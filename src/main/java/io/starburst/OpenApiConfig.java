@@ -19,9 +19,12 @@ import io.airlift.configuration.ConfigDescription;
 
 import javax.validation.constraints.NotNull;
 
+import java.net.URI;
+
 public class OpenApiConfig
 {
     private String specLocation;
+    private URI baseUri;
 
     @NotNull
     public String getSpecLocation()
@@ -34,6 +37,20 @@ public class OpenApiConfig
     public OpenApiConfig setSpecLocation(String value)
     {
         this.specLocation = value;
+        return this;
+    }
+
+    @NotNull
+    public URI getBaseUri()
+    {
+        return baseUri;
+    }
+
+    @Config("base-uri")
+    @ConfigDescription("Base URI of the API")
+    public OpenApiConfig setBaseUri(URI baseUri)
+    {
+        this.baseUri = baseUri;
         return this;
     }
 }

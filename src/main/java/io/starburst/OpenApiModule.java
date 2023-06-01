@@ -15,16 +15,17 @@
 package io.starburst;
 
 import com.google.inject.Binder;
-import com.google.inject.Module;
 import com.google.inject.Scopes;
+import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.spi.NodeManager;
 import io.trino.spi.type.TypeManager;
 
 import static io.airlift.configuration.ConfigBinder.configBinder;
+import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiModule
-        implements Module
+        extends AbstractConfigurationAwareModule
 {
     private final NodeManager nodeManager;
     private final TypeManager typeManager;
@@ -36,7 +37,7 @@ public class OpenApiModule
     }
 
     @Override
-    public void configure(Binder binder)
+    protected void setup(Binder binder)
     {
         binder.bind(NodeManager.class).toInstance(nodeManager);
         binder.bind(TypeManager.class).toInstance(typeManager);
@@ -48,5 +49,6 @@ public class OpenApiModule
         configBinder(binder).bindConfig(OpenApiConfig.class);
 
         binder.bind(OpenApiSpec.class).in(Scopes.SINGLETON);
+        httpClientBinder(binder).bindHttpClient("openApi", OpenApiClient.class);
     }
 }

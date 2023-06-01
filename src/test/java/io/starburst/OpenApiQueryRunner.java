@@ -51,7 +51,9 @@ public class OpenApiQueryRunner
         queryRunner.createCatalog(
                 "openapi",
                 "openapi",
-                Map.of("spec-location", "galaxy.spec.json"));
+                Map.of(
+                        "spec-location", "galaxy.spec.json",
+                        "base-uri", "https://ping.galaxy.starburst.io"));
 
         return queryRunner;
     }

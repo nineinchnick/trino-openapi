@@ -55,30 +55,42 @@ import static java.util.Objects.requireNonNull;
 public class OpenApiSpec
 {
     private static final Logger log = Logger.get(OpenApiSpec.class);
-
-    private final OpenAPI openApi;
-
     private final Map<String, List<ColumnMetadata>> tables;
+    private final Map<String, String> paths;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
     {
-        this.openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
+        OpenAPI openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
 
         this.tables = openApi.getPaths().values().stream()
-                .filter(pathItem -> {
-                    Operation op = pathItem.getGet();
-                    return op != null && (op.getDeprecated() == null || !op.getDeprecated()) && op.getResponses().get("200") != null && op.getResponses().get("200").getContent().get("application/json") != null;
-                })
+                .filter(this::filterPaths)
                 .map(PathItem::getGet)
                 .collect(Collectors.toMap(
                         op -> getIdentifier(op.getOperationId()),
                         this::getColumns));
+        this.paths = openApi.getPaths().entrySet().stream()
+                .filter(entry -> filterPaths(entry.getValue()))
+                .collect(Collectors.toMap(entry -> getIdentifier(entry.getValue().getGet().getOperationId()), Map.Entry::getKey));
+    }
+
+    private boolean filterPaths(PathItem pathItem)
+    {
+        Operation op = pathItem.getGet();
+        return op != null &&
+                (op.getDeprecated() == null || !op.getDeprecated()) &&
+                op.getResponses().get("200") != null &&
+                op.getResponses().get("200").getContent().get("application/json") != null;
     }
 
     public Map<String, List<ColumnMetadata>> getTables()
     {
         return tables;
+    }
+
+    public Map<String, String> getPaths()
+    {
+        return paths;
     }
 
     private List<ColumnMetadata> getColumns(Operation op)

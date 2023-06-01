@@ -61,7 +61,11 @@ public class OpenApiMetadata
         if (!schemaTableName.getSchemaName().equals(SCHEMA_NAME)) {
             return null;
         }
-        return new OpenApiTableHandle(schemaTableName);
+        String path = spec.getPaths().get(schemaTableName.getTableName());
+        if (path == null) {
+            throw new TableNotFoundException(schemaTableName);
+        }
+        return new OpenApiTableHandle(schemaTableName, path);
     }
 
     @Override

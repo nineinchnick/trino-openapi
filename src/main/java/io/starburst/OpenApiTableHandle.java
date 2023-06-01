@@ -23,17 +23,25 @@ public class OpenApiTableHandle
         implements ConnectorTableHandle
 {
     private final SchemaTableName schemaTableName;
+    private final String path;
 
     @JsonCreator
-    public OpenApiTableHandle(SchemaTableName schemaTableName)
+    public OpenApiTableHandle(SchemaTableName schemaTableName, String path)
     {
         this.schemaTableName = schemaTableName;
+        this.path = path;
     }
 
     @JsonProperty
     public SchemaTableName getSchemaTableName()
     {
         return schemaTableName;
+    }
+
+    @JsonProperty
+    public String getPath()
+    {
+        return path;
     }
 
     @Override

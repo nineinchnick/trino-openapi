@@ -14,6 +14,9 @@
 
 package io.starburst;
 
+import io.airlift.http.client.HttpClient;
+import io.airlift.http.client.Request;
+import io.airlift.http.client.ResponseHandler;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -28,22 +31,26 @@ import io.trino.spi.type.Type;
 
 import javax.inject.Inject;
 
+import java.net.URI;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
+import static io.airlift.http.client.Request.Builder.prepareGet;
 import static java.util.stream.Collectors.toList;
 
 public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
 {
-    private final String specLocation;
+    private final URI baseUri;
     private final OpenApiMetadata metadata;
+    private final HttpClient httpClient;
 
     @Inject
-    public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata)
+    public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient)
     {
-        this.specLocation = config.getSpecLocation();
+        this.baseUri = config.getBaseUri();
         this.metadata = metadata;
+        this.httpClient = httpClient;
     }
 
     @Override
@@ -72,7 +79,7 @@ public class OpenApiRecordSetProvider
                 })
                 .collect(toList());
 
-        Iterable<List<?>> rows = getRows();
+        Iterable<List<?>> rows = getRows((OpenApiTableHandle) table);
         Iterable<List<?>> mappedRows = StreamSupport.stream(rows.spliterator(), false)
                 .map(row -> columnIndexes.stream()
                         .map(row::get)
@@ -84,9 +91,18 @@ public class OpenApiRecordSetProvider
         return new InMemoryRecordSet(mappedTypes, mappedRows);
     }
 
-    private Iterable<List<?>> getRows()
+    private Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
-        // TODO replace the list with an iterable that provides the data read from the data source for this connector
+        // TODO get the airlift client
+        // TODO figure out the endpoint for the table, pass in the table handle?
+        // TODO make a GET http request
+
+        /*
+        Request request = prepareGet()
+                .setUri(baseUri.resolve(table.getPath()))
+                .build();
+        httpClient.execute(request, new ResponseHandler<Object, Exception>() {});
+         */
         return List.of(
                 List.of("x", "default", "my-name"));
     }
