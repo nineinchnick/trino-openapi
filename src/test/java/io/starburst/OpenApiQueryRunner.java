@@ -51,7 +51,7 @@ public class OpenApiQueryRunner
         queryRunner.createCatalog(
                 "example",
                 "openapi",
-                Map.of());
+                Map.of("spec-location", "galaxy.spec.json"));
 
         return queryRunner;
     }
