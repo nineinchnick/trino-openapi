@@ -15,8 +15,6 @@
 package io.starburst;
 
 import io.airlift.http.client.HttpClient;
-import io.airlift.http.client.Request;
-import io.airlift.http.client.ResponseHandler;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -35,7 +33,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
-import static io.airlift.http.client.Request.Builder.prepareGet;
 import static java.util.stream.Collectors.toList;
 
 public class OpenApiRecordSetProvider
