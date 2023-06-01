@@ -23,8 +23,10 @@ import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
 
 import javax.inject.Inject;
 
@@ -33,6 +35,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 
@@ -54,7 +58,7 @@ public class OpenApiSpec
                 })
                 .map(PathItem::getGet)
                 .collect(Collectors.toMap(
-                        op -> getTableName(op.getOperationId()),
+                        op -> getIdentifier(op.getOperationId()),
                         this::getColumns));
     }
 
@@ -71,35 +75,20 @@ public class OpenApiSpec
                 .getProperties();
         return properties.entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())
-                .map(property -> new ColumnMetadata(property.getKey(), convertType(property.getValue()).orElseThrow()))
+                .map(property -> new ColumnMetadata(getIdentifier(property.getKey()), convertType(property.getValue()).orElseThrow()))
                 .collect(Collectors.toList());
     }
 
-    public static String getTableName(String string)
+    public static String getIdentifier(String string)
     {
         return string.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
     private Optional<Type> convertType(Schema property)
     {
+        // composite type
         if (property.getType() == null) {
-            return Optional.of(VARCHAR);
-        }
-        if (property.getType().equals("array")) {
-            return Optional.of(new ArrayType(convertType(property.getItems()).orElseThrow()));
-        }
-        if (property.getType().equals("object")) {
             Map<String, Schema> subProperties = property.getProperties();
-            if (subProperties == null) {
-                return Optional.empty();
-                /*
-                if (property.getAdditionalProperties() instanceof Boolean) {
-                    return Optional.empty();
-                }
-                subProperties = ((Schema) property.getAdditionalProperties()).getProperties();
-
-                 */
-            }
             requireNonNull(subProperties, "subProperties of " + property +" is null");
             List<RowType.Field> fields = subProperties.entrySet()
                     .stream()
@@ -109,7 +98,25 @@ public class OpenApiSpec
                     .collect(Collectors.toList());
             return Optional.of(RowType.from(fields));
         }
-        return Optional.of(VARCHAR);
+        if (property.getType().equals("object")) {
+            return Optional.of(new MapType(VARCHAR, convertType((Schema) property.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
+        }
+        if (property.getType().equals("array")) {
+            return Optional.of(new ArrayType(convertType(property.getItems()).orElseThrow()));
+        }
+        if (property.getType().equals("integer")) {
+            // TODO use format to detect precision
+            return Optional.of(BIGINT);
+        }
+        if (property.getType().equals("string")) {
+            // TODO use format to detect date/time/timestamp types, or check if property instanceof DateTimeSchema
+            return Optional.of(VARCHAR);
+        }
+        if (property.getType().equals("boolean")) {
+            return Optional.of(BOOLEAN);
+        }
+        // TODO log?
+        return Optional.empty();
     }
 
     private static OpenAPI parse(String specLocation)
