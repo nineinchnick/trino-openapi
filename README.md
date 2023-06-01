@@ -25,6 +25,8 @@ Create a `openapi.properties` file in your Trino catalog directory and set all t
 
 ```
 connector.name=openapi
+spec-location=https://galaxy.starburst.io/public/openapi/v1/json
+base-uri=https://ping.galaxy.starburst.io
 ```
 
 After reloading Trino, you should be able to connect to the `openapi` catalog.

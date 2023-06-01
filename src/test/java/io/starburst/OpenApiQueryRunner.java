@@ -25,6 +25,7 @@ import io.trino.testing.QueryRunner;
 import java.util.Map;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
+import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 
 public class OpenApiQueryRunner
@@ -53,7 +54,10 @@ public class OpenApiQueryRunner
                 "openapi",
                 Map.of(
                         "spec-location", "galaxy.spec.json",
-                        "base-uri", "https://ping.galaxy.starburst.io"));
+                        "base-uri", "https://ping.galaxy-dev.io",
+                        "http-headers", "Authorization: Bearer " + requireNonNull(System.getenv("OPENAPI_BEARER_TOKEN")),
+                        "openApi.http-client.log.enabled", "true",
+                        "openApi.http-client.log.path", "logs"));
 
         return queryRunner;
     }
@@ -64,6 +68,7 @@ public class OpenApiQueryRunner
         Logging logger = Logging.initialize();
         logger.setLevel("io.starburst", Level.DEBUG);
         logger.setLevel("io.trino", Level.INFO);
+        logger.setLevel("io.airlift", Level.DEBUG);
 
         QueryRunner queryRunner = createQueryRunner();
 

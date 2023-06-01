@@ -14,7 +14,18 @@
 
 package io.starburst;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimaps;
+import com.google.common.io.CharStreams;
 import io.airlift.http.client.HttpClient;
+import io.airlift.http.client.Request;
+import io.airlift.http.client.Response;
+import io.airlift.http.client.ResponseHandler;
+import io.airlift.log.Logger;
+import io.trino.spi.PageBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -25,22 +36,35 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordSet;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 
 import javax.inject.Inject;
 
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.StreamSupport;
 
+import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.google.common.net.MediaType.JSON_UTF_8;
+import static io.airlift.http.client.Request.Builder.prepareGet;
+import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
 
 public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
 {
+    private static final Logger log = Logger.get(OpenApiRecordSetProvider.class);
     private final URI baseUri;
+
     private final OpenApiMetadata metadata;
     private final HttpClient httpClient;
+    private final Map<String, String> httpHeaders;
 
     @Inject
     public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient)
@@ -48,6 +72,7 @@ public class OpenApiRecordSetProvider
         this.baseUri = config.getBaseUri();
         this.metadata = metadata;
         this.httpClient = httpClient;
+        this.httpHeaders = ImmutableMap.copyOf(config.getHttpHeaders());
     }
 
     @Override
@@ -90,17 +115,47 @@ public class OpenApiRecordSetProvider
 
     private Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
-        // TODO get the airlift client
-        // TODO figure out the endpoint for the table, pass in the table handle?
-        // TODO make a GET http request
-
-        /*
         Request request = prepareGet()
                 .setUri(baseUri.resolve(table.getPath()))
+                .addHeaders(Multimaps.forMap(httpHeaders))
+                .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .build();
-        httpClient.execute(request, new ResponseHandler<Object, Exception>() {});
-         */
-        return List.of(
-                List.of("x", "default", "my-name"));
+        // TODO for building blocks we need a pageBuilder of a certain array type, get that from metadata
+        return httpClient.execute(request, new ResponseHandler<>()
+        {
+            @Override
+            public Iterable<List<?>> handleException(Request request, Exception exception)
+            {
+                throw new RuntimeException(exception);
+            }
+
+            @Override
+            public Iterable<List<?>> handle(Request request, Response response)
+            {
+                String result = "";
+                try {
+                    result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
+                }
+                catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                log.debug("Received response code " + response.getStatusCode() + ": " + result);
+
+                RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
+                ArrayType arrayType = new ArrayType(rowType);
+                PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
+
+                BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
+                BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
+
+                // TODO populate entries
+                //entryBuilder.closeEntry();
+                blockBuilder.closeEntry();
+                pageBuilder.declarePosition();
+                Block block = arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
+                return List.of(
+                        List.of("x", block));
+            }
+        });
     }
 }

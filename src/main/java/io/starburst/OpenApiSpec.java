@@ -14,7 +14,6 @@
 
 package io.starburst;
 
-import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
