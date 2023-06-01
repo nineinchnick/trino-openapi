@@ -14,6 +14,7 @@
 
 package io.starburst;
 
+import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -42,6 +43,8 @@ import static java.util.Objects.requireNonNull;
 
 public class OpenApiSpec
 {
+    private static final Logger log = Logger.get(OpenApiSpec.class);
+
     private final OpenAPI openApi;
 
     private final Map<String, List<ColumnMetadata>> tables;
@@ -115,7 +118,7 @@ public class OpenApiSpec
         if (property.getType().equals("boolean")) {
             return Optional.of(BOOLEAN);
         }
-        // TODO log?
+        log.warn("Skipping unrecognized type: " + property.getType());
         return Optional.empty();
     }
 

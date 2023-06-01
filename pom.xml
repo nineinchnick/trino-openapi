@@ -99,7 +99,6 @@
             <groupId>io.airlift</groupId>
             <artifactId>log</artifactId>
             <version>${dep.airlift.version}</version>
-            <scope>runtime</scope>
         </dependency>
 
         <dependency>
