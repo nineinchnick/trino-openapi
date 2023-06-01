@@ -21,19 +21,19 @@ import javax.validation.constraints.NotNull;
 
 public class OpenApiConfig
 {
-    private String defaultType = "default-value";
+    private String specLocation;
 
     @NotNull
-    public String getDefaultType()
+    public String getSpecLocation()
     {
-        return defaultType;
+        return specLocation;
     }
 
-    @Config("default-type")
-    @ConfigDescription("Default value for the type column")
-    public OpenApiConfig setDefaultType(String value)
+    @Config("spec-location")
+    @ConfigDescription("Path to the OpenAPI spec file")
+    public OpenApiConfig setSpecLocation(String value)
     {
-        this.defaultType = value;
+        this.specLocation = value;
         return this;
     }
 }

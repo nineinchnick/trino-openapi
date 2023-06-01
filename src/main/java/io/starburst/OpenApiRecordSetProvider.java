@@ -36,13 +36,13 @@ import static java.util.stream.Collectors.toList;
 public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
 {
-    private final String defaultType;
+    private final String specLocation;
     private final OpenApiMetadata metadata;
 
     @Inject
     public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata)
     {
-        this.defaultType = config.getDefaultType();
+        this.specLocation = config.getSpecLocation();
         this.metadata = metadata;
     }
 
@@ -88,6 +88,6 @@ public class OpenApiRecordSetProvider
     {
         // TODO replace the list with an iterable that provides the data read from the data source for this connector
         return List.of(
-                List.of("x", defaultType, "my-name"));
+                List.of("x", "default", "my-name"));
     }
 }

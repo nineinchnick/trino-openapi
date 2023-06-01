@@ -79,6 +79,7 @@ public class OpenApiMetadata
     @Override
     public List<SchemaTableName> listTables(ConnectorSession session, Optional<String> schemaName)
     {
+        // TODO columns need to be populated from the OpenAPI spec
         return columns
                 .keySet()
                 .stream()
