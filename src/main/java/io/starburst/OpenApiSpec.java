@@ -54,7 +54,6 @@ import static java.util.Objects.requireNonNull;
 
 public class OpenApiSpec
 {
-    private static final Logger log = Logger.get(OpenApiSpec.class);
     private final Map<String, List<ColumnMetadata>> tables;
     private final Map<String, String> paths;
 
@@ -153,7 +152,7 @@ public class OpenApiSpec
                 .map(prop -> RowType.field(
                         prop.getKey(),
                         convertType(prop.getValue()).orElseThrow()))
-                .collect(Collectors.toList());
+                .toList();
         return Optional.of(RowType.from(fields));
     }
 
@@ -164,7 +163,7 @@ public class OpenApiSpec
         SwaggerParseResult result = new OpenAPIV3Parser().readLocation(specLocation, null, parseOptions);
         OpenAPI openAPI = result.getOpenAPI();
 
-        if (result.getMessages() != null && result.getMessages().size() != 0) {
+        if (result.getMessages() != null && !result.getMessages().isEmpty()) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
 
