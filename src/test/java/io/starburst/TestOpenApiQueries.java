@@ -31,14 +31,14 @@ public class TestOpenApiQueries
     @Test
     public void showTables()
     {
-        assertQuery("SHOW SCHEMAS FROM example", "VALUES 'default', 'information_schema'");
-        assertQuery("SHOW TABLES FROM example.default", "VALUES 'single_row'");
+        assertQuery("SHOW SCHEMAS FROM openapi", "VALUES 'default', 'information_schema'");
+        assertQuery("SHOW TABLES FROM openapi.default", "VALUES 'get_cluster', 'get_schema_discovery', 'list_catalog', 'list_cluster', 'list_schema_discovery_of_catalog'");
     }
 
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT name FROM single_row WHERE id = 'x'",
+        assertQuery("SELECT name FROM list_catalog WHERE id = 'x'",
                 "VALUES ('my-name')");
     }
 }

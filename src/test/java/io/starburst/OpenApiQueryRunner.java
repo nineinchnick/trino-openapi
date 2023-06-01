@@ -35,7 +35,7 @@ public class OpenApiQueryRunner
             throws Exception
     {
         Session defaultSession = testSessionBuilder()
-                .setCatalog("example")
+                .setCatalog("openapi")
                 .setSchema("default")
                 .build();
 
@@ -49,7 +49,7 @@ public class OpenApiQueryRunner
         queryRunner.installPlugin(new OpenApiPlugin());
 
         queryRunner.createCatalog(
-                "example",
+                "openapi",
                 "openapi",
                 Map.of("spec-location", "galaxy.spec.json"));
 

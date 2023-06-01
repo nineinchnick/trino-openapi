@@ -26,6 +26,9 @@ import io.trino.spi.connector.ConnectorTableProperties;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
 import io.trino.spi.connector.TableColumnsMetadata;
+import io.trino.spi.connector.TableNotFoundException;
+
+import javax.inject.Inject;
 
 import java.util.Iterator;
 import java.util.List;
@@ -41,13 +44,13 @@ public class OpenApiMetadata
 {
     public static final String SCHEMA_NAME = "default";
 
-    // TODO replace with the actual tables provided by this connector
-    public static final Map<String, List<ColumnMetadata>> columns = new ImmutableMap.Builder<String, List<ColumnMetadata>>()
-            .put("single_row", ImmutableList.of(
-                    new ColumnMetadata("id", VARCHAR),
-                    new ColumnMetadata("type", VARCHAR),
-                    new ColumnMetadata("name", VARCHAR)))
-            .build();
+    private final OpenApiSpec spec;
+
+    @Inject
+    public OpenApiMetadata(OpenApiSpec spec)
+    {
+        this.spec = spec;
+    }
 
     @Override
     public List<String> listSchemaNames(ConnectorSession connectorSession)
@@ -71,16 +74,17 @@ public class OpenApiMetadata
     {
         OpenApiTableHandle tableHandle = (OpenApiTableHandle) connectorTableHandle;
         SchemaTableName schemaTableName = tableHandle.getSchemaTableName();
-        return new ConnectorTableMetadata(
-                schemaTableName,
-                columns.get(schemaTableName.getTableName()));
+        List<ColumnMetadata> columns = spec.getTables().get(schemaTableName.getTableName());
+        if (columns == null) {
+            throw new TableNotFoundException(schemaTableName);
+        }
+        return new ConnectorTableMetadata(schemaTableName, columns);
     }
 
     @Override
     public List<SchemaTableName> listTables(ConnectorSession session, Optional<String> schemaName)
     {
-        // TODO columns need to be populated from the OpenAPI spec
-        return columns
+        return spec.getTables()
                 .keySet()
                 .stream()
                 .map(table -> new SchemaTableName(SCHEMA_NAME, table))
@@ -115,7 +119,7 @@ public class OpenApiMetadata
     @Override
     public Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
     {
-        return columns.entrySet().stream()
+        return spec.getTables().entrySet().stream()
                 .map(entry -> TableColumnsMetadata.forTable(
                         new SchemaTableName(prefix.getSchema().orElse(""), entry.getKey()),
                         entry.getValue()))

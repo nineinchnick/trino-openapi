@@ -14,32 +14,112 @@
 
 package io.starburst;
 
-import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.parser.OpenAPIV3Parser;
+import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import io.trino.spi.connector.ColumnMetadata;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.Type;
 
 import javax.inject.Inject;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiSpec
 {
     private final OpenAPI openApi;
 
+    private final Map<String, List<ColumnMetadata>> tables;
+
     @Inject
     public OpenApiSpec(OpenApiConfig config)
     {
         this.openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
 
-        // TODO build a list of tables and columns
+        this.tables = openApi.getPaths().values().stream()
+                .filter(pathItem -> {
+                    Operation op = pathItem.getGet();
+                    return op != null && (op.getDeprecated() == null || !op.getDeprecated()) && op.getResponses().get("200") != null && op.getResponses().get("200").getContent().get("application/json") != null;
+                })
+                .map(PathItem::getGet)
+                .collect(Collectors.toMap(
+                        op -> getTableName(op.getOperationId()),
+                        this::getColumns));
+    }
+
+    public Map<String, List<ColumnMetadata>> getTables()
+    {
+        return tables;
+    }
+
+    private List<ColumnMetadata> getColumns(Operation op)
+    {
+        Map<String, Schema> properties = op.getResponses()
+                .get("200").getContent()
+                .get("application/json").getSchema()
+                .getProperties();
+        return properties.entrySet().stream()
+                .filter(property -> convertType(property.getValue()).isPresent())
+                .map(property -> new ColumnMetadata(property.getKey(), convertType(property.getValue()).orElseThrow()))
+                .collect(Collectors.toList());
+    }
+
+    public static String getTableName(String string)
+    {
+        return string.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
+    }
+
+    private Optional<Type> convertType(Schema property)
+    {
+        if (property.getType() == null) {
+            return Optional.of(VARCHAR);
+        }
+        if (property.getType().equals("array")) {
+            return Optional.of(new ArrayType(convertType(property.getItems()).orElseThrow()));
+        }
+        if (property.getType().equals("object")) {
+            Map<String, Schema> subProperties = property.getProperties();
+            if (subProperties == null) {
+                return Optional.empty();
+                /*
+                if (property.getAdditionalProperties() instanceof Boolean) {
+                    return Optional.empty();
+                }
+                subProperties = ((Schema) property.getAdditionalProperties()).getProperties();
+
+                 */
+            }
+            requireNonNull(subProperties, "subProperties of " + property +" is null");
+            List<RowType.Field> fields = subProperties.entrySet()
+                    .stream()
+                    .map(subprop -> RowType.field(
+                            subprop.getKey(),
+                            convertType(subprop.getValue()).orElseThrow()))
+                    .collect(Collectors.toList());
+            return Optional.of(RowType.from(fields));
+        }
+        return Optional.of(VARCHAR);
     }
 
     private static OpenAPI parse(String specLocation)
     {
-        SwaggerParseResult result = new OpenAPIParser().readLocation(specLocation, null, null);
+        ParseOptions parseOptions = new ParseOptions();
+        parseOptions.setResolveFully(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation(specLocation, null, parseOptions);
         OpenAPI openAPI = result.getOpenAPI();
 
-        if (result.getMessages() != null) {
+        if (result.getMessages() != null && result.getMessages().size() != 0) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
 

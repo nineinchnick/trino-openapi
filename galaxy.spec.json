@@ -3,8 +3,7 @@
   "info" : {
     "title" : "Starburst Galaxy Public API",
     "description" : "# Access Tokens\n\nAccess tokens are obtained using the OAuth2 credentials flow and API authentication tokens.\n\n1. Create an API authentication token at `https://{account-domain}/%s`\n2. Use the API authentication token to obtain a temporary access token by POST to `https://{account-domain}/oauth/v2/token`. The request must have a Basic Authorization header with the client ID and secret Base64 encoded in the form `clientId:clientSecret`. The request body must be `grant_type=client_credentials`.\n\n`cURL` example:\n\n```\ncurl -X POST \\\n  -H 'Authorization: Basic {base64(clientId:clientSecret)}' \\\n  -H 'Content-Type: application/x-www-form-urlencoded' \\\n  -d 'grant_type=client_credentials' \\\n  https://{account-domain}/oauth/v2/token\n```\n\nThe access token returned can be used to make API calls with the header `Authorization: Bearer {access token}`.\n",
-    "version" : "v1",
-    "summary" : "APIs for managing your Starburst Galaxy account"
+    "version" : "v1"
   },
   "security" : [ {
     "accessToken" : [ ]
