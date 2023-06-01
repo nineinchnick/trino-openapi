@@ -89,7 +89,7 @@ public class OpenApiSpec
         // composite type
         if (property.getType() == null) {
             Map<String, Schema> subProperties = property.getProperties();
-            requireNonNull(subProperties, "subProperties of " + property +" is null");
+            requireNonNull(subProperties, "subProperties of " + property + " is null");
             List<RowType.Field> fields = subProperties.entrySet()
                     .stream()
                     .map(subprop -> RowType.field(
