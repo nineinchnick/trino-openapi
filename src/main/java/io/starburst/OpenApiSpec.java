@@ -101,8 +101,16 @@ public class OpenApiSpec
                 .getProperties();
         return properties.entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())
-                .map(property -> new ColumnMetadata(getIdentifier(property.getKey()), convertType(property.getValue()).orElseThrow()))
-                .collect(Collectors.toList());
+                .map(property -> {
+                    Schema<?> value = property.getValue();
+                    return ColumnMetadata.builder()
+                            .setName(getIdentifier(property.getKey()))
+                            .setType(convertType(value).orElseThrow())
+                            .setNullable(Optional.ofNullable(value.getNullable()).orElse(false))
+                            .setComment(Optional.ofNullable(value.getDescription()))
+                            .build();
+                })
+                .toList();
     }
 
     public static String getIdentifier(String string)
