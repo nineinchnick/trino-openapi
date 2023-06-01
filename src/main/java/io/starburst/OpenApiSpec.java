@@ -18,7 +18,15 @@ import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.BooleanSchema;
+import io.swagger.v3.oas.models.media.DateSchema;
+import io.swagger.v3.oas.models.media.DateTimeSchema;
+import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -38,6 +46,9 @@ import java.util.stream.Collectors;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
+import static io.trino.spi.type.DateType.DATE;
+import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 
@@ -87,39 +98,47 @@ public class OpenApiSpec
         return string.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 
-    private Optional<Type> convertType(Schema property)
+    private Optional<Type> convertType(Schema<?> property)
     {
-        // composite type
-        if (property.getType() == null) {
-            Map<String, Schema> subProperties = property.getProperties();
-            requireNonNull(subProperties, "subProperties of " + property + " is null");
-            List<RowType.Field> fields = subProperties.entrySet()
-                    .stream()
-                    .map(subprop -> RowType.field(
-                            subprop.getKey(),
-                            convertType(subprop.getValue()).orElseThrow()))
-                    .collect(Collectors.toList());
-            return Optional.of(RowType.from(fields));
+        switch (property) {
+            case MapSchema map -> {
+                return Optional.of(new MapType(VARCHAR, convertType((Schema<?>) map.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
+            }
+            case ArraySchema array -> {
+                return Optional.of(new ArrayType(convertType(array.getItems()).orElseThrow()));
+            }
+            case IntegerSchema ignored -> {
+                return Optional.of(INTEGER);
+            }
+            case NumberSchema ignored -> {
+                return Optional.of(BIGINT);
+            }
+            case StringSchema ignored -> {
+                return Optional.of(VARCHAR);
+            }
+            case DateSchema ignored -> {
+                return Optional.of(DATE);
+            }
+            case DateTimeSchema ignored -> {
+                // according to ISO-8601 can be any precision actually so might not fit
+                return Optional.of(TIMESTAMP_MILLIS);
+            }
+            case BooleanSchema ignored -> {
+                return Optional.of(BOOLEAN);
+            }
+            default -> {
+                // composite type
+                Map<String, Schema> properties = property.getProperties();
+                requireNonNull(properties, "properties of " + property + " is null");
+                List<RowType.Field> fields = properties.entrySet()
+                        .stream()
+                        .map(prop -> RowType.field(
+                                prop.getKey(),
+                                convertType(prop.getValue()).orElseThrow()))
+                        .collect(Collectors.toList());
+                return Optional.of(RowType.from(fields));
+            }
         }
-        if (property.getType().equals("object")) {
-            return Optional.of(new MapType(VARCHAR, convertType((Schema) property.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
-        }
-        if (property.getType().equals("array")) {
-            return Optional.of(new ArrayType(convertType(property.getItems()).orElseThrow()));
-        }
-        if (property.getType().equals("integer")) {
-            // TODO use format to detect precision
-            return Optional.of(BIGINT);
-        }
-        if (property.getType().equals("string")) {
-            // TODO use format to detect date/time/timestamp types, or check if property instanceof DateTimeSchema
-            return Optional.of(VARCHAR);
-        }
-        if (property.getType().equals("boolean")) {
-            return Optional.of(BOOLEAN);
-        }
-        log.warn("Skipping unrecognized type: " + property.getType());
-        return Optional.empty();
     }
 
     private static OpenAPI parse(String specLocation)
