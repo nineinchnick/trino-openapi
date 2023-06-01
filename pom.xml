@@ -37,8 +37,13 @@
         <dep.trino.version>418</dep.trino.version>
         <dep.airlift.version>231</dep.airlift.version>
         <dep.errorprone.version>2.19.1</dep.errorprone.version>
+        <dep.jackson.version>2.15.1</dep.jackson.version>
+        <dep.swagger-parser.version>2.1.15</dep.swagger-parser.version>
+        <dep.swagger-core.version>2.2.10</dep.swagger-core.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
+        <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
+        <air.check.skip-duplicate-finder>true</air.check.skip-duplicate-finder>
         <project.scm.id>github</project.scm.id>
     </properties>
 
@@ -54,6 +59,28 @@
             <url>https://maven.pkg.github.com/starburstdata/trino-openapi</url>
         </repository>
     </distributionManagement>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${dep.jackson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${dep.jackson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-yaml</artifactId>
+                <version>${dep.jackson.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -107,6 +134,24 @@
         <dependency>
             <groupId>javax.validation</groupId>
             <artifactId>validation-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.swagger.parser.v3</groupId>
+            <artifactId>swagger-parser</artifactId>
+            <version>${dep.swagger-parser.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.swagger.parser.v3</groupId>
+            <artifactId>swagger-parser-core</artifactId>
+            <version>${dep.swagger-parser.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-models</artifactId>
+            <version>${dep.swagger-core.version}</version>
         </dependency>
 
         <!-- Trino SPI -->

@@ -46,5 +46,7 @@ public class OpenApiModule
         binder.bind(OpenApiSplitManager.class).in(Scopes.SINGLETON);
         binder.bind(OpenApiRecordSetProvider.class).in(Scopes.SINGLETON);
         configBinder(binder).bindConfig(OpenApiConfig.class);
+
+        binder.bind(OpenApiSpec.class).in(Scopes.SINGLETON);
     }
 }
