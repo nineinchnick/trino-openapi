@@ -23,6 +23,7 @@
 
     <properties>
         <project.build.targetJdk>17</project.build.targetJdk>
+        <air.java.version>17.0.4</air.java.version>
 
         <air.main.basedir>\${project.basedir}</air.main.basedir>
 
@@ -44,6 +45,7 @@
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
         <air.check.skip-duplicate-finder>true</air.check.skip-duplicate-finder>
+        <air.compiler.enable-preview>true</air.compiler.enable-preview>
         <project.scm.id>github</project.scm.id>
     </properties>
 
@@ -282,15 +284,6 @@
                 <artifactId>provisio-maven-plugin</artifactId>
                 <extensions>true</extensions>
                 <version>1.0.20</version>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>17</source>
-                    <target>17</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
-                </configuration>
             </plugin>
         </plugins>
     </build>
