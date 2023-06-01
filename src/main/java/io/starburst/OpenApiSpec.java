@@ -112,45 +112,41 @@ public class OpenApiSpec
 
     private Optional<Type> convertType(Schema<?> property)
     {
-        switch (property) {
-            case MapSchema map -> {
-                return Optional.of(new MapType(VARCHAR, convertType((Schema<?>) map.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
-            }
-            case ArraySchema array -> {
-                return Optional.of(new ArrayType(convertType(array.getItems()).orElseThrow()));
-            }
-            case IntegerSchema ignored -> {
-                return Optional.of(INTEGER);
-            }
-            case NumberSchema ignored -> {
-                return Optional.of(BIGINT);
-            }
-            case StringSchema ignored -> {
-                return Optional.of(VARCHAR);
-            }
-            case DateSchema ignored -> {
-                return Optional.of(DATE);
-            }
-            case DateTimeSchema ignored -> {
-                // according to ISO-8601 can be any precision actually so might not fit
-                return Optional.of(TIMESTAMP_MILLIS);
-            }
-            case BooleanSchema ignored -> {
-                return Optional.of(BOOLEAN);
-            }
-            default -> {
-                // composite type
-                Map<String, Schema> properties = property.getProperties();
-                requireNonNull(properties, "properties of " + property + " is null");
-                List<RowType.Field> fields = properties.entrySet()
-                        .stream()
-                        .map(prop -> RowType.field(
-                                prop.getKey(),
-                                convertType(prop.getValue()).orElseThrow()))
-                        .collect(Collectors.toList());
-                return Optional.of(RowType.from(fields));
-            }
+        if (property instanceof MapSchema map) {
+            return Optional.of(new MapType(VARCHAR, convertType((Schema<?>) map.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
         }
+        if (property instanceof ArraySchema array) {
+            return Optional.of(new ArrayType(convertType(array.getItems()).orElseThrow()));
+        }
+        if (property instanceof IntegerSchema) {
+            return Optional.of(INTEGER);
+        }
+        if (property instanceof NumberSchema) {
+            return Optional.of(BIGINT);
+        }
+        if (property instanceof StringSchema) {
+            return Optional.of(VARCHAR);
+        }
+        if (property instanceof DateSchema) {
+            return Optional.of(DATE);
+        }
+        if (property instanceof DateTimeSchema) {
+            // according to ISO-8601 can be any precision actually so might not fit
+            return Optional.of(TIMESTAMP_MILLIS);
+        }
+        if (property instanceof BooleanSchema) {
+            return Optional.of(BOOLEAN);
+        }
+        // composite type
+        Map<String, Schema> properties = property.getProperties();
+        requireNonNull(properties, "properties of " + property + " is null");
+        List<RowType.Field> fields = properties.entrySet()
+                .stream()
+                .map(prop -> RowType.field(
+                        prop.getKey(),
+                        convertType(prop.getValue()).orElseThrow()))
+                .collect(Collectors.toList());
+        return Optional.of(RowType.from(fields));
     }
 
     private static OpenAPI parse(String specLocation)
