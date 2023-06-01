@@ -14,8 +14,6 @@
 
 package io.starburst;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorMetadata;
@@ -35,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
