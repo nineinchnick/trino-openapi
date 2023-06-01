@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
@@ -54,6 +55,7 @@ import static java.util.Objects.requireNonNull;
 public class OpenApiSpec
 {
     private final Map<String, List<ColumnMetadata>> tables;
+    private final Map<String, Map<String, Schema<?>>> originalColumnTypes;
     private final Map<String, String> paths;
 
     @Inject
@@ -67,6 +69,12 @@ public class OpenApiSpec
                 .collect(Collectors.toMap(
                         op -> getIdentifier(op.getOperationId()),
                         this::getColumns));
+        this.originalColumnTypes = openApi.getPaths().values().stream()
+                .filter(this::filterPaths)
+                .map(PathItem::getGet)
+                .collect(Collectors.toMap(
+                        op -> getIdentifier(op.getOperationId()),
+                        this::getOriginalColumnTypes));
         this.paths = openApi.getPaths().entrySet().stream()
                 .filter(entry -> filterPaths(entry.getValue()))
                 .collect(Collectors.toMap(entry -> getIdentifier(entry.getValue().getGet().getOperationId()), Map.Entry::getKey));
@@ -91,6 +99,11 @@ public class OpenApiSpec
         return paths;
     }
 
+    public Map<String, Schema<?>> getOriginalColumnTypes(String tableName)
+    {
+        return originalColumnTypes.get(tableName);
+    }
+
     private List<ColumnMetadata> getColumns(Operation op)
     {
         Map<String, Schema> properties = op.getResponses()
@@ -109,6 +122,17 @@ public class OpenApiSpec
                             .build();
                 })
                 .toList();
+    }
+
+    private Map<String, Schema<?>> getOriginalColumnTypes(Operation op)
+    {
+        Map<String, Schema> properties = op.getResponses()
+                .get("200").getContent()
+                .get("application/json").getSchema()
+                .getProperties();
+        return properties.entrySet().stream()
+                .filter(property -> convertType(property.getValue()).isPresent())
+                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public static String getIdentifier(String string)

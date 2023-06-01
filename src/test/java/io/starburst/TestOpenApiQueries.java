@@ -38,7 +38,7 @@ public class TestOpenApiQueries
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT name FROM list_catalog WHERE id = 'x'",
-                "VALUES ('my-name')");
+        assertQuery("SELECT count(*) FROM list_cluster",
+                "VALUES 1");
     }
 }

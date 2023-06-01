@@ -23,9 +23,6 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
-import io.trino.spi.PageBuilder;
-import io.trino.spi.block.Block;
-import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -36,9 +33,9 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordSet;
-import io.trino.spi.type.ArrayType;
-import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import javax.inject.Inject;
 
@@ -52,7 +49,7 @@ import java.util.stream.StreamSupport;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareGet;
-import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
 
@@ -101,7 +98,7 @@ public class OpenApiRecordSetProvider
                 })
                 .collect(toList());
 
-        Iterable<List<?>> rows = getRows((OpenApiTableHandle) table);
+        Iterable<List<?>> rows = getRows(connectorSession, (OpenApiTableHandle) table);
         Iterable<List<?>> mappedRows = StreamSupport.stream(rows.spliterator(), false)
                 .map(row -> columnIndexes.stream()
                         .map(row::get)
@@ -113,8 +110,9 @@ public class OpenApiRecordSetProvider
         return new InMemoryRecordSet(mappedTypes, mappedRows);
     }
 
-    private Iterable<List<?>> getRows(OpenApiTableHandle table)
+    private Iterable<List<?>> getRows(ConnectorSession connectorSession, OpenApiTableHandle table)
     {
+        ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
         Request request = prepareGet()
                 .setUri(baseUri.resolve(table.getPath()))
                 .addHeaders(Multimaps.forMap(httpHeaders))
@@ -141,7 +139,13 @@ public class OpenApiRecordSetProvider
                 }
                 log.debug("Received response code " + response.getStatusCode() + ": " + result);
 
-                RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
+                JSONObject json = new JSONObject(result);
+
+                log.debug("Serialized to json %s", json);
+
+                return convertJson(json, tableMetadata);
+
+                /*RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
                 ArrayType arrayType = new ArrayType(rowType);
                 PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
 
@@ -154,8 +158,47 @@ public class OpenApiRecordSetProvider
                 pageBuilder.declarePosition();
                 Block block = arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
                 return List.of(
-                        List.of("x", block));
+                        List.of("x", block));*/
             }
         });
+    }
+
+    private Iterable<List<?>> convertJson(JSONObject jsonObject, ConnectorTableMetadata tableMetadata)
+    {
+        Object result = jsonObject.get("result");
+        if (result == null) {
+            throw new RuntimeException(format("No result key found for jsonObject with keys: %s", jsonObject.keySet()));
+        }
+
+        if (!(result instanceof JSONArray)) {
+            throw new RuntimeException(format("'result' object is not JSONArray: %s", result.getClass().getName()));
+        }
+        JSONArray resultArray = (JSONArray) result;
+
+        ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
+        for (Object obj : resultArray) {
+            if (!(obj instanceof JSONObject)) {
+                throw new RuntimeException(format("JSONArray object is not JSONObject: %s", obj.getClass()));
+            }
+            JSONObject recordObject = (JSONObject) obj;
+
+            ImmutableList.Builder<Object> recordBuilder = ImmutableList.builder();
+            for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
+                // Currently fails here due to it looking for the paginated object column 'next_page_token'
+                Object columnValue = recordObject.get(columnMetadata.getName());
+                if (columnValue == null) {
+                    throw new RuntimeException(format("JSON record missing column: %s, has columns: %s", columnMetadata.getName(), recordObject.keySet()));
+                }
+
+                recordBuilder.add(
+                        JsonTrinoConverter.convert(
+                                recordObject,
+                                columnMetadata.getName(),
+                                columnMetadata.getType(),
+                                metadata.getSpec().getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
+            }
+            resultRecordsBuilder.add(recordBuilder.build());
+        }
+        return resultRecordsBuilder.build();
     }
 }
