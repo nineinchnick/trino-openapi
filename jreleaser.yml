@@ -1,0 +1,15 @@
+project:
+  name: trino-openapi
+  description: This is a Trino connector
+  license: Apache-2
+  java:
+    groupId: io.starburst
+    version: 17
+
+files:
+  artifacts:
+    - path: "target/{{projectName}}-{{projectVersion}}.zip"
+
+release:
+  github:
+    owner: starburstdata
