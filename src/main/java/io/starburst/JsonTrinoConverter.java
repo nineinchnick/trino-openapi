@@ -28,14 +28,12 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 import org.json.JSONArray;
 
-import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
-import java.util.List;
 
 import static java.lang.String.format;
 
@@ -48,43 +46,42 @@ public class JsonTrinoConverter
     public static Object convert(Object jsonObject, Type type, Schema<?> schemaType)
     {
         if (type instanceof IntegerType) {
-            return (Integer) jsonObject;
+            return jsonObject;
         }
-        else if (type instanceof BigintType) {
-            return (BigInteger) jsonObject;
+        if (type instanceof BigintType) {
+            return jsonObject;
         }
-        else if (type instanceof VarcharType) {
-            return (String) jsonObject;
+        if (type instanceof VarcharType) {
+            return jsonObject;
         }
-        else if (type instanceof DateType) {
+        if (type instanceof DateType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
             TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
             return getSqlDate(LocalDate.from(temporalAccessor));
         }
-        else if (type instanceof TimestampType) {
+        if (type instanceof TimestampType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
             TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
             if (temporalAccessor instanceof Instant) {
                 return ((Instant) temporalAccessor).toEpochMilli();
             }
-            else if (temporalAccessor instanceof OffsetDateTime) {
+            if (temporalAccessor instanceof OffsetDateTime) {
                 return ((OffsetDateTime) temporalAccessor).toEpochSecond();
             }
-            else if (temporalAccessor instanceof ZonedDateTime) {
+            if (temporalAccessor instanceof ZonedDateTime) {
                 return ((ZonedDateTime) temporalAccessor).toEpochSecond();
             }
-            else {
-                throw new RuntimeException(format("Unsupported TemporalAccessor type %s", temporalAccessor.getClass().getCanonicalName()));
-            }
+            throw new RuntimeException(format("Unsupported TemporalAccessor type %s", temporalAccessor.getClass().getCanonicalName()));
         }
-        else if (type instanceof BooleanType) {
+        if (type instanceof BooleanType) {
             return jsonObject;
         }
-        else if (type instanceof MapType) {
+        if (type instanceof MapType) {
             throw new RuntimeException("MapType unsupported currently");
         }
-        else if (type instanceof ArrayType) {
+        if (type instanceof ArrayType) {
             JSONArray jsonArray = (JSONArray) jsonObject;
+            // TODO this should be a Trino Block
             ImmutableList.Builder<Object> listBuilder = ImmutableList.builder();
             for (Object listObject : jsonArray) {
                 listBuilder.add(convert(listObject, ((ArrayType) type).getElementType(), schemaType.getItems()));

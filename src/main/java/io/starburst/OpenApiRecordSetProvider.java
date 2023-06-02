@@ -64,16 +64,18 @@ public class OpenApiRecordSetProvider
 
     private final OpenApiMetadata metadata;
     private final HttpClient httpClient;
+    private final OpenApiSpec openApiSpec;
     private final Map<String, String> httpHeaders;
 
     private final Optional<OpenApiSpecAdapter> adapter = Optional.of(new GalaxyAdapter());
 
     @Inject
-    public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient)
+    public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient, OpenApiSpec openApiSpec)
     {
         this.baseUri = config.getBaseUri();
         this.metadata = metadata;
         this.httpClient = httpClient;
+        this.openApiSpec = openApiSpec;
         this.httpHeaders = ImmutableMap.copyOf(config.getHttpHeaders());
     }
 
@@ -183,10 +185,9 @@ public class OpenApiRecordSetProvider
 
             ImmutableList.Builder<Object> recordBuilder = ImmutableList.builder();
             for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-
-                // Hack to deal with the fact that some clusters are missing these two columns
+                // TODO Hack to deal with the fact that some clusters are missing these two columns
                 if (columnMetadata.getName().equals("idle_stop_minutes") && !recordObject.has("idle_stop_minutes")) {
-                    recordBuilder.add(new Integer(5));
+                    recordBuilder.add(Integer.valueOf(5));
                     continue;
                 }
                 if (columnMetadata.getName().equals("trino_uri") && !recordObject.has("trino_uri")) {
@@ -194,6 +195,7 @@ public class OpenApiRecordSetProvider
                     continue;
                 }
 
+                // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
                 Object columnValue = recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName()));
 
                 if (columnValue == null) {
@@ -202,9 +204,9 @@ public class OpenApiRecordSetProvider
 
                 recordBuilder.add(
                         JsonTrinoConverter.convert(
-                                recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName())),
+                                columnValue,
                                 columnMetadata.getType(),
-                                metadata.getSpec().getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
+                                openApiSpec.getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
             }
             resultRecordsBuilder.add(recordBuilder.build());
         }

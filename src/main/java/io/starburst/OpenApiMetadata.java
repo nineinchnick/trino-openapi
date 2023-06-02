@@ -126,9 +126,4 @@ public class OpenApiMetadata
                         entry.getValue()))
                 .iterator();
     }
-
-    public OpenApiSpec getSpec()
-    {
-        return spec;
-    }
 }
