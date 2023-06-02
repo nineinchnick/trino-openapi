@@ -14,6 +14,7 @@
 
 package io.starburst;
 
+import io.starburst.adapters.GalaxyAdapter;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -57,6 +58,7 @@ public class OpenApiSpec
     private final Map<String, List<ColumnMetadata>> tables;
     private final Map<String, Map<String, Schema<?>>> originalColumnTypes;
     private final Map<String, String> paths;
+    private final Optional<OpenApiSpecAdapter> adapter = Optional.of(new GalaxyAdapter());
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
@@ -104,13 +106,19 @@ public class OpenApiSpec
         return originalColumnTypes.get(tableName);
     }
 
-    private List<ColumnMetadata> getColumns(Operation op)
+    private Map<String, Schema> get200JsonSchema(Operation op)
     {
         Map<String, Schema> properties = op.getResponses()
                 .get("200").getContent()
                 .get("application/json").getSchema()
                 .getProperties();
-        return properties.entrySet().stream()
+
+        return adapter.map(adapter -> adapter.runAdapter(op.getOperationId(), properties)).orElse(properties);
+    }
+
+    private List<ColumnMetadata> getColumns(Operation op)
+    {
+        return get200JsonSchema(op).entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())
                 .map(property -> {
                     Schema<?> value = property.getValue();
@@ -126,13 +134,9 @@ public class OpenApiSpec
 
     private Map<String, Schema<?>> getOriginalColumnTypes(Operation op)
     {
-        Map<String, Schema> properties = op.getResponses()
-                .get("200").getContent()
-                .get("application/json").getSchema()
-                .getProperties();
-        return properties.entrySet().stream()
+        return get200JsonSchema(op).entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())
-                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
+                .collect(toImmutableMap(entry -> getIdentifier(entry.getKey()), Map.Entry::getValue));
     }
 
     public static String getIdentifier(String string)

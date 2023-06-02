@@ -14,7 +14,9 @@
 
 package io.starburst;
 
+import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
+import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
 import io.trino.spi.type.DateType;
@@ -24,14 +26,16 @@ import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
-import org.json.JSONObject;
+import org.json.JSONArray;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
+import java.util.List;
 
 import static java.lang.String.format;
 
@@ -41,25 +45,25 @@ public class JsonTrinoConverter
     {
     }
 
-    public static Object convert(JSONObject jsonObject, String columnName, Type type, Schema<?> schemaType)
+    public static Object convert(Object jsonObject, Type type, Schema<?> schemaType)
     {
         if (type instanceof IntegerType) {
-            return jsonObject.getInt(columnName);
+            return (Integer) jsonObject;
         }
         else if (type instanceof BigintType) {
-            return jsonObject.getBigInteger(columnName);
+            return (BigInteger) jsonObject;
         }
         else if (type instanceof VarcharType) {
-            return jsonObject.getString(columnName);
+            return (String) jsonObject;
         }
         else if (type instanceof DateType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.getString(columnName));
+            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
             return getSqlDate(LocalDate.from(temporalAccessor));
         }
         else if (type instanceof TimestampType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.getString(columnName));
+            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
             if (temporalAccessor instanceof Instant) {
                 return ((Instant) temporalAccessor).toEpochMilli();
             }
@@ -74,12 +78,20 @@ public class JsonTrinoConverter
             }
         }
         else if (type instanceof BooleanType) {
-            return jsonObject.getBoolean(columnName);
+            return jsonObject;
         }
         else if (type instanceof MapType) {
             throw new RuntimeException("MapType unsupported currently");
         }
-        throw new RuntimeException(format("Type unsupported: %s", type));
+        else if (type instanceof ArrayType) {
+            JSONArray jsonArray = (JSONArray) jsonObject;
+            ImmutableList.Builder<Object> listBuilder = ImmutableList.builder();
+            for (Object listObject : jsonArray) {
+                listBuilder.add(convert(listObject, ((ArrayType) type).getElementType(), schemaType.getItems()));
+            }
+            return listBuilder.build();
+        }
+        throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
 
     public static SqlDate getSqlDate(LocalDate localDate)

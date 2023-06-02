@@ -14,6 +14,7 @@
 
 package io.starburst;
 
+import com.google.common.base.CaseFormat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
@@ -23,6 +24,7 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
+import io.starburst.adapters.GalaxyAdapter;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -44,6 +46,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
@@ -62,6 +65,8 @@ public class OpenApiRecordSetProvider
     private final OpenApiMetadata metadata;
     private final HttpClient httpClient;
     private final Map<String, String> httpHeaders;
+
+    private final Optional<OpenApiSpecAdapter> adapter = Optional.of(new GalaxyAdapter());
 
     @Inject
     public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient)
@@ -130,6 +135,9 @@ public class OpenApiRecordSetProvider
             @Override
             public Iterable<List<?>> handle(Request request, Response response)
             {
+                if (response.getStatusCode() != 200) {
+                    throw new RuntimeException(format("Response code for getRows request was not 200: %s", response.getStatusCode()));
+                }
                 String result = "";
                 try {
                     result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
@@ -143,7 +151,9 @@ public class OpenApiRecordSetProvider
 
                 log.debug("Serialized to json %s", json);
 
-                return convertJson(json, tableMetadata);
+                JSONArray jsonArray = adapter.map(adapter -> adapter.runAdapter(tableMetadata, json)).orElseThrow();
+
+                return convertJson(jsonArray, tableMetadata);
 
                 /*RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
                 ArrayType arrayType = new ArrayType(rowType);
@@ -163,20 +173,10 @@ public class OpenApiRecordSetProvider
         });
     }
 
-    private Iterable<List<?>> convertJson(JSONObject jsonObject, ConnectorTableMetadata tableMetadata)
+    private Iterable<List<?>> convertJson(JSONArray jsonArray, ConnectorTableMetadata tableMetadata)
     {
-        Object result = jsonObject.get("result");
-        if (result == null) {
-            throw new RuntimeException(format("No result key found for jsonObject with keys: %s", jsonObject.keySet()));
-        }
-
-        if (!(result instanceof JSONArray)) {
-            throw new RuntimeException(format("'result' object is not JSONArray: %s", result.getClass().getName()));
-        }
-        JSONArray resultArray = (JSONArray) result;
-
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
-        for (Object obj : resultArray) {
+        for (Object obj : jsonArray) {
             if (!(obj instanceof JSONObject)) {
                 throw new RuntimeException(format("JSONArray object is not JSONObject: %s", obj.getClass()));
             }
@@ -185,15 +185,14 @@ public class OpenApiRecordSetProvider
             ImmutableList.Builder<Object> recordBuilder = ImmutableList.builder();
             for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
                 // Currently fails here due to it looking for the paginated object column 'next_page_token'
-                Object columnValue = recordObject.get(columnMetadata.getName());
+                Object columnValue = recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName()));
                 if (columnValue == null) {
                     throw new RuntimeException(format("JSON record missing column: %s, has columns: %s", columnMetadata.getName(), recordObject.keySet()));
                 }
 
                 recordBuilder.add(
                         JsonTrinoConverter.convert(
-                                recordObject,
-                                columnMetadata.getName(),
+                                recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName())),
                                 columnMetadata.getType(),
                                 metadata.getSpec().getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
             }
