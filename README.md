@@ -77,3 +77,12 @@ trino> select * from openapi.default.single_row;
  x  | default-value | my-name
 (1 row)
 ```
+
+
+## API Token configuration
+
+# Providers example
+- Starburst Galaxy
+  - https://docs.starburst.io/starburst-galaxy/access-control/api-auth-token.html
+- Atlassian Jira
+  - https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/#get-an-api-token
