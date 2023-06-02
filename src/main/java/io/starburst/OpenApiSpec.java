@@ -47,10 +47,12 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
+import static io.trino.spi.type.DecimalType.createDecimalType;
+import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
@@ -182,7 +184,15 @@ public class OpenApiSpec
             return Optional.of(INTEGER);
         }
         if (property instanceof NumberSchema) {
-            return Optional.of(BIGINT);
+            Optional<String> format = Optional.ofNullable(property.getFormat());
+            if (format.filter("float"::equals).isPresent()) {
+                return Optional.of(REAL);
+            }
+            if (format.filter("double"::equals).isPresent()) {
+                return Optional.of(DOUBLE);
+            }
+            // arbitrary scale and precision but should fit most numbers
+            return Optional.of(createDecimalType(18, 8));
         }
         if (property instanceof StringSchema) {
             return Optional.of(VARCHAR);
