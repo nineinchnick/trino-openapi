@@ -19,6 +19,7 @@ import io.starburst.adapters.GalaxyAdapter;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.DateSchema;
@@ -59,12 +60,17 @@ public class OpenApiSpec
     private final Map<String, List<ColumnMetadata>> tables;
     private final Map<String, Map<String, Schema<?>>> originalColumnTypes;
     private final Map<String, String> paths;
-    private final Optional<OpenApiSpecAdapter> adapter = Optional.of(new GalaxyAdapter());
+    private static final Map<String, OpenApiSpecAdapter> adapters = Map.of(
+            "Starburst Galaxy Public API", new GalaxyAdapter());
+    private final Optional<OpenApiSpecAdapter> adapter;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
     {
         OpenAPI openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
+
+        Info info = openApi.getInfo();
+        this.adapter = Optional.ofNullable(info != null ? adapters.get(info.getTitle()) : null);
 
         this.tables = openApi.getPaths().values().stream()
                 .filter(this::filterPaths)
@@ -81,6 +87,20 @@ public class OpenApiSpec
         this.paths = openApi.getPaths().entrySet().stream()
                 .filter(entry -> filterPaths(entry.getValue()))
                 .collect(Collectors.toMap(entry -> getIdentifier(entry.getValue().getGet().getOperationId()), Map.Entry::getKey));
+    }
+
+    private static OpenAPI parse(String specLocation)
+    {
+        ParseOptions parseOptions = new ParseOptions();
+        parseOptions.setResolveFully(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readLocation(specLocation, null, parseOptions);
+        OpenAPI openAPI = result.getOpenAPI();
+
+        if (result.getMessages() != null && !result.getMessages().isEmpty()) {
+            throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
+        }
+
+        return openAPI;
     }
 
     private boolean filterPaths(PathItem pathItem)
@@ -105,6 +125,11 @@ public class OpenApiSpec
     public Map<String, Schema<?>> getOriginalColumnTypes(String tableName)
     {
         return originalColumnTypes.get(tableName);
+    }
+
+    public Optional<OpenApiSpecAdapter> getAdapter()
+    {
+        return adapter;
     }
 
     private Map<String, Schema> get200JsonSchema(Operation op)
@@ -182,19 +207,5 @@ public class OpenApiSpec
                         convertType(prop.getValue()).orElseThrow()))
                 .toList();
         return Optional.of(RowType.from(fields));
-    }
-
-    private static OpenAPI parse(String specLocation)
-    {
-        ParseOptions parseOptions = new ParseOptions();
-        parseOptions.setResolveFully(true);
-        SwaggerParseResult result = new OpenAPIV3Parser().readLocation(specLocation, null, parseOptions);
-        OpenAPI openAPI = result.getOpenAPI();
-
-        if (result.getMessages() != null && !result.getMessages().isEmpty()) {
-            throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
-        }
-
-        return openAPI;
     }
 }

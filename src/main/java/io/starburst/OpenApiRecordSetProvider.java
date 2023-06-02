@@ -24,7 +24,6 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
-import io.starburst.adapters.GalaxyAdapter;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -46,7 +45,6 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
@@ -66,8 +64,6 @@ public class OpenApiRecordSetProvider
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
     private final Map<String, String> httpHeaders;
-
-    private final Optional<OpenApiSpecAdapter> adapter = Optional.of(new GalaxyAdapter());
 
     @Inject
     public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient, OpenApiSpec openApiSpec)
@@ -152,24 +148,9 @@ public class OpenApiRecordSetProvider
 
                 log.debug("Serialized to json %s", json);
 
-                JSONArray jsonArray = adapter.map(adapter -> adapter.runAdapter(tableMetadata, json)).orElseThrow();
+                JSONArray jsonArray = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, json)).orElseGet(() -> new JSONArray(List.of(json)));
 
                 return convertJson(jsonArray, tableMetadata);
-
-                /*RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
-                ArrayType arrayType = new ArrayType(rowType);
-                PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
-
-                BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
-                BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
-
-                // TODO populate entries
-                //entryBuilder.closeEntry();
-                blockBuilder.closeEntry();
-                pageBuilder.declarePosition();
-                Block block = arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
-                return List.of(
-                        List.of("x", block));*/
             }
         });
     }
@@ -187,7 +168,7 @@ public class OpenApiRecordSetProvider
             for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
                 // TODO Hack to deal with the fact that some clusters are missing these two columns
                 if (columnMetadata.getName().equals("idle_stop_minutes") && !recordObject.has("idle_stop_minutes")) {
-                    recordBuilder.add(Integer.valueOf(5));
+                    recordBuilder.add(5);
                     continue;
                 }
                 if (columnMetadata.getName().equals("trino_uri") && !recordObject.has("trino_uri")) {

@@ -82,6 +82,21 @@ public class JsonTrinoConverter
         if (type instanceof ArrayType) {
             JSONArray jsonArray = (JSONArray) jsonObject;
             // TODO this should be a Trino Block
+
+            /*
+            RowType rowType = RowType.from(List.of(RowType.field("aa", VARCHAR)));
+            ArrayType arrayType = new ArrayType(rowType);
+            PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
+
+            BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
+            BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
+
+            // populate entries
+            //entryBuilder.closeEntry();
+            blockBuilder.closeEntry();
+            pageBuilder.declarePosition();
+            Block block = arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
+            */
             ImmutableList.Builder<Object> listBuilder = ImmutableList.builder();
             for (Object listObject : jsonArray) {
                 listBuilder.add(convert(listObject, ((ArrayType) type).getElementType(), schemaType.getItems()));
