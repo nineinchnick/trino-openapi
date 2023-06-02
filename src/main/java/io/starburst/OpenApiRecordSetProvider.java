@@ -24,6 +24,7 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
@@ -50,6 +51,7 @@ import java.util.stream.StreamSupport;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareGet;
+import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
@@ -133,7 +135,7 @@ public class OpenApiRecordSetProvider
             public Iterable<List<?>> handle(Request request, Response response)
             {
                 if (response.getStatusCode() != 200) {
-                    throw new RuntimeException(format("Response code for getRows request was not 200: %s", response.getStatusCode()));
+                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Response code for getRows request was not 200: %s", response.getStatusCode()));
                 }
                 String result = "";
                 try {
