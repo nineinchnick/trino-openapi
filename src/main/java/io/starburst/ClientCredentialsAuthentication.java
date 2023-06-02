@@ -33,7 +33,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
 public class ClientCredentialsAuthentication
-        implements AuthenticationFilter
+        implements Authentication
 {
     private final URI baseUri;
     private final String clientId;

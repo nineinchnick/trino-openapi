@@ -16,7 +16,7 @@ package io.starburst;
 import io.airlift.http.client.Request;
 
 public class NoAuthentication
-        implements AuthenticationFilter
+        implements Authentication
 {
     @Override
     public Request filterRequest(Request request)

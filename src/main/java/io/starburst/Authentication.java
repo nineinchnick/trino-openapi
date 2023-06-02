@@ -15,7 +15,7 @@ package io.starburst;
 
 import io.airlift.http.client.HttpRequestFilter;
 
-public interface AuthenticationFilter
+public interface Authentication
         extends HttpRequestFilter
 {
 }

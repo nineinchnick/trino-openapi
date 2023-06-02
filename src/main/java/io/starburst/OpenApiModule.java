@@ -54,12 +54,12 @@ public class OpenApiModule
         binder.bind(OpenApiSpec.class).in(SINGLETON);
         httpClientBinder(binder)
                 .bindHttpClient("openApi", OpenApiClient.class)
-                .withFilter(AuthenticationFilter.class);
+                .withFilter(Authentication.class);
 
         install(conditionalModule(
                 OpenApiConfig.class,
                 config -> config.getAuthenticationType().isEmpty(),
-                conditionalBinder -> conditionalBinder.bind(AuthenticationFilter.class).to(NoAuthentication.class).in(SINGLETON)));
+                conditionalBinder -> conditionalBinder.bind(Authentication.class).to(NoAuthentication.class).in(SINGLETON)));
         install(conditionalModule(
                 OpenApiConfig.class,
                 config -> config.getAuthenticationType()
@@ -68,7 +68,7 @@ public class OpenApiModule
                 conditionalBinder -> {
                     httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
                     configBinder(conditionalBinder).bindConfig(ClientCredentialsAuthenticationConfig.class);
-                    conditionalBinder.bind(AuthenticationFilter.class).to(ClientCredentialsAuthentication.class).in(SINGLETON);
+                    conditionalBinder.bind(Authentication.class).to(ClientCredentialsAuthentication.class).in(SINGLETON);
                 }));
     }
 }
