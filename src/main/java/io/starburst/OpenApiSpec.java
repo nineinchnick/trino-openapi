@@ -14,6 +14,7 @@
 
 package io.starburst;
 
+import com.google.common.base.CaseFormat;
 import io.starburst.adapters.GalaxyAdapter;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -141,7 +142,7 @@ public class OpenApiSpec
 
     public static String getIdentifier(String string)
     {
-        return string.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
+        return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, string);
     }
 
     private Optional<Type> convertType(Schema<?> property)

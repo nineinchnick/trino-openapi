@@ -40,5 +40,7 @@ public class TestOpenApiQueries
     {
         assertQuery("SELECT cloud_region_id FROM list_cluster WHERE cluster_id='w-8135698509'",
                 "VALUES ('aws-us-east1')");
+        assertQuery("SELECT catalog_name FROM list_catalog where catalog_id='c-4450430933'",
+                "VALUES ('otel')");
     }
 }
