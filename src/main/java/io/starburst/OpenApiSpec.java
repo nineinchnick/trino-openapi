@@ -25,7 +25,6 @@ import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.DateSchema;
 import io.swagger.v3.oas.models.media.DateTimeSchema;
 import io.swagger.v3.oas.models.media.IntegerSchema;
-import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
@@ -35,13 +34,12 @@ import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.type.ArrayType;
-import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
-import io.trino.spi.type.TypeOperators;
 
 import javax.inject.Inject;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -152,10 +150,20 @@ public class OpenApiSpec
 
     private Map<String, Schema> get200JsonSchema(Operation op)
     {
-        Map<String, Schema> properties = op.getResponses()
+        Schema schema = op.getResponses()
                 .get("200").getContent()
-                .get("application/json").getSchema()
-                .getProperties();
+                .get("application/json").getSchema();
+
+        Map<String, Schema> properties;
+        if (schema instanceof ArraySchema) {
+            properties = schema.getItems().getProperties();
+        }
+        else {
+            properties = schema.getProperties();
+        }
+        if (properties == null) {
+            return new HashMap<>();
+        }
 
         if (adapter.isPresent()) {
             properties = adapter.get().runAdapter(op.getOperationId(), properties);
@@ -202,11 +210,17 @@ public class OpenApiSpec
 
     private Optional<Type> convertType(Schema<?> property)
     {
-        if (property instanceof MapSchema map) {
-            return Optional.of(new MapType(VARCHAR, convertType((Schema<?>) map.getAdditionalProperties()).orElseThrow(), new TypeOperators()));
+        // ignore arrays with `oneOf`, `anyOf`, `allOf` and `multipleOf` response type
+        if (property.getOneOf() != null
+                || property.getAnyOf() != null
+                || property.getAllOf() != null
+                || property.getMultipleOf() != null
+                // ignore `$ref` as well
+                || property.get$ref() != null) {
+            return Optional.empty();
         }
         if (property instanceof ArraySchema array) {
-            return Optional.of(new ArrayType(convertType(array.getItems()).orElseThrow()));
+            return convertType(array.getItems()).map(ArrayType::new);
         }
         if (property instanceof IntegerSchema) {
             return Optional.of(INTEGER);
@@ -237,13 +251,19 @@ public class OpenApiSpec
         }
         // composite type
         Map<String, Schema> properties = property.getProperties();
+        if (properties == null) {
+            return Optional.empty();
+        }
         requireNonNull(properties, "properties of " + property + " is null");
         List<RowType.Field> fields = properties.entrySet()
                 .stream()
-                .map(prop -> RowType.field(
-                        prop.getKey(),
-                        convertType(prop.getValue()).orElseThrow()))
+                .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
+                .filter(prop -> prop.getValue().isPresent())
+                .map(prop -> RowType.field(prop.getKey(), prop.getValue().get()))
                 .toList();
+        if (fields.isEmpty()) {
+            return Optional.empty();
+        }
         return Optional.of(RowType.from(fields));
     }
 }
