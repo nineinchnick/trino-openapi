@@ -24,6 +24,8 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
+import io.airlift.slice.Slice;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
@@ -35,6 +37,9 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordSet;
+import io.trino.spi.predicate.Domain;
+import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.Type;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -53,9 +58,12 @@ import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
+import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 
 public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
@@ -119,11 +127,32 @@ public class OpenApiRecordSetProvider
     private Iterable<List<?>> getRows(ConnectorSession connectorSession, OpenApiTableHandle table)
     {
         ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
+        String path = table.getPath();
+        Map<String, OpenApiColumnHandle> columns = tableMetadata.getColumns().stream().collect(toMap(ColumnMetadata::getName, column -> new OpenApiColumnHandle(column.getName(), column.getType())));
+        String tableName = table.getSchemaTableName().getTableName();
+        Map<String, Parameter> requiredParams = openApiSpec.getRequiredParameters().get(tableName);
+        // TODO we ignore query and header params
+        Map<String, String> pathParams = requiredParams.entrySet().stream()
+                .filter(entry -> entry.getValue().getIn().equals("path"))
+                .collect(toMap(Map.Entry::getKey, entry -> {
+                    // TODO this will fail for predicates on numeric columns
+                    String value = (String) getFilter(columns.get(entry.getKey()), table.getConstraint(), null);
+                    if (value == null) {
+                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + entry.getKey());
+                    }
+                    return value;
+                }));
+        for (Map.Entry<String, String> entry : pathParams.entrySet()) {
+            // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
+            String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, entry.getKey());
+            path = path.replace(format("{%s}", parameterName), entry.getValue());
+        }
         Request request = prepareGet()
-                .setUri(baseUri.resolve(table.getPath()))
+                .setUri(baseUri.resolve(path))
                 .addHeaders(Multimaps.forMap(httpHeaders))
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .build();
+
         return httpClient.execute(request, new ResponseHandler<>()
         {
             @Override
@@ -156,6 +185,30 @@ public class OpenApiRecordSetProvider
                 return convertJson(jsonArray, tableMetadata);
             }
         });
+    }
+
+    private static Object getFilter(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, Object defaultValue)
+    {
+        requireNonNull(column, "column is null");
+        Domain domain = null;
+        if (constraint.getDomains().isPresent()) {
+            domain = constraint.getDomains().get().get(column);
+        }
+        switch (column.getType().getBaseName()) {
+            case StandardTypes.VARCHAR:
+                if (domain == null) {
+                    return defaultValue;
+                }
+                return ((Slice) domain.getSingleValue()).toStringUtf8();
+            case StandardTypes.BIGINT:
+            case StandardTypes.INTEGER:
+                if (domain == null) {
+                    return defaultValue;
+                }
+                return domain.getSingleValue();
+            default:
+                throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
+        }
     }
 
     private Iterable<List<?>> convertJson(JSONArray jsonArray, ConnectorTableMetadata tableMetadata)

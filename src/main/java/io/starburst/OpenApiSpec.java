@@ -29,6 +29,7 @@ import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -56,10 +57,12 @@ import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
+import static java.util.function.Function.identity;
 
 public class OpenApiSpec
 {
     private final Map<String, List<ColumnMetadata>> tables;
+    private final Map<String, Map<String, Parameter>> requiredParameters;
     private final Map<String, Map<String, Schema<?>>> originalColumnTypes;
     private final Map<String, String> paths;
     private static final Map<String, OpenApiSpecAdapter> adapters = Map.of(
@@ -80,6 +83,14 @@ public class OpenApiSpec
                 .collect(Collectors.toMap(
                         op -> getIdentifier(op.getOperationId()),
                         this::getColumns));
+        this.requiredParameters = openApi.getPaths().values().stream()
+                .filter(this::filterPaths)
+                .map(PathItem::getGet)
+                .collect(Collectors.toMap(
+                        op -> getIdentifier(op.getOperationId()),
+                        op -> op.getParameters().stream()
+                                .filter(Parameter::getRequired)
+                                .collect(Collectors.toMap(parameter -> getIdentifier(parameter.getName()), identity()))));
         this.originalColumnTypes = openApi.getPaths().values().stream()
                 .filter(this::filterPaths)
                 .map(PathItem::getGet)
@@ -119,6 +130,11 @@ public class OpenApiSpec
         return tables;
     }
 
+    public Map<String, Map<String, Parameter>> getRequiredParameters()
+    {
+        return requiredParameters;
+    }
+
     public Map<String, String> getPaths()
     {
         return paths;
@@ -141,12 +157,24 @@ public class OpenApiSpec
                 .get("application/json").getSchema()
                 .getProperties();
 
-        return adapter.map(adapter -> adapter.runAdapter(op.getOperationId(), properties)).orElse(properties);
+        if (adapter.isPresent()) {
+            properties = adapter.get().runAdapter(op.getOperationId(), properties);
+        }
+
+        return properties;
     }
 
     private List<ColumnMetadata> getColumns(Operation op)
     {
-        return get200JsonSchema(op).entrySet().stream()
+        Map<String, Schema> properties = get200JsonSchema(op);
+        // add required parameters as columns, so they can be set as predicates;
+        // predicate values will be saved in the table handle and copied to result rows
+        Map<String, Schema> requiredParameters = op.getParameters().stream()
+                .filter(parameter -> parameter.getRequired() && !properties.containsKey(parameter.getName()))
+                .collect(Collectors.toMap(Parameter::getName, Parameter::getSchema));
+        properties.putAll(requiredParameters);
+
+        return properties.entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())
                 .map(property -> {
                     Schema<?> value = property.getValue();
