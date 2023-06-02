@@ -14,9 +14,12 @@
 
 package io.starburst;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.type.ArrayType;
@@ -31,8 +34,6 @@ import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
@@ -55,25 +57,25 @@ public class JsonTrinoConverter
     {
     }
 
-    public static Object convert(Object jsonObject, Type type, Schema<?> schemaType)
+    public static Object convert(JsonNode jsonNode, Type type, Schema<?> schemaType)
     {
         if (type instanceof IntegerType) {
-            return jsonObject;
+            return jsonNode.asInt();
         }
         if (type instanceof BigintType) {
-            return jsonObject;
+            return jsonNode.bigIntegerValue();
         }
         if (type instanceof VarcharType) {
-            return jsonObject;
+            return jsonNode.asText();
         }
         if (type instanceof DateType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
+            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonNode.asText());
             return getSqlDate(LocalDate.from(temporalAccessor));
         }
         if (type instanceof TimestampType) {
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonObject.toString());
+            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonNode.asText());
             if (temporalAccessor instanceof Instant instant) {
                 return instant.toEpochMilli();
             }
@@ -83,38 +85,37 @@ public class JsonTrinoConverter
             if (temporalAccessor instanceof ZonedDateTime zonedDateTime) {
                 return zonedDateTime.toEpochSecond();
             }
-            throw new RuntimeException(format("Unsupported TemporalAccessor type %s", temporalAccessor.getClass().getCanonicalName()));
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Unsupported TemporalAccessor type %s", temporalAccessor.getClass().getCanonicalName()));
         }
         if (type instanceof BooleanType) {
-            return jsonObject;
+            return jsonNode.asBoolean();
         }
         if (type instanceof MapType) {
-            throw new RuntimeException("MapType unsupported currently");
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, "MapType unsupported currently");
         }
         if (type instanceof ArrayType arrayType) {
-            return buildArray((JSONArray) jsonObject, arrayType, schemaType);
+            return buildArray((ArrayNode) jsonNode, arrayType, schemaType);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
 
-    private static Block buildArray(JSONArray jsonArray, ArrayType arrayType, Schema<?> schemaType)
+    private static Block buildArray(ArrayNode jsonArray, ArrayType arrayType, Schema<?> schemaType)
     {
         PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
 
         BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
         BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
 
-        for (Object listObject : jsonArray) {
+        for (JsonNode listObject : jsonArray) {
             if (arrayType.getElementType() instanceof RowType rowType) {
                 BlockBuilder rowBuilder = entryBuilder.beginBlockEntry();
-                JSONObject obj = (JSONObject) listObject;
                 // iterate over subfields, same as we build the rowType
                 List<Map.Entry<String, Schema>> fieldTypes = schemaType.getProperties().entrySet().stream().toList();
                 IntStream.range(0, fieldTypes.size()).forEach(i -> {
                     String fieldName = fieldTypes.get(i).getKey();
                     Schema fieldSchema = fieldTypes.get(i).getValue();
                     Type fieldType = rowType.getTypeParameters().get(i);
-                    Object value = convert(obj.get(fieldName), fieldType, fieldSchema);
+                    Object value = convert(listObject.get(fieldName), fieldType, fieldSchema);
                     writeTo(rowBuilder, value, fieldType);
                 });
                 entryBuilder.closeEntry();

@@ -14,10 +14,9 @@
 
 package io.starburst;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.connector.ConnectorTableMetadata;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.util.Map;
 
@@ -25,5 +24,5 @@ public interface OpenApiSpecAdapter
 {
     Map<String, Schema> runAdapter(String operationId, Map<String, Schema> original);
 
-    JSONArray runAdapter(ConnectorTableMetadata tableMetadata, JSONObject original);
+    JsonNode runAdapter(ConnectorTableMetadata tableMetadata, JsonNode original);
 }

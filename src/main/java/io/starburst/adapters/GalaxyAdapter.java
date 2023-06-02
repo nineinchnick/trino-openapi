@@ -14,11 +14,11 @@
 
 package io.starburst.adapters;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.starburst.OpenApiSpecAdapter;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.connector.ConnectorTableMetadata;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.util.Map;
 
@@ -33,11 +33,11 @@ public class GalaxyAdapter
         return original;
     }
 
-    public JSONArray runAdapter(ConnectorTableMetadata tableMetadata, JSONObject original)
+    public JsonNode runAdapter(ConnectorTableMetadata tableMetadata, JsonNode original)
     {
-        if (original.keySet().contains("result")) {
-            return original.getJSONArray("result");
+        if (original.has("result") && original.get("result") instanceof ArrayNode) {
+            return original.get("result");
         }
-        return null;
+        return original;
     }
 }

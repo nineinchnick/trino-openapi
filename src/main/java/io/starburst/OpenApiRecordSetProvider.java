@@ -14,6 +14,10 @@
 
 package io.starburst;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.common.base.CaseFormat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
@@ -39,8 +43,6 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.Type;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import javax.inject.Inject;
 
@@ -143,6 +145,9 @@ public class OpenApiRecordSetProvider
             String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, entry.getKey());
             path = path.replace(format("{%s}", parameterName), entry.getValue());
         }
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
         Request request = prepareGet()
                 .setUri(baseUri.resolve(path))
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
@@ -171,13 +176,18 @@ public class OpenApiRecordSetProvider
                 }
                 log.debug("Received response code " + response.getStatusCode() + ": " + result);
 
-                JSONObject json = new JSONObject(result);
+                try {
+                    JsonNode jsonNode = objectMapper.readTree(result);
 
-                log.debug("Serialized to json %s", json);
+                    log.debug("Marshalled response to json %s", jsonNode);
 
-                JSONArray jsonArray = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, json)).orElseGet(() -> new JSONArray(List.of(json)));
+                    JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, jsonNode)).orElse(jsonNode);
 
-                return convertJson(jsonArray, tableMetadata);
+                    return convertJson(jsonNodeToUse, tableMetadata);
+                }
+                catch (JsonProcessingException ex) {
+                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Could not marshal JSON from API response: %s", result), ex);
+                }
             }
         });
     }
@@ -206,30 +216,44 @@ public class OpenApiRecordSetProvider
         }
     }
 
-    private Iterable<List<?>> convertJson(JSONArray jsonArray, ConnectorTableMetadata tableMetadata)
+    private Iterable<List<?>> convertJson(JsonNode jsonNode, ConnectorTableMetadata tableMetadata)
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
-        for (Object obj : jsonArray) {
-            if (!(obj instanceof JSONObject recordObject)) {
-                throw new RuntimeException(format("JSONArray object is not JSONObject: %s", obj.getClass()));
-            }
 
-            List<Object> recordBuilder = new ArrayList<>();
-            for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-                // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
-                String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName());
-                if (!recordObject.has(parameterName)) {
-                    recordBuilder.add(null);
-                    continue;
-                }
-                recordBuilder.add(
-                        JsonTrinoConverter.convert(
-                                recordObject.get(parameterName),
-                                columnMetadata.getType(),
-                                openApiSpec.getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
+        if (jsonNode instanceof ArrayNode) {
+            ArrayNode jsonArray = (ArrayNode) jsonNode;
+            for (JsonNode jsonRecord : jsonArray) {
+                resultRecordsBuilder.add(convertJsonToRecord(jsonRecord, tableMetadata));
             }
-            resultRecordsBuilder.add(recordBuilder);
         }
+        else {
+            resultRecordsBuilder.add(convertJsonToRecord(jsonNode, tableMetadata));
+        }
+
         return resultRecordsBuilder.build();
+    }
+
+    private List<?> convertJsonToRecord(JsonNode jsonNode, ConnectorTableMetadata tableMetadata)
+    {
+        if (!jsonNode.isObject()) {
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
+        }
+
+        List<Object> recordBuilder = new ArrayList<>();
+        for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
+            // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
+            String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName());
+            if (!jsonNode.has(parameterName)) {
+                recordBuilder.add(null);
+                continue;
+            }
+            recordBuilder.add(
+                    JsonTrinoConverter.convert(
+                            jsonNode.get(parameterName),
+                            columnMetadata.getType(),
+                            openApiSpec.getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
+        }
+
+        return recordBuilder;
     }
 }
