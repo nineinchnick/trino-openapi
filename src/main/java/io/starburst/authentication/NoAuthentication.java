@@ -11,10 +11,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.starburst;
+package io.starburst.authentication;
 
-public enum AuthenticationType
+import io.airlift.http.client.Request;
+
+public class NoAuthentication
+        implements Authentication
 {
-    CLIENT_CREDENTIALS,
-    /**/;
+    @Override
+    public Request filterRequest(Request request)
+    {
+        return request;
+    }
 }

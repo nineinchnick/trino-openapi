@@ -16,6 +16,11 @@ package io.starburst;
 
 import com.google.inject.Binder;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
+import io.starburst.authentication.Authentication;
+import io.starburst.authentication.ClientCredentialsAuthentication;
+import io.starburst.authentication.ClientCredentialsAuthenticationConfig;
+import io.starburst.authentication.NoAuthentication;
+import io.starburst.authentication.OpenApiAuthenticationClient;
 import io.trino.spi.NodeManager;
 import io.trino.spi.type.TypeManager;
 
@@ -23,7 +28,7 @@ import static com.google.inject.Scopes.SINGLETON;
 import static io.airlift.configuration.ConditionalModule.conditionalModule;
 import static io.airlift.configuration.ConfigBinder.configBinder;
 import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
-import static io.starburst.AuthenticationType.CLIENT_CREDENTIALS;
+import static io.starburst.authentication.AuthenticationType.CLIENT_CREDENTIALS;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Predicate.isEqual;
 

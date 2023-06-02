@@ -11,12 +11,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.starburst;
+package io.starburst.authentication;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Suppliers;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
+import io.starburst.OpenApiConfig;
 
 import javax.inject.Inject;
 

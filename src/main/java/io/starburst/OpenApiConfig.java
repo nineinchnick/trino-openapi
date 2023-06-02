@@ -16,6 +16,7 @@ package io.starburst;
 
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
+import io.starburst.authentication.AuthenticationType;
 
 import javax.validation.constraints.NotNull;
 

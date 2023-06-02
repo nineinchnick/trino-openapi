@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package io.starburst;
+package io.starburst.authentication;
 
 import javax.inject.Qualifier;
 
