@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
 import com.google.common.io.CharStreams;
+import com.google.common.primitives.Primitives;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
@@ -43,7 +44,9 @@ import javax.inject.Inject;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.StreamSupport;
@@ -161,37 +164,25 @@ public class OpenApiRecordSetProvider
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
         for (Object obj : jsonArray) {
-            if (!(obj instanceof JSONObject)) {
+            if (!(obj instanceof JSONObject recordObject)) {
                 throw new RuntimeException(format("JSONArray object is not JSONObject: %s", obj.getClass()));
             }
-            JSONObject recordObject = (JSONObject) obj;
 
-            ImmutableList.Builder<Object> recordBuilder = ImmutableList.builder();
+            List<Object> recordBuilder = new ArrayList<>();
             for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-                // TODO Hack to deal with the fact that some clusters are missing these two columns
-                if (columnMetadata.getName().equals("idle_stop_minutes") && !recordObject.has("idle_stop_minutes")) {
-                    recordBuilder.add(5);
-                    continue;
-                }
-                if (columnMetadata.getName().equals("trino_uri") && !recordObject.has("trino_uri")) {
-                    recordBuilder.add("trinoplane.com");
-                    continue;
-                }
-
                 // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
-                Object columnValue = recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName()));
-
-                if (columnValue == null) {
-                    throw new RuntimeException(format("JSON record missing column: %s, has columns: %s", columnMetadata.getName(), recordObject.keySet()));
+                String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName());
+                if (!recordObject.has(parameterName)) {
+                    recordBuilder.add(null);
+                    continue;
                 }
-
                 recordBuilder.add(
                         JsonTrinoConverter.convert(
-                                columnValue,
+                                recordObject.get(parameterName),
                                 columnMetadata.getType(),
                                 openApiSpec.getOriginalColumnTypes(tableMetadata.getTable().getTableName()).get(columnMetadata.getName())));
             }
-            resultRecordsBuilder.add(recordBuilder.build());
+            resultRecordsBuilder.add(recordBuilder);
         }
         return resultRecordsBuilder.build();
     }
