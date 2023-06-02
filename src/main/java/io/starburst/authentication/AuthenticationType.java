@@ -16,5 +16,6 @@ package io.starburst.authentication;
 public enum AuthenticationType
 {
     CLIENT_CREDENTIALS,
+    BASIC,
     /**/;
 }

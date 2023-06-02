@@ -17,6 +17,8 @@ package io.starburst;
 import com.google.inject.Binder;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.starburst.authentication.Authentication;
+import io.starburst.authentication.BasicAuthentication;
+import io.starburst.authentication.BasicAuthenticationConfig;
 import io.starburst.authentication.ClientCredentialsAuthentication;
 import io.starburst.authentication.ClientCredentialsAuthenticationConfig;
 import io.starburst.authentication.NoAuthentication;
@@ -28,6 +30,7 @@ import static com.google.inject.Scopes.SINGLETON;
 import static io.airlift.configuration.ConditionalModule.conditionalModule;
 import static io.airlift.configuration.ConfigBinder.configBinder;
 import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
+import static io.starburst.authentication.AuthenticationType.BASIC;
 import static io.starburst.authentication.AuthenticationType.CLIENT_CREDENTIALS;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Predicate.isEqual;
@@ -74,6 +77,15 @@ public class OpenApiModule
                     httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
                     configBinder(conditionalBinder).bindConfig(ClientCredentialsAuthenticationConfig.class);
                     conditionalBinder.bind(Authentication.class).to(ClientCredentialsAuthentication.class).in(SINGLETON);
+                }));
+        install(conditionalModule(
+                OpenApiConfig.class,
+                config -> config.getAuthenticationType()
+                        .filter(isEqual(BASIC))
+                        .isPresent(),
+                conditionalBinder -> {
+                    configBinder(conditionalBinder).bindConfig(BasicAuthenticationConfig.class);
+                    conditionalBinder.bind(Authentication.class).to(BasicAuthentication.class).in(SINGLETON);
                 }));
     }
 }
