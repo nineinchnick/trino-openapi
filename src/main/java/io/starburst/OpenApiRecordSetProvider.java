@@ -16,8 +16,6 @@ package io.starburst;
 
 import com.google.common.base.CaseFormat;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimaps;
 import com.google.common.io.CharStreams;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
@@ -74,7 +72,6 @@ public class OpenApiRecordSetProvider
     private final OpenApiMetadata metadata;
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
-    private final Map<String, String> httpHeaders;
 
     @Inject
     public OpenApiRecordSetProvider(OpenApiConfig config, OpenApiMetadata metadata, @OpenApiClient HttpClient httpClient, OpenApiSpec openApiSpec)
@@ -83,7 +80,6 @@ public class OpenApiRecordSetProvider
         this.metadata = metadata;
         this.httpClient = httpClient;
         this.openApiSpec = openApiSpec;
-        this.httpHeaders = ImmutableMap.copyOf(config.getHttpHeaders());
     }
 
     @Override
@@ -149,7 +145,6 @@ public class OpenApiRecordSetProvider
         }
         Request request = prepareGet()
                 .setUri(baseUri.resolve(path))
-                .addHeaders(Multimaps.forMap(httpHeaders))
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .build();
 

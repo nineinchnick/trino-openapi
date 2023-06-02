@@ -15,14 +15,17 @@
 package io.starburst;
 
 import com.google.inject.Binder;
-import com.google.inject.Scopes;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.spi.NodeManager;
 import io.trino.spi.type.TypeManager;
 
+import static com.google.inject.Scopes.SINGLETON;
+import static io.airlift.configuration.ConditionalModule.conditionalModule;
 import static io.airlift.configuration.ConfigBinder.configBinder;
 import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
+import static io.starburst.AuthenticationType.CLIENT_CREDENTIALS;
 import static java.util.Objects.requireNonNull;
+import static java.util.function.Predicate.isEqual;
 
 public class OpenApiModule
         extends AbstractConfigurationAwareModule
@@ -42,13 +45,30 @@ public class OpenApiModule
         binder.bind(NodeManager.class).toInstance(nodeManager);
         binder.bind(TypeManager.class).toInstance(typeManager);
 
-        binder.bind(OpenApiConnector.class).in(Scopes.SINGLETON);
-        binder.bind(OpenApiMetadata.class).in(Scopes.SINGLETON);
-        binder.bind(OpenApiSplitManager.class).in(Scopes.SINGLETON);
-        binder.bind(OpenApiRecordSetProvider.class).in(Scopes.SINGLETON);
+        binder.bind(OpenApiConnector.class).in(SINGLETON);
+        binder.bind(OpenApiMetadata.class).in(SINGLETON);
+        binder.bind(OpenApiSplitManager.class).in(SINGLETON);
+        binder.bind(OpenApiRecordSetProvider.class).in(SINGLETON);
         configBinder(binder).bindConfig(OpenApiConfig.class);
 
-        binder.bind(OpenApiSpec.class).in(Scopes.SINGLETON);
-        httpClientBinder(binder).bindHttpClient("openApi", OpenApiClient.class);
+        binder.bind(OpenApiSpec.class).in(SINGLETON);
+        httpClientBinder(binder)
+                .bindHttpClient("openApi", OpenApiClient.class)
+                .withFilter(AuthenticationFilter.class);
+
+        install(conditionalModule(
+                OpenApiConfig.class,
+                config -> config.getAuthenticationType().isEmpty(),
+                conditionalBinder -> conditionalBinder.bind(AuthenticationFilter.class).to(NoAuthentication.class).in(SINGLETON)));
+        install(conditionalModule(
+                OpenApiConfig.class,
+                config -> config.getAuthenticationType()
+                        .filter(isEqual(CLIENT_CREDENTIALS))
+                        .isPresent(),
+                conditionalBinder -> {
+                    httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
+                    configBinder(conditionalBinder).bindConfig(ClientCredentialsAuthenticationConfig.class);
+                    conditionalBinder.bind(AuthenticationFilter.class).to(ClientCredentialsAuthentication.class).in(SINGLETON);
+                }));
     }
 }
