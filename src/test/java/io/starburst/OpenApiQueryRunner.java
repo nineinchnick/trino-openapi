@@ -54,7 +54,7 @@ public class OpenApiQueryRunner
                 "openapi",
                 Map.of(
                         "spec-location", "galaxy.spec.json",
-                        "base-uri", "https://ping.galaxy-dev.io",
+                        "base-uri", requireNonNullElse(System.getenv("GALAXY_BASE_URI"), "https://ping.galaxy-dev.io"),
                         "http-headers", "Authorization: Bearer " + requireNonNull(System.getenv("OPENAPI_BEARER_TOKEN")),
                         "openApi.http-client.log.enabled", "true",
                         "openApi.http-client.log.path", "logs"));
