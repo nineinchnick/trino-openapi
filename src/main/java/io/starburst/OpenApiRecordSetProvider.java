@@ -123,7 +123,6 @@ public class OpenApiRecordSetProvider
                 .addHeaders(Multimaps.forMap(httpHeaders))
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .build();
-        // TODO for building blocks we need a pageBuilder of a certain array type, get that from metadata
         return httpClient.execute(request, new ResponseHandler<>()
         {
             @Override
@@ -184,8 +183,19 @@ public class OpenApiRecordSetProvider
 
             ImmutableList.Builder<Object> recordBuilder = ImmutableList.builder();
             for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-                // Currently fails here due to it looking for the paginated object column 'next_page_token'
+
+                // Hack to deal with the fact that some clusters are missing these two columns
+                if (columnMetadata.getName().equals("idle_stop_minutes") && !recordObject.has("idle_stop_minutes")) {
+                    recordBuilder.add(new Integer(5));
+                    continue;
+                }
+                if (columnMetadata.getName().equals("trino_uri") && !recordObject.has("trino_uri")) {
+                    recordBuilder.add("trinoplane.com");
+                    continue;
+                }
+
                 Object columnValue = recordObject.get(CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName()));
+
                 if (columnValue == null) {
                     throw new RuntimeException(format("JSON record missing column: %s, has columns: %s", columnMetadata.getName(), recordObject.keySet()));
                 }

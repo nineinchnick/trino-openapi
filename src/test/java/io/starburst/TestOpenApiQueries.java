@@ -38,7 +38,7 @@ public class TestOpenApiQueries
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT count(*) FROM list_cluster",
-                "VALUES 1");
+        assertQuery("SELECT cloud_region_id FROM list_cluster WHERE cluster_id='w-8135698509'",
+                "VALUES ('aws-us-east1')");
     }
 }
