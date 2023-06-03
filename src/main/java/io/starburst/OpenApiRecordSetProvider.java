@@ -126,20 +126,8 @@ public class OpenApiRecordSetProvider
     {
         ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
         String path = table.getPath();
-        Map<String, OpenApiColumnHandle> columns = tableMetadata.getColumns().stream().collect(toMap(ColumnMetadata::getName, column -> new OpenApiColumnHandle(column.getName(), column.getType())));
-        String tableName = table.getSchemaTableName().getTableName();
-        Map<String, Parameter> requiredParams = openApiSpec.getRequiredParameters().get(tableName);
         // TODO we ignore query and header params
-        Map<String, String> pathParams = requiredParams.entrySet().stream()
-                .filter(entry -> entry.getValue().getIn().equals("path"))
-                .collect(toMap(Map.Entry::getKey, entry -> {
-                    // TODO this will fail for predicates on numeric columns
-                    String value = (String) getFilter(columns.get(entry.getKey()), table.getConstraint(), null);
-                    if (value == null) {
-                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + entry.getKey());
-                    }
-                    return value;
-                }));
+        Map<String, String> pathParams = getFilterValues(connectorSession, table);
         for (Map.Entry<String, String> entry : pathParams.entrySet()) {
             // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
             String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, entry.getKey());
@@ -183,13 +171,31 @@ public class OpenApiRecordSetProvider
 
                     JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, jsonNode)).orElse(jsonNode);
 
-                    return convertJson(jsonNodeToUse, tableMetadata);
+                    return convertJson(connectorSession, table, jsonNodeToUse);
                 }
                 catch (JsonProcessingException ex) {
                     throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Could not marshal JSON from API response: %s", result), ex);
                 }
             }
         });
+    }
+
+    private Map<String, String> getFilterValues(ConnectorSession connectorSession, OpenApiTableHandle table)
+    {
+        Map<String, ColumnHandle> columns = metadata.getColumnHandles(connectorSession, table);
+        String tableName = table.getSchemaTableName().getTableName();
+        Map<String, Parameter> requiredParams = openApiSpec.getRequiredParameters().get(tableName);
+        // TODO we ignore query and header params
+        return requiredParams.entrySet().stream()
+                .filter(entry -> entry.getValue().getIn().equals("path"))
+                .collect(toMap(Map.Entry::getKey, entry -> {
+                    // TODO this will fail for predicates on numeric columns
+                    String value = (String) getFilter((OpenApiColumnHandle) columns.get(entry.getKey()), table.getConstraint(), null);
+                    if (value == null) {
+                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + entry.getKey());
+                    }
+                    return value;
+                }));
     }
 
     private static Object getFilter(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, Object defaultValue)
@@ -216,24 +222,26 @@ public class OpenApiRecordSetProvider
         }
     }
 
-    private Iterable<List<?>> convertJson(JsonNode jsonNode, ConnectorTableMetadata tableMetadata)
+    private Iterable<List<?>> convertJson(ConnectorSession connectorSession, OpenApiTableHandle table, JsonNode jsonNode)
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
+        ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
+        Map<String, String> pathParams = getFilterValues(connectorSession, table);
         if (jsonNode instanceof ArrayNode) {
             ArrayNode jsonArray = (ArrayNode) jsonNode;
             for (JsonNode jsonRecord : jsonArray) {
-                resultRecordsBuilder.add(convertJsonToRecord(jsonRecord, tableMetadata));
+                resultRecordsBuilder.add(convertJsonToRecord(tableMetadata, pathParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.add(convertJsonToRecord(jsonNode, tableMetadata));
+            resultRecordsBuilder.add(convertJsonToRecord(tableMetadata, pathParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private List<?> convertJsonToRecord(JsonNode jsonNode, ConnectorTableMetadata tableMetadata)
+    private List<?> convertJsonToRecord(ConnectorTableMetadata tableMetadata, Map<String, String> pathParams, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
@@ -244,7 +252,8 @@ public class OpenApiRecordSetProvider
             // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
             String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName());
             if (!jsonNode.has(parameterName)) {
-                recordBuilder.add(null);
+                // this might be a virtual column for a required parameter, if so, copy the value from the constraint
+                recordBuilder.add(pathParams.getOrDefault(parameterName, null));
                 continue;
             }
             recordBuilder.add(
