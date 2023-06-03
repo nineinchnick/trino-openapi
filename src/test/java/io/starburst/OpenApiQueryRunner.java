@@ -56,8 +56,8 @@ public class OpenApiQueryRunner
                         "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), "galaxy.spec.json"),
                         "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), "https://ping.galaxy-dev.io"),
                         "authentication.type", "client-credentials",
-                        "authentication.client-id", requireNonNull(System.getenv("OPENAPI_CLIENT_ID")),
-                        "authentication.client-secret", requireNonNull(System.getenv("OPENAPI_CLIENT_SECRET")),
+                        "authentication.client-id", requireNonNull(System.getenv("OPENAPI_CLIENT_ID"), "\"OPENAPI_CLIENT_ID\" environment variable must be set"),
+                        "authentication.client-secret", requireNonNull(System.getenv("OPENAPI_CLIENT_SECRET"), "\"OPENAPI_CLIENT_SECRET\" environment variable must be set"),
                         "openApi.http-client.log.enabled", "true",
                         "openApi.http-client.log.path", "logs"));
 

@@ -3,7 +3,7 @@ Trino Plugin
 
 [![Build Status](https://github.com/starburstdata/trino-openapi/actions/workflows/release.yaml/badge.svg)](https://github.com/starburstdata/trino-openapi/actions/workflows/release.yaml)
 
-This is a [Trino](http://trino.io/) plugin that provides a connector.
+This is a [Trino](http://trino.io/) plugin that provides a connector to read from HTTP APIs given an OpenAPI specification.
 
 # Quick Start
 
@@ -12,6 +12,10 @@ To run a Docker container with the connector, run the following:
 docker run \
   -d \
   --name trino-openapi \
+  -e OPENAPI_SPEC_LOCATION=galaxy.spec.json \
+  -e OPENAPI_BASE_URI=https://ping.galaxy-dev.io \
+  -e OPENAPI_CLIENT_ID \
+  -e OPENAPI_CLIENT_SECRET \
   -p 8080:8080 \
   starburstdata/trino-openapi:0.1
 ```
@@ -27,6 +31,9 @@ Create a `openapi.properties` file in your Trino catalog directory and set all t
 connector.name=openapi
 spec-location=https://galaxy.starburst.io/public/openapi/v1/json
 base-uri=https://ping.galaxy.starburst.io
+authentication.type=client-credentials
+authentication.client-id=${ENV:OPENAPI_CLIENT_ID}
+authentication.client-secret=${ENV:OPENAPI_CLIENT_SECRET}
 ```
 
 After reloading Trino, you should be able to connect to the `openapi` catalog.
