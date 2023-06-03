@@ -25,7 +25,9 @@ import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.DateSchema;
 import io.swagger.v3.oas.models.media.DateTimeSchema;
 import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
+import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -34,8 +36,10 @@ import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
 
 import javax.inject.Inject;
 
@@ -222,6 +226,9 @@ public class OpenApiSpec
         if (property instanceof ArraySchema array) {
             return convertType(array.getItems()).map(ArrayType::new);
         }
+        if (property instanceof MapSchema map && map.getAdditionalProperties() instanceof Schema<?> valueSchema) {
+            return convertType(valueSchema).map(type -> new MapType(VARCHAR, type, new TypeOperators()));
+        }
         if (property instanceof IntegerSchema) {
             return Optional.of(INTEGER);
         }
@@ -249,21 +256,25 @@ public class OpenApiSpec
         if (property instanceof BooleanSchema) {
             return Optional.of(BOOLEAN);
         }
-        // composite type
-        Map<String, Schema> properties = property.getProperties();
-        if (properties == null) {
-            return Optional.empty();
+        if (property instanceof ObjectSchema) {
+            // composite type
+            Map<String, Schema> properties = property.getProperties();
+            if (properties == null) {
+                return Optional.empty();
+            }
+            requireNonNull(properties, "properties of " + property + " is null");
+            List<RowType.Field> fields = properties.entrySet()
+                    .stream()
+                    .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
+                    .filter(prop -> prop.getValue().isPresent())
+                    .map(prop -> RowType.field(prop.getKey(), prop.getValue().get()))
+                    .toList();
+            if (fields.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(RowType.from(fields));
         }
-        requireNonNull(properties, "properties of " + property + " is null");
-        List<RowType.Field> fields = properties.entrySet()
-                .stream()
-                .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
-                .filter(prop -> prop.getValue().isPresent())
-                .map(prop -> RowType.field(prop.getKey(), prop.getValue().get()))
-                .toList();
-        if (fields.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(RowType.from(fields));
+        // TODO log unknown type
+        return Optional.of(VARCHAR);
     }
 }

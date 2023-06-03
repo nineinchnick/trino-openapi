@@ -49,6 +49,7 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.String.format;
 
 public class JsonTrinoConverter
@@ -59,6 +60,9 @@ public class JsonTrinoConverter
 
     public static Object convert(JsonNode jsonNode, Type type, Schema<?> schemaType)
     {
+        if (jsonNode == null) {
+            return null;
+        }
         if (type instanceof IntegerType) {
             return jsonNode.asInt();
         }
@@ -90,11 +94,20 @@ public class JsonTrinoConverter
         if (type instanceof BooleanType) {
             return jsonNode.asBoolean();
         }
-        if (type instanceof MapType) {
-            throw new TrinoException(GENERIC_INTERNAL_ERROR, "MapType unsupported currently");
+        if (type instanceof MapType mapType) {
+            return buildMap(jsonNode, mapType, schemaType);
         }
         if (type instanceof ArrayType arrayType) {
             return buildArray((ArrayNode) jsonNode, arrayType, schemaType);
+        }
+        if (type instanceof RowType rowType) {
+            PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(rowType));
+            BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
+            BlockBuilder rowBuilder = blockBuilder.beginBlockEntry();
+            writeRow(rowBuilder, jsonNode, rowType, schemaType);
+            blockBuilder.closeEntry();
+            pageBuilder.declarePosition();
+            return rowType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
@@ -108,17 +121,7 @@ public class JsonTrinoConverter
 
         for (JsonNode listObject : jsonArray) {
             if (arrayType.getElementType() instanceof RowType rowType) {
-                BlockBuilder rowBuilder = entryBuilder.beginBlockEntry();
-                // iterate over subfields, same as we build the rowType
-                List<Map.Entry<String, Schema>> fieldTypes = schemaType.getProperties().entrySet().stream().toList();
-                IntStream.range(0, fieldTypes.size()).forEach(i -> {
-                    String fieldName = fieldTypes.get(i).getKey();
-                    Schema fieldSchema = fieldTypes.get(i).getValue();
-                    Type fieldType = rowType.getTypeParameters().get(i);
-                    Object value = convert(listObject.get(fieldName), fieldType, fieldSchema);
-                    writeTo(rowBuilder, value, fieldType);
-                });
-                entryBuilder.closeEntry();
+                writeRow(entryBuilder, listObject, rowType, schemaType.getItems());
             }
             else {
                 Object value = convert(listObject, arrayType.getElementType(), schemaType.getItems());
@@ -129,6 +132,38 @@ public class JsonTrinoConverter
         blockBuilder.closeEntry();
         pageBuilder.declarePosition();
         return arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
+    }
+
+    private static Block buildMap(JsonNode node, MapType mapType, Schema<?> schemaType)
+    {
+        BlockBuilder blockBuilder = mapType.createBlockBuilder(null, node.size());
+        BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
+        node.fields().forEachRemaining(entry -> {
+            VARCHAR.writeString(entryBuilder, entry.getKey());
+            Object value = convert(entry.getValue(), mapType.getValueType(), (Schema<?>) schemaType.getAdditionalProperties());
+            writeTo(entryBuilder, value, mapType.getValueType());
+        });
+        blockBuilder.closeEntry();
+        return mapType.getObject(blockBuilder, 0);
+    }
+
+    private static void writeRow(BlockBuilder blockBuilder, JsonNode node, RowType rowType, Schema<?> schemaType)
+    {
+        if (node == null) {
+            blockBuilder.appendNull();
+            return;
+        }
+        BlockBuilder rowBuilder = blockBuilder.beginBlockEntry();
+        // iterate over subfields, same as we build the rowType
+        List<Map.Entry<String, Schema>> fieldTypes = schemaType.getProperties().entrySet().stream().toList();
+        IntStream.range(0, fieldTypes.size()).forEach(i -> {
+            String fieldName = fieldTypes.get(i).getKey();
+            Schema fieldSchema = fieldTypes.get(i).getValue();
+            Type fieldType = rowType.getTypeParameters().get(i);
+            Object value = convert(node.get(fieldName), fieldType, fieldSchema);
+            writeTo(rowBuilder, value, fieldType);
+        });
+        blockBuilder.closeEntry();
     }
 
     private static void writeTo(BlockBuilder rowBuilder, Object value, Type type)
@@ -148,6 +183,14 @@ public class JsonTrinoConverter
         if (type instanceof TimestampType timestampType) {
             // TODO check precision
             timestampType.writeLong(rowBuilder, packTimestamp((ZonedDateTime) value));
+            return;
+        }
+        if (type instanceof MapType mapType) {
+            mapType.writeObject(rowBuilder, value);
+            return;
+        }
+        if (type instanceof ArrayType arrayType) {
+            arrayType.writeObject(rowBuilder, value);
             return;
         }
         throw new RuntimeException(format("Unsupported array element type %s", type.getClass().getCanonicalName()));

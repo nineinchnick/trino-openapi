@@ -49,17 +49,32 @@ public class OpenApiQueryRunner
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
 
-        queryRunner.createCatalog(
-                "openapi",
-                "openapi",
-                Map.of(
-                        "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), "galaxy.spec.json"),
-                        "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), "https://ping.galaxy-dev.io"),
-                        "authentication.type", "client-credentials",
-                        "authentication.client-id", requireNonNull(System.getenv("OPENAPI_CLIENT_ID"), "\"OPENAPI_CLIENT_ID\" environment variable must be set"),
-                        "authentication.client-secret", requireNonNull(System.getenv("OPENAPI_CLIENT_SECRET"), "\"OPENAPI_CLIENT_SECRET\" environment variable must be set"),
-                        "openApi.http-client.log.enabled", "true",
-                        "openApi.http-client.log.path", "logs"));
+        ImmutableMap.Builder<String, String> catalogProperties = ImmutableMap.builder();
+        catalogProperties.putAll(Map.of(
+                "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), "galaxy.spec.json"),
+                "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), "https://ping.galaxy-dev.io"),
+                "openApi.http-client.log.enabled", "true",
+                "openApi.http-client.log.path", "logs"));
+        String authType = requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "client-credentials");
+        if (authType.equals("basic")) {
+            if (System.getenv("OPENAPI_USERNAME") == null || System.getenv("OPENAPI_PASSWORD") == null) {
+                throw new IllegalArgumentException("OPENAPI_USERNAME and OPENAPI_PASSWORD must be set when OPENAPI_AUTH_TYPE is basic");
+            }
+            catalogProperties.putAll(Map.of(
+                    "authentication.type", authType,
+                    "authentication.username", System.getenv("OPENAPI_USERNAME"),
+                    "authentication.password", System.getenv("OPENAPI_PASSWORD")));
+        }
+        if (authType.equals("client-credentials")) {
+            if (System.getenv("OPENAPI_CLIENT_USERNAME") == null || System.getenv("OPENAPI_CLIENT_CLIENT_SECRET") == null) {
+                throw new IllegalArgumentException("OPENAPI_CLIENT_USERNAME and OPENAPI_CLIENT_CLIENT_SECRET must be set when OPENAPI_AUTH_TYPE is client-credentials");
+            }
+            catalogProperties.putAll(Map.of(
+                    "authentication.type", authType,
+                    "authentication.client-id", System.getenv("OPENAPI_CLIENT_ID"),
+                    "authentication.client-secret", System.getenv("OPENAPI_CLIENT_SECRET")));
+        }
+        queryRunner.createCatalog("openapi", "openapi", catalogProperties.build());
 
         return queryRunner;
     }
