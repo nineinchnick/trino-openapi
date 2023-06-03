@@ -22,19 +22,11 @@ jobs:
         run: |
           echo "::add-matcher::.github/problem-matcher.json"
           echo "::remove-matcher owner=java::"
-      - name: Get Galaxy access token
-        run: |
-          opts=(
-            -fL
-            -H 'Authorization: Basic ${{ secrets.GALAXY_CLIENT_SECRET }}'
-            -H 'Content-Type: application/x-www-form-urlencoded'
-          )
-          token=$(curl "${opts[@]}" "${{ vars.GALAXY_BASE_URI }}/oauth/v2/token?token_format=oauth2" -d grant_type=client_credentials | jq -er '.access_token')
-          echo "OPENAPI_BEARER_TOKEN=$token" >> $GITHUB_ENV
       - name: Build with Maven
         run: mvn -B package
         env:
-          GALAXY_BASE_URI: ${{ vars.GALAXY_BASE_URI }}
+          OPENAPI_CLIENT_ID: ${{ secrets.OPENAPI_CLIENT_ID }}
+          OPENAPI_CLIENT_SECRET: ${{ secrets.OPENAPI_CLIENT_SECRET }}
       - name: Upload test report
         uses: actions/upload-artifact@v3
         if: always()
