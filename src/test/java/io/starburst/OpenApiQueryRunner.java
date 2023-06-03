@@ -25,7 +25,6 @@ import io.trino.testing.QueryRunner;
 import java.util.Map;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
-import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 
 public class OpenApiQueryRunner
