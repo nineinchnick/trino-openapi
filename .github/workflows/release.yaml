@@ -27,8 +27,8 @@ jobs:
 
       - name: Configure Git user
         run: |
-          git config user.name "${{ github.event.head_commit.committer.name }}"
-          git config user.email "${{ github.event.head_commit.committer.email }}"
+          git config user.name "automation-starburstdata"
+          git config user.email "automation@starburstdata.com"
 
       - name: Prepare release
         run: ./mvnw -B release:prepare
