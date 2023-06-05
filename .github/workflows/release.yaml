@@ -38,7 +38,7 @@ jobs:
 
       - name: Save version number in env
         run: |
-          echo "VERSION=$(grep 'project\\.rel\\..*=' release.properties | cut -d'=' -f2)" >> $GITHUB_ENV
+          echo "VERSION=$(grep 'project.rel.*=' release.properties | cut -d'=' -f2)" >> $GITHUB_ENV
 
       - name: Publish JAR
         run: ./mvnw -B release:perform -Darguments=-Dgpg.skip
@@ -59,6 +59,7 @@ jobs:
         with:
           name: test report ${{ github.job }}
           path: |
+            release.properties
             **/surefire-reports/TEST-*.xml
             out/jreleaser/trace.log
             out/jreleaser/output.properties
