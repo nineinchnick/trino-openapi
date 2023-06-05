@@ -65,8 +65,8 @@ public class OpenApiQueryRunner
                     "authentication.password", System.getenv("OPENAPI_PASSWORD")));
         }
         if (authType.equals("client-credentials")) {
-            if (System.getenv("OPENAPI_CLIENT_USERNAME") == null || System.getenv("OPENAPI_CLIENT_CLIENT_SECRET") == null) {
-                throw new IllegalArgumentException("OPENAPI_CLIENT_USERNAME and OPENAPI_CLIENT_CLIENT_SECRET must be set when OPENAPI_AUTH_TYPE is client-credentials");
+            if (System.getenv("OPENAPI_CLIENT_ID") == null || System.getenv("OPENAPI_CLIENT_SECRET") == null) {
+                throw new IllegalArgumentException("OPENAPI_CLIENT_ID and OPENAPI_CLIENT_SECRET must be set when OPENAPI_AUTH_TYPE is client-credentials");
             }
             catalogProperties.putAll(Map.of(
                     "authentication.type", authType,
