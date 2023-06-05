@@ -32,6 +32,9 @@ jobs:
 
       - name: Prepare release
         run: ./mvnw -B release:prepare
+        env:
+          OPENAPI_CLIENT_ID: ${{ secrets.OPENAPI_CLIENT_ID }}
+          OPENAPI_CLIENT_SECRET: ${{ secrets.OPENAPI_CLIENT_SECRET }}
 
       - name: Save version number in env
         run: |
