@@ -12,10 +12,8 @@ To run a Docker container with the connector, run the following:
 docker run \
   -d \
   --name trino-openapi \
-  -e OPENAPI_SPEC_LOCATION=galaxy.spec.json \
-  -e OPENAPI_BASE_URI=https://ping.galaxy-dev.io \
-  -e OPENAPI_CLIENT_ID \
-  -e OPENAPI_CLIENT_SECRET \
+  -e OPENAPI_SPEC_LOCATION=http://api.example/api/spec.yaml \
+  -e OPENAPI_BASE_URI=http://api.example/api/v1 \
   -p 8080:8080 \
   nineinchnick/trino-openapi:0.1
 ```
@@ -29,8 +27,8 @@ Create a `openapi.properties` file in your Trino catalog directory and set all t
 
 ```
 connector.name=openapi
-spec-location=https://galaxy.starburst.io/public/openapi/v1/json
-base-uri=https://ping.galaxy.starburst.io
+spec-location=http://api.example/api/spec.yaml
+base-uri=http://api.example/api/v1
 authentication.type=client-credentials
 authentication.client-id=${ENV:OPENAPI_CLIENT_ID}
 authentication.client-secret=${ENV:OPENAPI_CLIENT_SECRET}
@@ -84,12 +82,3 @@ trino> select * from openapi.default.single_row;
  x  | default-value | my-name
 (1 row)
 ```
-
-
-## API Token configuration
-
-# Providers example
-- Starburst Galaxy
-  - https://docs.starburst.io/starburst-galaxy/access-control/api-auth-token.html
-- Atlassian Jira
-  - https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/#get-an-api-token

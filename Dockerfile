@@ -5,4 +5,4 @@ ARG VERSION
 
 ADD target/trino-openapi-$VERSION/ /usr/lib/trino/plugin/openapi/
 ADD catalog/ /etc/trino/catalog/
-ADD galaxy.spec.json /etc/trino/catalog/galaxy.spec.json
+ADD petstore.yaml /etc/trino/catalog/petstore.yaml

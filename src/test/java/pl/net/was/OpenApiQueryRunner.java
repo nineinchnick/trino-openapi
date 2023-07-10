@@ -31,7 +31,7 @@ public class OpenApiQueryRunner
 {
     private OpenApiQueryRunner() {}
 
-    public static QueryRunner createQueryRunner()
+    public static QueryRunner createQueryRunner(TestingOpenApiServer server)
             throws Exception
     {
         Session defaultSession = testSessionBuilder()
@@ -50,11 +50,11 @@ public class OpenApiQueryRunner
 
         ImmutableMap.Builder<String, String> catalogProperties = ImmutableMap.builder();
         catalogProperties.putAll(Map.of(
-                "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), "galaxy.spec.json"),
-                "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), "https://ping.galaxy-dev.io"),
+                "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), server.getSpecUrl()),
+                "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), server.getApiUrl()),
                 "openApi.http-client.log.enabled", "true",
                 "openApi.http-client.log.path", "logs"));
-        String authType = requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "client-credentials");
+        String authType = requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "header");
         if (authType.equals("basic")) {
             if (System.getenv("OPENAPI_USERNAME") == null || System.getenv("OPENAPI_PASSWORD") == null) {
                 throw new IllegalArgumentException("OPENAPI_USERNAME and OPENAPI_PASSWORD must be set when OPENAPI_AUTH_TYPE is basic");
@@ -65,13 +65,16 @@ public class OpenApiQueryRunner
                     "authentication.password", System.getenv("OPENAPI_PASSWORD")));
         }
         if (authType.equals("client-credentials")) {
-            if (System.getenv("OPENAPI_CLIENT_ID") == null || System.getenv("OPENAPI_CLIENT_SECRET") == null) {
-                throw new IllegalArgumentException("OPENAPI_CLIENT_ID and OPENAPI_CLIENT_SECRET must be set when OPENAPI_AUTH_TYPE is client-credentials");
-            }
             catalogProperties.putAll(Map.of(
                     "authentication.type", authType,
-                    "authentication.client-id", System.getenv("OPENAPI_CLIENT_ID"),
-                    "authentication.client-secret", System.getenv("OPENAPI_CLIENT_SECRET")));
+                    "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
+                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret")));
+        }
+        if (authType.equals("header")) {
+            catalogProperties.putAll(Map.of(
+                    "authentication.type", authType,
+                    "authentication.header-name", requireNonNullElse(System.getenv("OPENAPI_HEADER_NAME"), "api_key"),
+                    "authentication.header-value", requireNonNullElse(System.getenv("OPENAPI_HEADER_VALUE"), "secret")));
         }
         queryRunner.createCatalog("openapi", "openapi", catalogProperties.build());
 
@@ -86,7 +89,8 @@ public class OpenApiQueryRunner
         logger.setLevel("io.trino", Level.INFO);
         logger.setLevel("io.airlift", Level.DEBUG);
 
-        QueryRunner queryRunner = createQueryRunner();
+        TestingOpenApiServer server = new TestingOpenApiServer();
+        QueryRunner queryRunner = createQueryRunner(server);
 
         Logger log = Logger.get(OpenApiQueryRunner.class);
         log.info("======== SERVER STARTED ========");

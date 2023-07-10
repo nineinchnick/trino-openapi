@@ -69,7 +69,6 @@ public class ClientCredentialsAuthentication
                         preparePost()
                                 .setUri(uriBuilderFrom(baseUri)
                                         .appendPath("/oauth/v2/token")
-                                        .addParameter("token_format", "oauth2")
                                         .build())
                                 .setHeader("Content-Type", "application/x-www-form-urlencoded")
                                 .setHeader("Authorization", "Basic " + base64Url().encode("%s:%s".formatted(clientId, clientSecret).getBytes(UTF_8)))

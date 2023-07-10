@@ -23,6 +23,8 @@ import pl.net.was.authentication.BasicAuthentication;
 import pl.net.was.authentication.BasicAuthenticationConfig;
 import pl.net.was.authentication.ClientCredentialsAuthentication;
 import pl.net.was.authentication.ClientCredentialsAuthenticationConfig;
+import pl.net.was.authentication.HeaderAuthentication;
+import pl.net.was.authentication.HeaderAuthenticationConfig;
 import pl.net.was.authentication.NoAuthentication;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
 
@@ -34,6 +36,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.function.Predicate.isEqual;
 import static pl.net.was.authentication.AuthenticationType.BASIC;
 import static pl.net.was.authentication.AuthenticationType.CLIENT_CREDENTIALS;
+import static pl.net.was.authentication.AuthenticationType.HEADER;
 
 public class OpenApiModule
         extends AbstractConfigurationAwareModule
@@ -86,6 +89,15 @@ public class OpenApiModule
                 conditionalBinder -> {
                     configBinder(conditionalBinder).bindConfig(BasicAuthenticationConfig.class);
                     conditionalBinder.bind(Authentication.class).to(BasicAuthentication.class).in(SINGLETON);
+                }));
+        install(conditionalModule(
+                OpenApiConfig.class,
+                config -> config.getAuthenticationType()
+                        .filter(isEqual(HEADER))
+                        .isPresent(),
+                conditionalBinder -> {
+                    configBinder(conditionalBinder).bindConfig(HeaderAuthenticationConfig.class);
+                    conditionalBinder.bind(Authentication.class).to(HeaderAuthentication.class).in(SINGLETON);
                 }));
     }
 }

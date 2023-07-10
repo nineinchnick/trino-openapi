@@ -17,5 +17,6 @@ public enum AuthenticationType
 {
     CLIENT_CREDENTIALS,
     BASIC,
+    HEADER,
     /**/;
 }

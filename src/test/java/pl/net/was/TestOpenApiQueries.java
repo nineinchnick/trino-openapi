@@ -25,22 +25,23 @@ public class TestOpenApiQueries
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return OpenApiQueryRunner.createQueryRunner();
+        TestingOpenApiServer server = new TestingOpenApiServer();
+        return OpenApiQueryRunner.createQueryRunner(server);
     }
 
     @Test
     public void showTables()
     {
         assertQuery("SHOW SCHEMAS FROM openapi", "VALUES 'default', 'information_schema'");
-        assertQuery("SHOW TABLES FROM openapi.default", "VALUES 'get_cluster', 'get_schema_discovery', 'list_catalog', 'list_cluster', 'list_schema_discovery_of_catalog'");
+        assertQuery("SHOW TABLES FROM openapi.default", "VALUES 'find_pets_by_status', 'get_order_by_id', 'get_pet_by_id', 'get_user_by_name', 'login_user'");
     }
 
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT cloud_region_id FROM list_cluster WHERE cluster_id='w-8135698509'",
-                "VALUES ('aws-us-east1')");
-        assertQuery("SELECT catalog_name FROM list_catalog where catalog_id='c-4450430933'",
-                "VALUES ('otel')");
+        assertQuery("SELECT name FROM find_pets_by_status WHERE status='approved'",
+                "VALUES ('Cat 1')");
+        assertQuery("SELECT name FROM get_pet_by_id where id='1'",
+                "VALUES ('Cat 1')");
     }
 }

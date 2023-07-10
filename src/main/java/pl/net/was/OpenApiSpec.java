@@ -88,6 +88,7 @@ public class OpenApiSpec
         this.requiredParameters = openApi.getPaths().values().stream()
                 .filter(this::filterPaths)
                 .map(PathItem::getGet)
+                .filter(op -> op.getParameters() != null)
                 .collect(Collectors.toMap(
                         op -> getIdentifier(op.getOperationId()),
                         op -> op.getParameters().stream()
@@ -179,12 +180,14 @@ public class OpenApiSpec
     private List<ColumnMetadata> getColumns(Operation op)
     {
         Map<String, Schema> properties = get200JsonSchema(op);
-        // add required parameters as columns, so they can be set as predicates;
-        // predicate values will be saved in the table handle and copied to result rows
-        Map<String, Schema> requiredParameters = op.getParameters().stream()
-                .filter(parameter -> parameter.getRequired() && !properties.containsKey(parameter.getName()))
-                .collect(Collectors.toMap(Parameter::getName, Parameter::getSchema));
-        properties.putAll(requiredParameters);
+        if (op.getParameters() != null) {
+            // add required parameters as columns, so they can be set as predicates;
+            // predicate values will be saved in the table handle and copied to result rows
+            Map<String, Schema> requiredParameters = op.getParameters().stream()
+                    .filter(parameter -> parameter.getRequired() && !properties.containsKey(parameter.getName()))
+                    .collect(Collectors.toMap(Parameter::getName, Parameter::getSchema));
+            properties.putAll(requiredParameters);
+        }
 
         return properties.entrySet().stream()
                 .filter(property -> convertType(property.getValue()).isPresent())

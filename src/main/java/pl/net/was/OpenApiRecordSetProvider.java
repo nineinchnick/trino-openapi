@@ -137,7 +137,7 @@ public class OpenApiRecordSetProvider
         ObjectMapper objectMapper = new ObjectMapper();
 
         Request request = prepareGet()
-                .setUri(baseUri.resolve(path))
+                .setUri(baseUri.resolve(baseUri.getPath() + path))
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .build();
 

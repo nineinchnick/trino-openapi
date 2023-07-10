@@ -38,7 +38,7 @@
         <dep.trino.version>418</dep.trino.version>
         <dep.airlift.version>231</dep.airlift.version>
         <dep.errorprone.version>2.19.1</dep.errorprone.version>
-        <dep.jackson.version>2.15.1</dep.jackson.version>
+        <dep.jackson.version>2.15.2</dep.jackson.version>
         <dep.swagger-parser.version>2.1.15</dep.swagger-parser.version>
         <dep.swagger-core.version>2.2.10</dep.swagger-core.version>
 
@@ -210,6 +210,21 @@
         </dependency>
 
         <!-- for testing -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>1.18.3</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java-api</artifactId>
+            <version>3.3.2</version>
+            <scope>test</scope>
+        </dependency>
+
+
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-main</artifactId>
