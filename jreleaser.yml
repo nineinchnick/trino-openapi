@@ -3,8 +3,12 @@ project:
   description: This is a Trino connector
   license: Apache-2
   java:
-    groupId: io.starburst
+    groupId: pl.net.was
     version: 17
+  authors:
+    - Jan Waś
+  extraProperties:
+    inceptionYear: 2021
 
 files:
   artifacts:
@@ -12,4 +16,4 @@ files:
 
 release:
   github:
-    owner: starburstdata
+    owner: nineinchnick

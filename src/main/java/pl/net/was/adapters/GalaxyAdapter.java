@@ -1,0 +1,43 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package pl.net.was.adapters;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import io.swagger.v3.oas.models.media.Schema;
+import io.trino.spi.connector.ConnectorTableMetadata;
+import pl.net.was.OpenApiSpecAdapter;
+
+import java.util.Map;
+
+public class GalaxyAdapter
+        implements OpenApiSpecAdapter
+{
+    public Map<String, Schema> runAdapter(String operationId, Map<String, Schema> original)
+    {
+        if (original.containsKey("result")) {
+            return original.get("result").getItems().getProperties();
+        }
+        return original;
+    }
+
+    public JsonNode runAdapter(ConnectorTableMetadata tableMetadata, JsonNode original)
+    {
+        if (original.has("result") && original.get("result") instanceof ArrayNode) {
+            return original.get("result");
+        }
+        return original;
+    }
+}

@@ -1,7 +1,7 @@
 Trino Plugin
 ============
 
-[![Build Status](https://github.com/starburstdata/trino-openapi/actions/workflows/release.yaml/badge.svg)](https://github.com/starburstdata/trino-openapi/actions/workflows/release.yaml)
+[![Build Status](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml/badge.svg)](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml)
 
 This is a [Trino](http://trino.io/) plugin that provides a connector to read from HTTP APIs given an OpenAPI specification.
 
@@ -17,7 +17,7 @@ docker run \
   -e OPENAPI_CLIENT_ID \
   -e OPENAPI_CLIENT_SECRET \
   -p 8080:8080 \
-  starburstdata/trino-openapi:0.1
+  nineinchnick/trino-openapi:0.1
 ```
 
 Then use your favourite SQL client to connect to Trino running at http://localhost:8080
@@ -60,7 +60,7 @@ mv ${PLUGIN_DIRECTORY}/trino-openapi-* ${PLUGIN_DIRECTORY}/trino-openapi
 
 To test and debug the connector locally, run the `OpenApiQueryRunner` class located in tests:
 ```bash
-mvn test-compile exec:java -Dexec.mainClass="io.starburst.OpenApiQueryRunner" -Dexec.classpathScope=test
+mvn test-compile exec:java -Dexec.mainClass="pl.net.was.OpenApiQueryRunner" -Dexec.classpathScope=test
 ```
 
 And then run the Trino CLI using `trino --server localhost:8080 --no-progress` and query it:

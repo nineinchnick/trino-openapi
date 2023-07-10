@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.starburst</groupId>
+    <groupId>pl.net.was</groupId>
     <artifactId>trino-openapi</artifactId>
     <version>1.2-SNAPSHOT</version>
     <packaging>trino-plugin</packaging>
@@ -23,7 +23,7 @@
 
     <properties>
         <project.build.targetJdk>17</project.build.targetJdk>
-        <air.java.version>17.0.4</air.java.version>
+        <air.java.version>17.0.6</air.java.version>
 
         <air.main.basedir>\${project.basedir}</air.main.basedir>
 
@@ -50,7 +50,7 @@
     </properties>
 
     <scm>
-        <developerConnection>scm:git:https://github.com/starburstdata/trino-openapi.git</developerConnection>
+        <developerConnection>scm:git:https://github.com/nineinchnick/trino-openapi.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 
@@ -58,7 +58,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Maven Packages</name>
-            <url>https://maven.pkg.github.com/starburstdata/trino-openapi</url>
+            <url>https://maven.pkg.github.com/nineinchnick/trino-openapi</url>
         </repository>
     </distributionManagement>
 

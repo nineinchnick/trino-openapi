@@ -1,8 +1,6 @@
 name: Java CI with Maven
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -24,9 +22,6 @@ jobs:
           echo "::remove-matcher owner=java::"
       - name: Build with Maven
         run: mvn -B package
-        env:
-          OPENAPI_CLIENT_ID: ${{ secrets.OPENAPI_CLIENT_ID }}
-          OPENAPI_CLIENT_SECRET: ${{ secrets.OPENAPI_CLIENT_SECRET }}
       - name: Upload test report
         uses: actions/upload-artifact@v3
         if: always()
