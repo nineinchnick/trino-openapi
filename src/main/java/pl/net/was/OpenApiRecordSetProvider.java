@@ -49,11 +49,15 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareGet;
@@ -62,6 +66,7 @@ import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -124,70 +129,61 @@ public class OpenApiRecordSetProvider
 
     private Iterable<List<?>> getRows(ConnectorSession connectorSession, OpenApiTableHandle table)
     {
-        ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
         String path = table.getPath();
-        // TODO we ignore query and header params
-        Map<String, String> pathParams = getFilterValues(connectorSession, table);
+        Map<String, String> pathParams = getFilterValues(connectorSession, table, "path");
         for (Map.Entry<String, String> entry : pathParams.entrySet()) {
             // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
             String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, entry.getKey());
             path = path.replace(format("{%s}", parameterName), entry.getValue());
         }
 
-        ObjectMapper objectMapper = new ObjectMapper();
-
-        Request request = prepareGet()
-                .setUri(baseUri.resolve(baseUri.getPath() + path))
+        URI uri;
+        try {
+            uri = buildUri(baseUri, path, getFilterValues(connectorSession, table, "query"));
+        }
+        catch (URISyntaxException e) {
+            throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
+        }
+        Request.Builder builder = prepareGet()
+                .setUri(uri)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
-                .build();
+                .addHeader(ACCEPT, JSON_UTF_8.toString());
+        getFilterValues(connectorSession, table, "header").forEach(builder::addHeader);
+        Request request = builder.build();
 
-        return httpClient.execute(request, new ResponseHandler<>()
-        {
-            @Override
-            public Iterable<List<?>> handleException(Request request, Exception exception)
-            {
-                throw new RuntimeException(exception);
-            }
+        return httpClient.execute(request, new ApiResponseHandler(connectorSession, table));
+    }
 
-            @Override
-            public Iterable<List<?>> handle(Request request, Response response)
-            {
-                if (response.getStatusCode() != 200) {
-                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Response code for getRows request was not 200: %s", response.getStatusCode()));
-                }
-                String result = "";
-                try {
-                    result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
-                }
-                catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                log.debug("Received response code " + response.getStatusCode() + ": " + result);
-
-                try {
-                    JsonNode jsonNode = objectMapper.readTree(result);
-
-                    log.debug("Marshalled response to json %s", jsonNode);
-
-                    JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, jsonNode)).orElse(jsonNode);
-
-                    return convertJson(connectorSession, table, jsonNodeToUse);
-                }
-                catch (JsonProcessingException ex) {
-                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Could not marshal JSON from API response: %s", result), ex);
-                }
-            }
-        });
+    public static URI buildUri(URI uri, String path, Map<String, String> queryParams)
+            throws URISyntaxException
+    {
+        URI oldUri = uri.resolve(uri.getPath() + path);
+        String query = queryParams.entrySet().stream()
+                .map(entry -> format("%s=%s", entry.getKey(), URLEncoder.encode(entry.getValue(), UTF_8)))
+                .collect(joining("&"));
+        return new URI(
+                oldUri.getScheme(),
+                oldUri.getAuthority(),
+                oldUri.getPath(),
+                oldUri.getQuery() == null ? query : oldUri.getQuery() + "&" + query,
+                oldUri.getFragment());
     }
 
     private Map<String, String> getFilterValues(ConnectorSession connectorSession, OpenApiTableHandle table)
     {
+        return getFilterValues(connectorSession, table, null);
+    }
+
+    private Map<String, String> getFilterValues(ConnectorSession connectorSession, OpenApiTableHandle table, String in)
+    {
         Map<String, ColumnHandle> columns = metadata.getColumnHandles(connectorSession, table);
         String tableName = table.getSchemaTableName().getTableName();
         Map<String, Parameter> requiredParams = openApiSpec.getRequiredParameters().get(tableName);
-        // TODO we ignore query and header params
-        return requiredParams.entrySet().stream()
-                .filter(entry -> entry.getValue().getIn().equals("path"))
+        Stream<Map.Entry<String, Parameter>> stream = requiredParams.entrySet().stream();
+        if (in != null) {
+            stream = stream.filter(entry -> entry.getValue().getIn().equals(in));
+        }
+        return stream
                 .collect(toMap(Map.Entry::getKey, entry -> {
                     // TODO this will fail for predicates on numeric columns
                     String value = (String) getFilter((OpenApiColumnHandle) columns.get(entry.getKey()), table.getConstraint(), null);
@@ -219,6 +215,58 @@ public class OpenApiRecordSetProvider
                 return domain.getSingleValue();
             default:
                 throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
+        }
+    }
+
+    private class ApiResponseHandler
+        implements ResponseHandler<Iterable<List<?>>, RuntimeException>
+    {
+        private static final ObjectMapper objectMapper = new ObjectMapper();
+
+        private final ConnectorSession connectorSession;
+        private final OpenApiTableHandle table;
+        private final ConnectorTableMetadata tableMetadata;
+
+        ApiResponseHandler(ConnectorSession connectorSession, OpenApiTableHandle table)
+        {
+            this.connectorSession = requireNonNull(connectorSession, "connectorSession is null");
+            this.table = requireNonNull(table, "table is null");
+            this.tableMetadata = metadata.getTableMetadata(connectorSession, table);
+        }
+
+        @Override
+        public Iterable<List<?>> handleException(Request request, Exception exception)
+        {
+            throw new RuntimeException(exception);
+        }
+
+        @Override
+        public Iterable<List<?>> handle(Request request, Response response)
+        {
+            if (response.getStatusCode() != 200) {
+                throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Response code for getRows request was not 200: %s", response.getStatusCode()));
+            }
+            String result = "";
+            try {
+                result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
+            }
+            catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            log.debug("Received response code " + response.getStatusCode() + ": " + result);
+
+            try {
+                JsonNode jsonNode = objectMapper.readTree(result);
+
+                log.debug("Marshalled response to json %s", jsonNode);
+
+                JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, jsonNode)).orElse(jsonNode);
+
+                return convertJson(connectorSession, table, jsonNodeToUse);
+            }
+            catch (JsonProcessingException ex) {
+                throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Could not marshal JSON from API response: %s", result), ex);
+            }
         }
     }
 
