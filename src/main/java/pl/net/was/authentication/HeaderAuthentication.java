@@ -17,9 +17,7 @@ import io.airlift.http.client.Request;
 
 import javax.inject.Inject;
 
-import static com.google.common.io.BaseEncoding.base64Url;
 import static io.airlift.http.client.Request.Builder.fromRequest;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class HeaderAuthentication
         implements Authentication

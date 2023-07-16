@@ -21,11 +21,11 @@ import io.trino.spi.type.TypeManager;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.BasicAuthentication;
 import pl.net.was.authentication.BasicAuthenticationConfig;
-import pl.net.was.authentication.OAuthTokenAuthentication;
-import pl.net.was.authentication.OAuthTokenAuthenticationConfig;
 import pl.net.was.authentication.HeaderAuthentication;
 import pl.net.was.authentication.HeaderAuthenticationConfig;
 import pl.net.was.authentication.NoAuthentication;
+import pl.net.was.authentication.OAuthTokenAuthentication;
+import pl.net.was.authentication.OAuthTokenAuthenticationConfig;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
 
 import static com.google.inject.Scopes.SINGLETON;
@@ -35,8 +35,8 @@ import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Predicate.isEqual;
 import static pl.net.was.authentication.AuthenticationType.BASIC;
-import static pl.net.was.authentication.AuthenticationType.OAUTH_TOKEN;
 import static pl.net.was.authentication.AuthenticationType.HEADER;
+import static pl.net.was.authentication.AuthenticationType.OAUTH_TOKEN;
 
 public class OpenApiModule
         extends AbstractConfigurationAwareModule

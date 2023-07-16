@@ -219,7 +219,7 @@ public class OpenApiRecordSetProvider
     }
 
     private class ApiResponseHandler
-        implements ResponseHandler<Iterable<List<?>>, RuntimeException>
+            implements ResponseHandler<Iterable<List<?>>, RuntimeException>
     {
         private static final ObjectMapper objectMapper = new ObjectMapper();
 
