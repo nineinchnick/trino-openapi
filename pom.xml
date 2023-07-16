@@ -4,7 +4,7 @@
 
     <groupId>pl.net.was</groupId>
     <artifactId>trino-openapi</artifactId>
-    <version>1.3-SNAPSHOT</version>
+    <version>1.3</version>
     <packaging>trino-plugin</packaging>
 
     <parent>
@@ -51,7 +51,7 @@
 
     <scm>
         <developerConnection>scm:git:https://github.com/nineinchnick/trino-openapi.git</developerConnection>
-        <tag>HEAD</tag>
+        <tag>v1.3</tag>
     </scm>
 
     <distributionManagement>
