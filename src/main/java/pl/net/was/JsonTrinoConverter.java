@@ -103,9 +103,7 @@ public class JsonTrinoConverter
         if (type instanceof RowType rowType) {
             PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(rowType));
             BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
-            BlockBuilder rowBuilder = blockBuilder.beginBlockEntry();
-            writeRow(rowBuilder, jsonNode, rowType, schemaType);
-            blockBuilder.closeEntry();
+            writeRow(blockBuilder, jsonNode, rowType, schemaType);
             pageBuilder.declarePosition();
             return rowType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
         }
@@ -174,6 +172,10 @@ public class JsonTrinoConverter
         }
         if (type instanceof VarcharType varcharType) {
             varcharType.writeString(rowBuilder, (String) value);
+            return;
+        }
+        if (type instanceof IntegerType integerType) {
+            integerType.writeLong(rowBuilder, ((Integer) value).longValue());
             return;
         }
         if (type instanceof BigintType bigintType) {

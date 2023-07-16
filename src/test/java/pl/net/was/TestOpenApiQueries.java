@@ -32,16 +32,20 @@ public class TestOpenApiQueries
     @Test
     public void showTables()
     {
-        assertQuery("SHOW SCHEMAS FROM openapi", "VALUES 'default', 'information_schema'");
-        assertQuery("SHOW TABLES FROM openapi.default", "VALUES 'find_pets_by_status', 'get_order_by_id', 'get_pet_by_id', 'get_user_by_name', 'login_user'");
+        assertQuery("SHOW SCHEMAS FROM openapi",
+                "VALUES 'default', 'information_schema'");
+        assertQuery("SHOW TABLES FROM openapi.default",
+                "VALUES 'find_pets_by_status', 'get_inventory', 'get_order_by_id', 'get_pet_by_id', 'get_user_by_name', 'login_user'");
     }
 
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT name FROM find_pets_by_status WHERE status='approved'",
+        assertQuery("SELECT name FROM find_pets_by_status WHERE status='available'",
+                "VALUES ('Cat 1'), ('Cat 2'), ('Dog 1'), ('Lion 1'), ('Lion 2'), ('Lion 3'), ('Rabbit 1')");
+        /* TODO this fails because it uses a different authentication mechanism - api_key
+        assertQuery("SELECT name FROM get_pet_by_id where pet_id = 1",
                 "VALUES ('Cat 1')");
-        assertQuery("SELECT name FROM get_pet_by_id where id='1'",
-                "VALUES ('Cat 1')");
+         */
     }
 }

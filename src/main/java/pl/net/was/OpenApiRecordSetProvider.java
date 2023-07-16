@@ -185,8 +185,8 @@ public class OpenApiRecordSetProvider
         }
         return stream
                 .collect(toMap(Map.Entry::getKey, entry -> {
-                    // TODO this will fail for predicates on numeric columns
-                    String value = (String) getFilter((OpenApiColumnHandle) columns.get(entry.getKey()), table.getConstraint(), null);
+                    // TODO this requires proper type mapping, reverse of JsonTrinoConverter.writeTo()
+                    String value = getFilter((OpenApiColumnHandle) columns.get(entry.getKey()), table.getConstraint(), null).toString();
                     if (value == null) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + entry.getKey());
                     }
