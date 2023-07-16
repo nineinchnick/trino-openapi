@@ -43,6 +43,10 @@ jobs:
       - name: Prepare release
         run: ./mvnw -B release:prepare
 
+      - name: Build and push Docker image
+        run: |
+          ./docker-build.sh
+
       - name: Save version number in env
         run: |
           echo "VERSION=$(grep 'project.rel.*=' release.properties | cut -d'=' -f2)" >> $GITHUB_ENV

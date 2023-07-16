@@ -12,8 +12,9 @@ TRINO_VERSION=$(mvn help:evaluate -Dexpression=dep.trino.version -q -DforceStdou
 TAG=nineinchnick/trino-openapi:$VERSION
 
 docker buildx build \
+    --platform linux/amd64,linux/arm64 \
     -t "$TAG" \
     --build-arg TRINO_VERSION="$TRINO_VERSION" \
     --build-arg VERSION="$VERSION" \
-    --load \
+    --push \
     .
