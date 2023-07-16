@@ -21,8 +21,8 @@ import io.trino.spi.type.TypeManager;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.BasicAuthentication;
 import pl.net.was.authentication.BasicAuthenticationConfig;
-import pl.net.was.authentication.ClientCredentialsAuthentication;
-import pl.net.was.authentication.ClientCredentialsAuthenticationConfig;
+import pl.net.was.authentication.OAuthTokenAuthentication;
+import pl.net.was.authentication.OAuthTokenAuthenticationConfig;
 import pl.net.was.authentication.HeaderAuthentication;
 import pl.net.was.authentication.HeaderAuthenticationConfig;
 import pl.net.was.authentication.NoAuthentication;
@@ -35,7 +35,7 @@ import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Predicate.isEqual;
 import static pl.net.was.authentication.AuthenticationType.BASIC;
-import static pl.net.was.authentication.AuthenticationType.CLIENT_CREDENTIALS;
+import static pl.net.was.authentication.AuthenticationType.OAUTH_TOKEN;
 import static pl.net.was.authentication.AuthenticationType.HEADER;
 
 public class OpenApiModule
@@ -74,12 +74,12 @@ public class OpenApiModule
         install(conditionalModule(
                 OpenApiConfig.class,
                 config -> config.getAuthenticationType()
-                        .filter(isEqual(CLIENT_CREDENTIALS))
+                        .filter(isEqual(OAUTH_TOKEN))
                         .isPresent(),
                 conditionalBinder -> {
                     httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
-                    configBinder(conditionalBinder).bindConfig(ClientCredentialsAuthenticationConfig.class);
-                    conditionalBinder.bind(Authentication.class).to(ClientCredentialsAuthentication.class).in(SINGLETON);
+                    configBinder(conditionalBinder).bindConfig(OAuthTokenAuthenticationConfig.class);
+                    conditionalBinder.bind(Authentication.class).to(OAuthTokenAuthentication.class).in(SINGLETON);
                 }));
         install(conditionalModule(
                 OpenApiConfig.class,

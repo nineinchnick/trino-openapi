@@ -54,7 +54,7 @@ public class OpenApiQueryRunner
                 "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), server.getApiUrl()),
                 "openApi.http-client.log.enabled", "true",
                 "openApi.http-client.log.path", "logs"));
-        String authType = requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "header");
+        String authType = requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "oauth-token");
         if (authType.equals("basic")) {
             if (System.getenv("OPENAPI_USERNAME") == null || System.getenv("OPENAPI_PASSWORD") == null) {
                 throw new IllegalArgumentException("OPENAPI_USERNAME and OPENAPI_PASSWORD must be set when OPENAPI_AUTH_TYPE is basic");
@@ -64,11 +64,15 @@ public class OpenApiQueryRunner
                     "authentication.username", System.getenv("OPENAPI_USERNAME"),
                     "authentication.password", System.getenv("OPENAPI_PASSWORD")));
         }
-        if (authType.equals("client-credentials")) {
+        if (authType.equals("oauth-token")) {
             catalogProperties.putAll(Map.of(
                     "authentication.type", authType,
+                    "authentication.token-endpoint", requireNonNullElse(System.getenv("OPENAPI_TOKEN_ENDPOINT"), "/oauth/token"),
                     "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
-                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret")));
+                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
+                    "authentication.grant-type", requireNonNullElse(System.getenv("OPENAPI_GRANT_TYPE"), "password"),
+                    "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "user"),
+                    "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "user")));
         }
         if (authType.equals("header")) {
             catalogProperties.putAll(Map.of(

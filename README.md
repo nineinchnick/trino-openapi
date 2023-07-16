@@ -29,7 +29,7 @@ Create a `openapi.properties` file in your Trino catalog directory and set all t
 connector.name=openapi
 spec-location=http://api.example/api/spec.yaml
 base-uri=http://api.example/api/v1
-authentication.type=client-credentials
+authentication.type=oauth-token
 authentication.client-id=${ENV:OPENAPI_CLIENT_ID}
 authentication.client-secret=${ENV:OPENAPI_CLIENT_SECRET}
 ```

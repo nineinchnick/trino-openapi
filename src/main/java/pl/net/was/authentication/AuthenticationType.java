@@ -15,7 +15,7 @@ package pl.net.was.authentication;
 
 public enum AuthenticationType
 {
-    CLIENT_CREDENTIALS,
+    OAUTH_TOKEN,
     BASIC,
     HEADER,
     /**/;
