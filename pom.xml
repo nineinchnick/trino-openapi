@@ -10,7 +10,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>139</version>
+        <version>143</version>
     </parent>
 
     <licenses>
@@ -35,17 +35,16 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>418</dep.trino.version>
-        <dep.airlift.version>231</dep.airlift.version>
-        <dep.errorprone.version>2.19.1</dep.errorprone.version>
+        <dep.trino.version>422</dep.trino.version>
+        <dep.airlift.version>235</dep.airlift.version>
+        <dep.errorprone.version>2.20.0</dep.errorprone.version>
         <dep.jackson.version>2.15.2</dep.jackson.version>
-        <dep.swagger-parser.version>2.1.15</dep.swagger-parser.version>
-        <dep.swagger-core.version>2.2.10</dep.swagger-core.version>
+        <dep.swagger-parser.version>2.1.16</dep.swagger-parser.version>
+        <dep.swagger-core.version>2.2.15</dep.swagger-core.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
         <air.check.skip-duplicate-finder>true</air.check.skip-duplicate-finder>
-        <air.compiler.enable-preview>true</air.compiler.enable-preview>
         <project.scm.id>github</project.scm.id>
     </properties>
 
@@ -137,11 +136,6 @@
             <artifactId>error_prone_annotations</artifactId>
             <version>${dep.errorprone.version}</version>
             <scope>runtime</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>javax.inject</groupId>
-            <artifactId>javax.inject</artifactId>
         </dependency>
 
         <dependency>
@@ -275,7 +269,7 @@
         <dependency>
             <groupId>io.airlift</groupId>
             <artifactId>units</artifactId>
-            <version>1.8</version>
+            <version>1.10</version>
             <scope>runtime</scope>
         </dependency>
     </dependencies>

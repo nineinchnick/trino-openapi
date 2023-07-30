@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.google.inject.Inject;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -32,8 +33,6 @@ import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
-
-import javax.inject.Inject;
 
 import java.util.HashMap;
 import java.util.Iterator;

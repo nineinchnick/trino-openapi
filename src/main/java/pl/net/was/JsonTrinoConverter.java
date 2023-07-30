@@ -20,8 +20,11 @@ import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.MapBlockBuilder;
+import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
@@ -114,34 +117,33 @@ public class JsonTrinoConverter
     {
         PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
 
-        BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
-        BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
-
-        for (JsonNode listObject : jsonArray) {
-            if (arrayType.getElementType() instanceof RowType rowType) {
-                writeRow(entryBuilder, listObject, rowType, schemaType.getItems());
+        ArrayBlockBuilder blockBuilder = (ArrayBlockBuilder) pageBuilder.getBlockBuilder(0);
+        blockBuilder.buildEntry(elementBuilder -> {
+            for (JsonNode listObject : jsonArray) {
+                if (arrayType.getElementType() instanceof RowType rowType) {
+                    writeRow(elementBuilder, listObject, rowType, schemaType.getItems());
+                }
+                else {
+                    Object value = convert(listObject, arrayType.getElementType(), schemaType.getItems());
+                    writeTo(elementBuilder, value, arrayType.getElementType());
+                }
             }
-            else {
-                Object value = convert(listObject, arrayType.getElementType(), schemaType.getItems());
-                writeTo(entryBuilder, value, arrayType.getElementType());
-            }
-        }
+        });
 
-        blockBuilder.closeEntry();
         pageBuilder.declarePosition();
         return arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
     }
 
     private static Block buildMap(JsonNode node, MapType mapType, Schema<?> schemaType)
     {
-        BlockBuilder blockBuilder = mapType.createBlockBuilder(null, node.size());
-        BlockBuilder entryBuilder = blockBuilder.beginBlockEntry();
-        node.fields().forEachRemaining(entry -> {
-            VARCHAR.writeString(entryBuilder, entry.getKey());
-            Object value = convert(entry.getValue(), mapType.getValueType(), (Schema<?>) schemaType.getAdditionalProperties());
-            writeTo(entryBuilder, value, mapType.getValueType());
+        MapBlockBuilder blockBuilder = mapType.createBlockBuilder(null, node.size());
+        blockBuilder.buildEntry((keyBuilder, valueBuilder) -> {
+            node.fields().forEachRemaining(entry -> {
+                VARCHAR.writeString(keyBuilder, entry.getKey());
+                Object value = convert(entry.getValue(), mapType.getValueType(), (Schema<?>) schemaType.getAdditionalProperties());
+                writeTo(valueBuilder, value, mapType.getValueType());
+            });
         });
-        blockBuilder.closeEntry();
         return mapType.getObject(blockBuilder, 0);
     }
 
@@ -151,17 +153,18 @@ public class JsonTrinoConverter
             blockBuilder.appendNull();
             return;
         }
-        BlockBuilder rowBuilder = blockBuilder.beginBlockEntry();
-        // iterate over subfields, same as we build the rowType
-        List<Map.Entry<String, Schema>> fieldTypes = schemaType.getProperties().entrySet().stream().toList();
-        IntStream.range(0, fieldTypes.size()).forEach(i -> {
-            String fieldName = fieldTypes.get(i).getKey();
-            Schema fieldSchema = fieldTypes.get(i).getValue();
-            Type fieldType = rowType.getTypeParameters().get(i);
-            Object value = convert(node.get(fieldName), fieldType, fieldSchema);
-            writeTo(rowBuilder, value, fieldType);
+        RowBlockBuilder rowBuilder = (RowBlockBuilder) blockBuilder;
+        rowBuilder.buildEntry(fieldBuilders -> {
+            // iterate over subfields, same as we build the rowType
+            List<Map.Entry<String, Schema>> fieldTypes = schemaType.getProperties().entrySet().stream().toList();
+            IntStream.range(0, fieldTypes.size()).forEach(i -> {
+                String fieldName = fieldTypes.get(i).getKey();
+                Schema fieldSchema = fieldTypes.get(i).getValue();
+                Type fieldType = rowType.getTypeParameters().get(i);
+                Object value = convert(node.get(fieldName), fieldType, fieldSchema);
+                writeTo(fieldBuilders.get(i), value, fieldType);
+            });
         });
-        blockBuilder.closeEntry();
     }
 
     private static void writeTo(BlockBuilder rowBuilder, Object value, Type type)
