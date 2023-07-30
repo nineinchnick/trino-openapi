@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import com.google.common.base.CaseFormat;
+import com.google.inject.Inject;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -30,6 +31,8 @@ import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -41,8 +44,7 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import pl.net.was.adapters.GalaxyAdapter;
 
-import javax.inject.Inject;
-
+import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +72,10 @@ public class OpenApiSpec
     private static final Map<String, OpenApiSpecAdapter> adapters = Map.of(
             "Starburst Galaxy Public API", new GalaxyAdapter());
     private final Optional<OpenApiSpecAdapter> adapter;
+
+    private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
+    private final Map<String, SecurityScheme> securitySchemas;
+    private final List<SecurityRequirement> securityRequirements;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
@@ -103,6 +109,18 @@ public class OpenApiSpec
         this.paths = openApi.getPaths().entrySet().stream()
                 .filter(entry -> filterPaths(entry.getValue()))
                 .collect(Collectors.toMap(entry -> getIdentifier(entry.getValue().getGet().getOperationId()), Map.Entry::getKey));
+        this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
+                .map(pathEntry -> new AbstractMap.SimpleEntry<>(
+                        pathEntry.getKey(),
+                        pathEntry.getValue().readOperationsMap().entrySet().stream()
+                                .filter(opEntry -> opEntry.getValue().getSecurity() != null)
+                                .map(opEntry -> new AbstractMap.SimpleEntry<>(
+                                        opEntry.getKey(),
+                                        opEntry.getValue().getSecurity()))
+                                .collect(toImmutableMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue))))
+                .collect(toImmutableMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
+        this.securitySchemas = openApi.getComponents().getSecuritySchemes();
+        this.securityRequirements = openApi.getSecurity();
     }
 
     private static OpenAPI parse(String specLocation)
@@ -279,5 +297,20 @@ public class OpenApiSpec
         }
         // TODO log unknown type
         return Optional.of(VARCHAR);
+    }
+
+    public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()
+    {
+        return pathSecurityRequirements;
+    }
+
+    public Map<String, SecurityScheme> getSecuritySchemas()
+    {
+        return securitySchemas;
+    }
+
+    public List<SecurityRequirement> getSecurityRequirements()
+    {
+        return securityRequirements;
     }
 }

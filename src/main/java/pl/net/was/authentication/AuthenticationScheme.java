@@ -13,14 +13,8 @@
  */
 package pl.net.was.authentication;
 
-import io.airlift.http.client.Request;
-
-public class NoAuthentication
-        implements Authentication
+public enum AuthenticationScheme
 {
-    @Override
-    public Request filterRequest(Request request)
-    {
-        return request;
-    }
+    BASIC,
+    BEARER,
 }

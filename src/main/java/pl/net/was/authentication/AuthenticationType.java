@@ -15,8 +15,9 @@ package pl.net.was.authentication;
 
 public enum AuthenticationType
 {
-    OAUTH_TOKEN,
-    BASIC,
-    HEADER,
+    NONE,
+    HTTP,
+    API_KEY,
+    OAUTH,
     /**/;
 }
