@@ -35,9 +35,9 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>422</dep.trino.version>
+        <dep.trino.version>423</dep.trino.version>
         <dep.airlift.version>235</dep.airlift.version>
-        <dep.errorprone.version>2.20.0</dep.errorprone.version>
+        <dep.errorprone.version>2.21.1</dep.errorprone.version>
         <dep.jackson.version>2.15.2</dep.jackson.version>
         <dep.swagger-parser.version>2.1.16</dep.swagger-parser.version>
         <dep.swagger-core.version>2.2.15</dep.swagger-core.version>
@@ -283,7 +283,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.0.0</version>
+                <version>3.0.1</version>
                 <configuration>
                     <scmCommentPrefix>[ci skip]</scmCommentPrefix>
                     <tagNameFormat>v@{project.version}</tagNameFormat>
@@ -293,7 +293,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-scm-plugin</artifactId>
-                <version>2.0.0</version>
+                <version>2.0.1</version>
                 <configuration>
                     <pushChanges>true</pushChanges>
                 </configuration>
