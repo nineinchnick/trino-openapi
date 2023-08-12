@@ -146,7 +146,8 @@ public class OpenApiRecordSetProvider
         Request.Builder builder = prepareGet()
                 .setUri(uri)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
-                .addHeader(ACCEPT, JSON_UTF_8.toString());
+                .addHeader(ACCEPT, JSON_UTF_8.toString())
+                .addHeader("X-Trino-OpenAPI-Path", table.getPath());
         getFilterValues(connectorSession, table, "header").forEach(builder::addHeader);
         Request request = builder.build();
 

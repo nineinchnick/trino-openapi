@@ -43,9 +43,7 @@ public class TestOpenApiQueries
     {
         assertQuery("SELECT name FROM find_pets_by_status WHERE status='available'",
                 "VALUES ('Cat 1'), ('Cat 2'), ('Dog 1'), ('Lion 1'), ('Lion 2'), ('Lion 3'), ('Rabbit 1')");
-        /* TODO this fails because it uses a different authentication mechanism - api_key
         assertQuery("SELECT name FROM get_pet_by_id where pet_id = 1",
                 "VALUES ('Cat 1')");
-         */
     }
 }

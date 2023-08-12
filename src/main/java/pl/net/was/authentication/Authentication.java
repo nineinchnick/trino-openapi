@@ -30,6 +30,7 @@ import pl.net.was.OpenApiSpec;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -99,21 +100,31 @@ public class Authentication
     {
         URI uri = request.getUri();
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
-        String path = uri.getPath();
-        List<SecurityRequirement> requirements = securityRequirements;
-        if (pathSecurityRequirements.containsKey(path) && pathSecurityRequirements.get(path).containsKey(method)) {
-            requirements = pathSecurityRequirements.get(path).get(method);
-        }
         Request.Builder builder = fromRequest(request);
+        List<SecurityRequirement> requirements = getRequirements(request.getHeader("X-Trino-OpenAPI-Path"), method);
         applyAuthFilters(builder, requirements, uri);
         if ((requirements == null || requirements.isEmpty()) && defaultAuthenticationType != AuthenticationType.NONE) {
             switch (defaultAuthenticationType) {
-                case API_KEY -> applyApiKeyAuth(builder, uri, SecurityScheme.In.HEADER);
+                case API_KEY -> {
+                    SecurityScheme scheme = new SecurityScheme();
+                    scheme.setIn(SecurityScheme.In.HEADER);
+                    applyApiKeyAuth(builder, uri, scheme);
+                }
                 case HTTP -> applyHttpAuth(builder, null);
                 case OAUTH -> applyOAuth(builder);
             }
         }
         return builder.build();
+    }
+
+    private List<SecurityRequirement> getRequirements(String path, PathItem.HttpMethod method)
+    {
+        requireNonNull(path, "path is null");
+        requireNonNull(method, "method is null");
+        if (pathSecurityRequirements.containsKey(path)&& pathSecurityRequirements.get(path).containsKey(method)) {
+            return pathSecurityRequirements.get(path).get(method);
+        }
+        return securityRequirements;
     }
 
     private void applyAuthFilters(Request.Builder builder, List<SecurityRequirement> requirements, URI uri)
@@ -125,7 +136,7 @@ public class Authentication
             SecurityScheme securitySchema = securitySchemas.get(name);
             requireNonNull(securitySchema, "securitySchema is null");
             switch (securitySchema.getType()) {
-                case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema.getIn());
+                case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
                 case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
                 case OAUTH2 -> applyOAuth(builder);
                 default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
@@ -133,13 +144,16 @@ public class Authentication
         }));
     }
 
-    private void applyApiKeyAuth(Request.Builder builder, URI uri, SecurityScheme.In in)
+    private void applyApiKeyAuth(Request.Builder builder, URI uri, SecurityScheme scheme)
     {
-        switch (in) {
-            case COOKIE -> builder.addHeader("Cookie", encodePair(apiKeyName, apiKeyValue));
-            case HEADER -> builder.addHeader(apiKeyName, apiKeyValue);
+        String name = requireNonNullElse(scheme.getName(), apiKeyName);
+        requireNonNull(name, "Cannot use API Key authentication method, authentication.api-key-name configuration property is not set");
+        requireNonNull(apiKeyValue, "Cannot use API Key authentication method, authentication.api-key-value configuration property is not set");
+        switch (scheme.getIn()) {
+            case COOKIE -> builder.addHeader("Cookie", encodePair(name, apiKeyValue));
+            case HEADER -> builder.addHeader(name, apiKeyValue);
             case QUERY -> {
-                String query = encodePair(apiKeyName, apiKeyValue);
+                String query = encodePair(name, apiKeyValue);
                 try {
                     builder.setUri(new URI(
                             uri.getScheme(),
@@ -152,7 +166,7 @@ public class Authentication
                     throw new RuntimeException(e);
                 }
             }
-            default -> throw new IllegalArgumentException(format("Unsupported security schema `in` type: %s", in));
+            default -> throw new IllegalArgumentException(format("Unsupported security schema `in` type: %s", scheme.getIn()));
         }
     }
 
