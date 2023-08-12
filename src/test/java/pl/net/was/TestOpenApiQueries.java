@@ -35,15 +35,29 @@ public class TestOpenApiQueries
         assertQuery("SHOW SCHEMAS FROM openapi",
                 "VALUES 'default', 'information_schema'");
         assertQuery("SHOW TABLES FROM openapi.default",
-                "VALUES 'find_pets_by_status', 'get_inventory', 'get_order_by_id', 'get_pet_by_id', 'get_user_by_name', 'login_user'");
+                "VALUES 'pet_find_by_status', 'store_inventory', 'store_order', 'pet', 'user', 'user_login', 'pet_upload_image'");
     }
 
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT name FROM find_pets_by_status WHERE status='available'",
+        assertQuery("SELECT name FROM pet_find_by_status WHERE status='available' AND id != 100",
                 "VALUES ('Cat 1'), ('Cat 2'), ('Dog 1'), ('Lion 1'), ('Lion 2'), ('Lion 3'), ('Rabbit 1')");
-        assertQuery("SELECT name FROM get_pet_by_id where pet_id = 1",
+        assertQuery("SELECT name FROM pet WHERE pet_id = 1",
                 "VALUES ('Cat 1')");
+    }
+
+    @Test
+    public void insertPet()
+    {
+        assertQueryReturnsEmptyResult("SELECT name FROM pet WHERE pet_id = 100");
+        assertQuerySucceeds("INSERT INTO pet (id, name, photo_urls, status) VALUES (100, 'Cat X', ARRAY[], 'available')");
+        assertQuery("SELECT name FROM pet WHERE pet_id = 100",
+                "VALUES ('Cat X')");
+        assertUpdate("UPDATE pet SET name = 'Cat Y' WHERE pet_id = 100", 1);
+        assertQuery("SELECT name FROM pet WHERE pet_id = 100",
+                "VALUES ('Cat Y')");
+        assertUpdate("DELETE FROM pet WHERE pet_id = 100", 1);
+        assertQueryReturnsEmptyResult("SELECT name FROM pet WHERE pet_id = 100");
     }
 }
