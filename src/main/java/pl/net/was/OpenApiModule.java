@@ -48,11 +48,13 @@ public class OpenApiModule
         binder.bind(OpenApiMetadata.class).in(SINGLETON);
         binder.bind(OpenApiSplitManager.class).in(SINGLETON);
         binder.bind(OpenApiRecordSetProvider.class).in(SINGLETON);
+        binder.bind(OpenApiPageSinkProvider.class).in(SINGLETON);
+        binder.bind(OpenApiClient.class).in(SINGLETON);
         configBinder(binder).bindConfig(OpenApiConfig.class);
 
         binder.bind(OpenApiSpec.class).in(SINGLETON);
         httpClientBinder(binder)
-                .bindHttpClient("openApi", OpenApiClient.class)
+                .bindHttpClient("openApi", ForOpenApi.class)
                 .withFilter(Authentication.class);
 
         httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);

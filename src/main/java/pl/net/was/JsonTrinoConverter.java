@@ -15,7 +15,10 @@
 package pl.net.was;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
@@ -25,16 +28,22 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
+import io.trino.spi.block.SingleMapBlock;
+import io.trino.spi.block.SingleRowBlock;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
 import io.trino.spi.type.DateTimeEncoding;
 import io.trino.spi.type.DateType;
+import io.trino.spi.type.DoubleType;
 import io.trino.spi.type.IntegerType;
 import io.trino.spi.type.MapType;
+import io.trino.spi.type.RealType;
 import io.trino.spi.type.RowType;
+import io.trino.spi.type.SmallintType;
 import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.TinyintType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 
@@ -63,14 +72,20 @@ public class JsonTrinoConverter
 
     public static Object convert(JsonNode jsonNode, Type type, Schema<?> schemaType)
     {
-        if (jsonNode == null) {
+        if (jsonNode == null || jsonNode instanceof NullNode) {
             return null;
         }
-        if (type instanceof IntegerType) {
+        if (type instanceof IntegerType || type instanceof SmallintType || type instanceof TinyintType) {
             return jsonNode.asInt();
         }
         if (type instanceof BigintType) {
             return jsonNode.bigIntegerValue();
+        }
+        if (type instanceof RealType) {
+            return jsonNode.floatValue();
+        }
+        if (type instanceof DoubleType) {
+            return jsonNode.doubleValue();
         }
         if (type instanceof VarcharType) {
             return jsonNode.asText();
@@ -111,6 +126,128 @@ public class JsonTrinoConverter
             return rowType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
+    }
+
+    public static Object convert(Block block, int position, Type type, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        if (block.isNull(position)) {
+            return null;
+        }
+        if (type instanceof BooleanType) {
+            return type.getBoolean(block, position);
+        }
+        if (type instanceof TinyintType || type instanceof SmallintType || type instanceof IntegerType || type instanceof BigintType) {
+            return type.getLong(block, position);
+        }
+        if (type instanceof DoubleType || type instanceof RealType) {
+            return type.getDouble(block, position);
+        }
+        if (type instanceof VarcharType) {
+            return type.getSlice(block, position).toStringUtf8();
+        }
+        if (type instanceof DateType) {
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
+            return dateFormatter.format(LocalDate.ofEpochDay(type.getLong(block, position)));
+        }
+        if (type instanceof TimestampType) {
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
+            // TODO this is probably wrong, handle other types/precisions
+            return dateFormatter.format(Instant.ofEpochMilli(type.getLong(block, position)));
+        }
+        if (type instanceof ArrayType arrayType) {
+            Block arrayBlock = arrayType.getObject(block, position);
+            ArrayNode arrayNode = objectMapper.createArrayNode();
+            for (int i = 0; i < arrayBlock.getPositionCount(); i++) {
+                Object itemValue = convert(arrayBlock, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
+                if (itemValue == null) {
+                    arrayNode.addNull();
+                }
+                else if (itemValue instanceof Boolean booleanValue) {
+                    arrayNode.add(booleanValue);
+                }
+                else if (itemValue instanceof Long longValue) {
+                    arrayNode.add(longValue);
+                }
+                else if (itemValue instanceof Double doubleValue) {
+                    arrayNode.add(doubleValue);
+                }
+                else if (itemValue instanceof String stringValue) {
+                    arrayNode.add(stringValue);
+                }
+                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
+                    arrayNode.add((JsonNode) itemValue);
+                }
+                else {
+                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
+                }
+            }
+            return arrayNode;
+        }
+        if (type instanceof MapType mapType) {
+            SingleMapBlock mapBlock = (SingleMapBlock) mapType.getObject(block, position);
+            ObjectNode mapNode = objectMapper.createObjectNode();
+            int entryCount = mapBlock.getPositionCount() / 2;
+            for (int i = 0; i < entryCount; i++) {
+                // TODO passing schemaType.getItems() to both key and value is probably incorrect
+                String key = convert(mapBlock, 2 * i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
+                Object itemValue = convert(mapBlock, 2 * i + 1, mapType.getValueType(), schemaType.getItems(), objectMapper);
+                if (itemValue == null) {
+                    mapNode.putNull(key);
+                }
+                else if (itemValue instanceof Boolean booleanValue) {
+                    mapNode.put(key, booleanValue);
+                }
+                else if (itemValue instanceof Long longValue) {
+                    mapNode.put(key, longValue);
+                }
+                else if (itemValue instanceof Double doubleValue) {
+                    mapNode.put(key, doubleValue);
+                }
+                else if (itemValue instanceof String stringValue) {
+                    mapNode.put(key, stringValue);
+                }
+                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
+                    mapNode.set(key, (JsonNode) itemValue);
+                }
+                else {
+                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
+                }
+            }
+            return mapNode;
+        }
+        if (type instanceof RowType rowType) {
+            SingleRowBlock rowBlock = (SingleRowBlock) rowType.getObject(block, position);
+            ObjectNode rowNode = objectMapper.createObjectNode();
+            for (int i = 0; i < rowBlock.getPositionCount(); i++) {
+                RowType.Field field = rowType.getFields().get(i);
+                String key = field.getName().orElse(format("_col%d", i));
+                // TODO passing schemaType.getItems() is incorrect, need to use getProperties().get(originalFieldName)
+                Object itemValue = convert(rowBlock, i, field.getType(), schemaType.getItems(), objectMapper);
+                if (itemValue == null) {
+                    rowNode.putNull(key);
+                }
+                else if (itemValue instanceof Boolean booleanValue) {
+                    rowNode.put(key, booleanValue);
+                }
+                else if (itemValue instanceof Long longValue) {
+                    rowNode.put(key, longValue);
+                }
+                else if (itemValue instanceof Double doubleValue) {
+                    rowNode.put(key, doubleValue);
+                }
+                else if (itemValue instanceof String stringValue) {
+                    rowNode.put(key, stringValue);
+                }
+                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
+                    rowNode.set(key, (JsonNode) itemValue);
+                }
+                else {
+                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
+                }
+            }
+            return rowNode;
+        }
+        throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
     }
 
     private static Block buildArray(ArrayNode jsonArray, ArrayType arrayType, Schema<?> schemaType)

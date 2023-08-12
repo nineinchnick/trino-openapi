@@ -25,17 +25,26 @@ public class OpenApiTableHandle
         implements ConnectorTableHandle, Cloneable
 {
     private final SchemaTableName schemaTableName;
-    private final String path;
+    private final String selectPath;
+    private final String insertPath;
+    private final String updatePath;
+    private final String deletePath;
     private TupleDomain<ColumnHandle> constraint;
 
     @JsonCreator
     public OpenApiTableHandle(
             SchemaTableName schemaTableName,
-            String path,
+            String selectPath,
+            String insertPath,
+            String updatePath,
+            String deletePath,
             TupleDomain<ColumnHandle> constraint)
     {
         this.schemaTableName = schemaTableName;
-        this.path = path;
+        this.selectPath = selectPath;
+        this.insertPath = insertPath;
+        this.updatePath = updatePath;
+        this.deletePath = deletePath;
         this.constraint = constraint;
     }
 
@@ -46,9 +55,27 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public String getPath()
+    public String getSelectPath()
     {
-        return path;
+        return selectPath;
+    }
+
+    @JsonProperty
+    public String getInsertPath()
+    {
+        return insertPath;
+    }
+
+    @JsonProperty
+    public String getUpdatePath()
+    {
+        return updatePath;
+    }
+
+    @JsonProperty
+    public String getDeletePath()
+    {
+        return deletePath;
     }
 
     @JsonProperty("constraint")
