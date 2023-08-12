@@ -30,7 +30,6 @@ import pl.net.was.OpenApiSpec;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -121,7 +120,7 @@ public class Authentication
     {
         requireNonNull(path, "path is null");
         requireNonNull(method, "method is null");
-        if (pathSecurityRequirements.containsKey(path)&& pathSecurityRequirements.get(path).containsKey(method)) {
+        if (pathSecurityRequirements.containsKey(path) && pathSecurityRequirements.get(path).containsKey(method)) {
             return pathSecurityRequirements.get(path).get(method);
         }
         return securityRequirements;
