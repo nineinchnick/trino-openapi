@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 
 import java.io.Closeable;
 
@@ -30,11 +31,13 @@ public class TestingOpenApiServer
     private final GenericContainer<?> dockerContainer;
 
     public TestingOpenApiServer()
+            throws InterruptedException
     {
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("openapitools/openapi-petstore:latest")
                 .withStartupAttempts(3)
-                .withEnv("OPENAPI_BASE_PATH", BASE_PATH);
+                .withEnv("OPENAPI_BASE_PATH", BASE_PATH)
+                .waitingFor(new HttpWaitStrategy().forPort(8080).forPath("/openapi.yaml").forStatusCode(200));
         dockerContainer.withCreateContainerCmdModifier(cmd -> cmd
                 .withHostConfig(requireNonNull(cmd.getHostConfig(), "hostConfig is null")
                         .withPublishAllPorts(true)));
