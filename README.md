@@ -1,10 +1,10 @@
-Trino Plugin
-============
+Trino OpenAPI
+=============
 
 [![Build Status](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml/badge.svg)](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml)
 
 This is a [Trino](http://trino.io/) plugin that provides a connector to read
-from HTTP APIs given an OpenAPI specification.
+from and write to HTTP APIs given an OpenAPI specification.
 
 # Quick Start
 
@@ -16,7 +16,7 @@ docker run \
   -e OPENAPI_SPEC_LOCATION=http://api.example/api/spec.yaml \
   -e OPENAPI_BASE_URI=http://api.example/api/v1 \
   -p 8080:8080 \
-  nineinchnick/trino-openapi:1.9
+  nineinchnick/trino-openapi:1.10
 ```
 
 Then use your favourite SQL client to connect to Trino running at
@@ -24,7 +24,7 @@ http://localhost:8080
 
 ## Usage
 
-Download one of the ZIP packages, unzip it and copy the `trino-openapi-0.1`
+Download one of the ZIP packages, unzip it and copy the `trino-openapi-1.10`
 directory to the plugin directory on every node in your Trino cluster. Create a
 `openapi.properties` file in your Trino catalog directory and set all the
 required properties.
@@ -74,12 +74,12 @@ This connector has been tested with the following APIs. The Docker image
 includes additional catalog files that will be used if the first of their
 environmental variable is set.
 
-| Name | Environmental variables |
-| ---- | ----------------------- |
-| [OpenAPI Petstore](https://github.com/OpenAPITools/openapi-petstore) | `PETSTORE_URL` |
-| [Starburst Galaxy](https://galaxy.starburst.io/public-api) | `GALAXY_URL`, `GALAXY_TOKEN` |
-| [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version)  | `JIRA_URL` |
-| [GitHub REST API](https://docs.github.com/en/rest) | `GITHUB_TOKEN` |
+| Name                                                                                              | Environmental variables      |
+|---------------------------------------------------------------------------------------------------|------------------------------|
+| [OpenAPI Petstore](https://github.com/OpenAPITools/openapi-petstore)                              | `PETSTORE_URL`               |
+| [Starburst Galaxy](https://galaxy.starburst.io/public-api)                                        | `GALAXY_URL`, `GALAXY_TOKEN` |
+| [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version) | `JIRA_URL`                   |
+| [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`               |
 
 ## Build
 
