@@ -56,14 +56,17 @@ public class OpenApiQueryRunner
                 "openApi.http-client.log.path", "logs"));
         catalogProperties.putAll(Map.of(
                 "authentication.type", requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "oauth"),
+                "authentication.scheme", requireNonNullElse(System.getenv("OPENAPI_AUTH_SCHEME"), "basic")));
+        catalogProperties.putAll(Map.of(
                 "authentication.token-endpoint", requireNonNullElse(System.getenv("OPENAPI_TOKEN_ENDPOINT"), "/oauth/token"),
                 "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
                 "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
                 "authentication.grant-type", requireNonNullElse(System.getenv("OPENAPI_GRANT_TYPE"), "password"),
                 "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "user"),
                 "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "user"),
-                "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_HEADER_NAME"), "api_key"),
-                "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_HEADER_VALUE"), "special-key")));
+                "authentication.bearer-token", requireNonNullElse(System.getenv("OPENAPI_BEARER_TOKEN"), ""),
+                "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
+                "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
         queryRunner.createCatalog("openapi", "openapi", catalogProperties.build());
 
         return queryRunner;

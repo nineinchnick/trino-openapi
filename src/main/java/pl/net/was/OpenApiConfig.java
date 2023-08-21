@@ -34,6 +34,7 @@ public class OpenApiConfig
 
     private String username;
     private String password;
+    private String bearerToken;
 
     private String apiKeyName;
     private String apiKeyValue;
@@ -122,6 +123,20 @@ public class OpenApiConfig
     public OpenApiConfig setPassword(String password)
     {
         this.password = password;
+        return this;
+    }
+
+    public String getBearerToken()
+    {
+        return bearerToken;
+    }
+
+    @Config("authentication.bearer-token")
+    @ConfigDescription("Bearer token")
+    @ConfigSecuritySensitive
+    public OpenApiConfig setBearerToken(String bearerToken)
+    {
+        this.bearerToken = bearerToken;
         return this;
     }
 

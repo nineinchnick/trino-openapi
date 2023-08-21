@@ -58,6 +58,7 @@ public class Authentication
     private final AuthenticationType defaultAuthenticationType;
     private final String username;
     private final String password;
+    private final String bearerToken;
     private final String apiKeyName;
     private final String apiKeyValue;
 
@@ -83,6 +84,7 @@ public class Authentication
         this.defaultAuthenticationType = config.getAuthenticationType();
         this.username = config.getUsername();
         this.password = config.getPassword();
+        this.bearerToken = config.getBearerToken();
         this.apiKeyName = config.getApiKeyName();
         this.apiKeyValue = config.getApiKeyValue();
 
@@ -171,9 +173,15 @@ public class Authentication
 
     private Request.Builder applyHttpAuth(Request.Builder builder, String scheme)
     {
-        return builder.addHeader(
-                "Authorization",
-                getAuthHeader(requireNonNullElse(scheme, defaultAuthenticationScheme), username, password));
+        scheme = requireNonNullElse(scheme, defaultAuthenticationScheme);
+        String value;
+        if (scheme.equals("bearer")) {
+            value = "Bearer " + bearerToken;
+        }
+        else {
+            value = getAuthHeader(scheme, username, password);
+        }
+        return builder.addHeader("Authorization", value);
     }
 
     private Request.Builder applyOAuth(Request.Builder builder)
