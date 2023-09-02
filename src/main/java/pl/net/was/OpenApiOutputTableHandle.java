@@ -16,37 +16,22 @@ package pl.net.was;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableList;
 import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMergeTableHandle;
 import io.trino.spi.connector.ConnectorOutputTableHandle;
-import io.trino.spi.type.Type;
-
-import java.util.List;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiOutputTableHandle
         implements ConnectorOutputTableHandle, ConnectorInsertTableHandle, ConnectorMergeTableHandle
 {
     private final OpenApiTableHandle tableHandle;
-    private final List<String> columnNames;
-    private final List<Type> columnTypes;
 
     @JsonCreator
-    public OpenApiOutputTableHandle(
-            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle,
-            @JsonProperty("columnNames") List<String> columnNames,
-            @JsonProperty("columnTypes") List<Type> columnTypes)
+    public OpenApiOutputTableHandle(@JsonProperty("tableHandle") OpenApiTableHandle tableHandle)
     {
         this.tableHandle = requireNonNull(tableHandle, "tableHandle is null");
-        requireNonNull(columnNames, "columnNames is null");
-        requireNonNull(columnTypes, "columnTypes is null");
-        checkArgument(columnNames.size() == columnTypes.size(), "columnNames and columnTypes sizes don't match");
-        this.columnNames = ImmutableList.copyOf(columnNames);
-        this.columnTypes = ImmutableList.copyOf(columnTypes);
     }
 
     @Override
@@ -54,18 +39,6 @@ public class OpenApiOutputTableHandle
     public OpenApiTableHandle getTableHandle()
     {
         return tableHandle;
-    }
-
-    @JsonProperty
-    public List<String> getColumnNames()
-    {
-        return columnNames;
-    }
-
-    @JsonProperty
-    public List<Type> getColumnTypes()
-    {
-        return columnTypes;
     }
 
     @Override

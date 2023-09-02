@@ -17,7 +17,6 @@ package pl.net.was.adapters;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.swagger.v3.oas.models.media.Schema;
-import io.trino.spi.connector.ConnectorTableMetadata;
 import pl.net.was.OpenApiSpecAdapter;
 
 import java.util.Map;
@@ -33,7 +32,7 @@ public class GalaxyAdapter
         return original;
     }
 
-    public JsonNode runAdapter(ConnectorTableMetadata tableMetadata, JsonNode original)
+    public JsonNode runAdapter(JsonNode original)
     {
         if (original.has("result") && original.get("result") instanceof ArrayNode) {
             return original.get("result");

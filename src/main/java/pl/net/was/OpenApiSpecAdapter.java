@@ -16,7 +16,6 @@ package pl.net.was;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.models.media.Schema;
-import io.trino.spi.connector.ConnectorTableMetadata;
 
 import java.util.Map;
 
@@ -24,5 +23,5 @@ public interface OpenApiSpecAdapter
 {
     Map<String, Schema> runAdapter(String operationId, Map<String, Schema> original);
 
-    JsonNode runAdapter(ConnectorTableMetadata tableMetadata, JsonNode original);
+    JsonNode runAdapter(JsonNode original);
 }
