@@ -19,7 +19,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.base.CaseFormat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
 import com.google.inject.Inject;
@@ -32,18 +31,13 @@ import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.media.Schema;
-import io.swagger.v3.oas.models.parameters.Parameter;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
-import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.StandardTypes;
-import io.trino.spi.type.Type;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -54,7 +48,6 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
@@ -78,15 +71,13 @@ public class OpenApiClient
 
     private final URI baseUri;
 
-    private final OpenApiMetadata metadata;
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
 
     @Inject
-    public OpenApiClient(OpenApiConfig config, OpenApiMetadata metadata, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
+    public OpenApiClient(OpenApiConfig config, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
     {
         this.baseUri = config.getBaseUri();
-        this.metadata = metadata;
         this.httpClient = httpClient;
         this.openApiSpec = openApiSpec;
     }
@@ -127,16 +118,14 @@ public class OpenApiClient
     public <T> T makeRequest(OpenApiTableHandle table, PathItem.HttpMethod method, String path, Request.Builder builder, ResponseHandler<T, RuntimeException> responseHandler)
     {
         String uriPath = requireNonNull(path, "path is null");
-        Map<String, String> pathParams = getFilterValues(table, path, method, "path");
-        for (Map.Entry<String, String> entry : pathParams.entrySet()) {
-            // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
-            String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, entry.getKey());
-            uriPath = uriPath.replace(format("{%s}", parameterName), entry.getValue());
+        Map<String, Object> pathParams = getFilterValues(table, method, "path");
+        for (Map.Entry<String, Object> entry : pathParams.entrySet()) {
+            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
         }
 
         URI uri;
         try {
-            uri = buildUri(baseUri, uriPath, getFilterValues(table, path, method, "query"));
+            uri = buildUri(baseUri, uriPath, getFilterValues(table, method, "query"));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -146,17 +135,17 @@ public class OpenApiClient
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader("X-Trino-OpenAPI-Path", path);
-        getFilterValues(table, path, method, "header").forEach(builder::addHeader);
+        getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
 
         return httpClient.execute(builder.build(), responseHandler);
     }
 
-    private static URI buildUri(URI uri, String path, Map<String, String> queryParams)
+    private static URI buildUri(URI uri, String path, Map<String, Object> queryParams)
             throws URISyntaxException
     {
         URI oldUri = uri.resolve(uri.getPath() + path);
         String query = queryParams.entrySet().stream()
-                .map(entry -> format("%s=%s", entry.getKey(), URLEncoder.encode(entry.getValue(), UTF_8)))
+                .map(entry -> format("%s=%s", entry.getKey(), URLEncoder.encode(entry.getValue().toString(), UTF_8)))
                 .collect(joining("&"));
         return new URI(
                 oldUri.getScheme(),
@@ -166,39 +155,25 @@ public class OpenApiClient
                 oldUri.getFragment());
     }
 
-    private Map<String, String> getFilterValues(OpenApiTableHandle table, String path)
+    private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, String in)
     {
-        return getFilterValues(table, path, PathItem.HttpMethod.GET, null);
-    }
-
-    private Map<String, String> getFilterValues(OpenApiTableHandle table, String path, PathItem.HttpMethod method, String in)
-    {
-        Map<String, OpenApiColumnHandle> columns = metadata.getColumnHandles(table);
-        if (!openApiSpec.getRequiredParameters().containsKey(path) || !openApiSpec.getRequiredParameters().get(path).containsKey(method)) {
-            return Map.of();
-        }
-        Map<String, Parameter> requiredParams = openApiSpec.getRequiredParameters().get(path).get(method);
-        Stream<Map.Entry<String, Parameter>> stream = requiredParams.entrySet().stream();
-        if (in != null) {
-            stream = stream.filter(entry -> entry.getValue().getIn().equals(in));
-        }
-        return stream
-                .collect(toMap(Map.Entry::getKey, entry -> {
-                    Object value = getFilter(columns.get(entry.getKey()), table.getConstraint(), null);
+        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(column -> column.getRequiresPredicate().containsKey(method) && (in == null || column.getRequiresPredicate().get(method).equals(in)))
+                .collect(toMap(OpenApiColumn::getSourceName, column -> {
+                    Object value = getFilter(column, table.getConstraint(), null);
                     if (value == null) {
-                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + entry.getKey());
+                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
-                    // TODO this requires proper type mapping, reverse of JsonTrinoConverter.writeTo()
-                    return value.toString();
+                    return value;
                 }));
     }
 
-    private static Object getFilter(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, Object defaultValue)
+    private static Object getFilter(OpenApiColumn column, TupleDomain<ColumnHandle> constraint, Object defaultValue)
     {
         requireNonNull(column, "column is null");
         Domain domain = null;
         if (constraint.getDomains().isPresent()) {
-            domain = constraint.getDomains().get().get(column);
+            domain = constraint.getDomains().get().get(column.getHandle());
         }
         if (domain == null) {
             return defaultValue;
@@ -212,22 +187,21 @@ public class OpenApiClient
 
     public ObjectNode serializePage(OpenApiOutputTableHandle table, Page page, int position)
     {
-        Map<String, Schema<?>> columnTypes = openApiSpec.getOriginalColumnTypes(table.getTableHandle().getSchemaTableName().getTableName());
-        requireNonNull(columnTypes, "columnTypes is null");
-
         ObjectMapper objectMapper = new ObjectMapper();
         ObjectNode node = objectMapper.createObjectNode();
-        // TODO iterate over non-hidden columns, not channels
-        for (int channel = 0; channel < table.getColumnTypes().size(); channel++) {
+        String tableName = table.getTableHandle().getSchemaTableName().getTableName();
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
+                .filter(column -> !column.getName().equals(ROW_ID))
+                .toList();
+        for (int channel = 0; channel < columns.size(); channel++) {
             Block block = page.getBlock(channel);
             if (block.isNull(position)) {
                 continue;
             }
 
-            String columnName = table.getColumnNames().get(channel);
-            Type type = table.getColumnTypes().get(channel);
-            Object value = JsonTrinoConverter.convert(block, position, type, columnTypes.get(columnName), objectMapper);
-            nodePut(node, columnName, value);
+            OpenApiColumn column = columns.get(channel);
+            Object value = JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), objectMapper);
+            nodePut(node, column.getName(), value);
         }
         return node;
     }
@@ -266,12 +240,10 @@ public class OpenApiClient
         private static final ObjectMapper objectMapper = new ObjectMapper();
 
         private final OpenApiTableHandle table;
-        private final ConnectorTableMetadata tableMetadata;
 
         JsonResponseHandler(OpenApiTableHandle table)
         {
             this.table = requireNonNull(table, "table is null");
-            this.tableMetadata = metadata.getTableMetadata(table);
         }
 
         @Override
@@ -303,7 +275,7 @@ public class OpenApiClient
 
                 log.debug("Marshalled response to json %s", jsonNode);
 
-                JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(tableMetadata, jsonNode)).orElse(jsonNode);
+                JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(jsonNode)).orElse(jsonNode);
 
                 return convertJson(table, jsonNodeToUse);
             }
@@ -317,47 +289,43 @@ public class OpenApiClient
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
-        ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(table);
-        Map<String, String> pathParams = getFilterValues(table, table.getSelectPath());
+        Map<String, Object> pathParams = getFilterValues(table, PathItem.HttpMethod.GET, null);
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.add(convertJsonToRecord(tableMetadata, pathParams, jsonRecord));
+                resultRecordsBuilder.add(convertJsonToRecord(table, pathParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.add(convertJsonToRecord(tableMetadata, pathParams, jsonNode));
+            resultRecordsBuilder.add(convertJsonToRecord(table, pathParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private List<?> convertJsonToRecord(ConnectorTableMetadata tableMetadata, Map<String, String> pathParams, JsonNode jsonNode)
+    private List<?> convertJsonToRecord(OpenApiTableHandle table, Map<String, Object> pathParams, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
         }
 
         List<Object> recordBuilder = new ArrayList<>();
-        for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-            if (columnMetadata.getName().equals(ROW_ID)) {
+        for (OpenApiColumn column : openApiSpec.getTables().get(table.getSchemaTableName().getTableName())) {
+            if (column.getName().equals(ROW_ID)) {
                 // TODO this is dangerous, make it configurable and required?
-                recordBuilder.add(pathParams.values().stream().findFirst().orElse(null));
+                recordBuilder.add(pathParams.values().stream().findFirst().map(Object::toString).orElse(null));
                 continue;
             }
-            // TODO we shouldn't have to do a reverse name mapping, we should iterate over tuples of spec properties and trino types
-            String parameterName = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, columnMetadata.getName());
+            String parameterName = column.getSourceName();
             if (!jsonNode.has(parameterName)) {
                 // this might be a virtual column for a required parameter, if so, copy the value from the constraint
                 recordBuilder.add(pathParams.getOrDefault(parameterName, null));
                 continue;
             }
-            Map<String, Schema<?>> columnTypes = openApiSpec.getOriginalColumnTypes(tableMetadata.getTable().getTableName());
-            requireNonNull(columnTypes, "columnTypes is null");
             recordBuilder.add(
                     JsonTrinoConverter.convert(
                             jsonNode.get(parameterName),
-                            columnMetadata.getType(),
-                            columnTypes.get(columnMetadata.getName())));
+                            column.getType(),
+                            column.getSourceType()));
         }
 
         return recordBuilder;

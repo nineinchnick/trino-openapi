@@ -56,12 +56,13 @@ public class OpenApiColumnHandle
             return false;
         }
         OpenApiColumnHandle that = (OpenApiColumnHandle) o;
-        return Objects.equals(name, that.name);
+        return Objects.equals(name, that.name)
+                && Objects.equals(type, that.type);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(name);
+        return Objects.hash(name, type);
     }
 }

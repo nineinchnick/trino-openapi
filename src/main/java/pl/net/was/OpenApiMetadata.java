@@ -14,11 +14,9 @@
 
 package pl.net.was;
 
-import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.airlift.slice.Slice;
-import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.parameters.Parameter;
+import io.trino.spi.StandardErrorCode;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
@@ -29,7 +27,7 @@ import io.trino.spi.connector.ConnectorOutputMetadata;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTableMetadata;
-import io.trino.spi.connector.ConnectorTableProperties;
+import io.trino.spi.connector.ConnectorTableVersion;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.RetryMode;
@@ -42,7 +40,6 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.statistics.ComputedStatistics;
-import io.trino.spi.type.Type;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -51,11 +48,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.RowChangeParadigm.CHANGE_ONLY_UPDATED_COLUMNS;
-import static java.util.Objects.requireNonNull;
+import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSpec.ROW_ID;
@@ -80,22 +76,17 @@ public class OpenApiMetadata
     }
 
     @Override
-    public ConnectorTableHandle getTableHandle(ConnectorSession connectorSession, SchemaTableName schemaTableName)
+    public ConnectorTableHandle getTableHandle(
+            ConnectorSession connectorSession,
+            SchemaTableName schemaTableName,
+            Optional<ConnectorTableVersion> startVersion,
+            Optional<ConnectorTableVersion> endVersion)
     {
-        if (!schemaTableName.getSchemaName().equals(SCHEMA_NAME)) {
-            return null;
+        OpenApiTableHandle handle = spec.getTableHandle(schemaTableName);
+        if (startVersion.isPresent() || endVersion.isPresent()) {
+            throw new TrinoException(StandardErrorCode.NOT_SUPPORTED, "This connector does not support versioned tables");
         }
-        Map<PathItem.HttpMethod, String> paths = spec.getPaths().get(schemaTableName.getTableName());
-        if (paths == null) {
-            throw new TableNotFoundException(schemaTableName);
-        }
-        return new OpenApiTableHandle(
-                schemaTableName,
-                paths.get(PathItem.HttpMethod.GET),
-                paths.get(PathItem.HttpMethod.POST),
-                paths.containsKey(PathItem.HttpMethod.PUT) ? paths.get(PathItem.HttpMethod.PUT) : paths.get(PathItem.HttpMethod.POST),
-                paths.get(PathItem.HttpMethod.DELETE),
-                TupleDomain.none());
+        return handle;
     }
 
     @Override
@@ -110,11 +101,11 @@ public class OpenApiMetadata
     {
         OpenApiTableHandle tableHandle = (OpenApiTableHandle) connectorTableHandle;
         SchemaTableName schemaTableName = tableHandle.getSchemaTableName();
-        List<ColumnMetadata> columns = spec.getTables().get(schemaTableName.getTableName());
+        List<OpenApiColumn> columns = spec.getTables().get(schemaTableName.getTableName());
         if (columns == null) {
             throw new TableNotFoundException(schemaTableName);
         }
-        return new ConnectorTableMetadata(schemaTableName, columns);
+        return new ConnectorTableMetadata(schemaTableName, columns.stream().map(OpenApiColumn::getMetadata).toList());
     }
 
     @Override
@@ -132,14 +123,23 @@ public class OpenApiMetadata
             ConnectorSession connectorSession,
             ConnectorTableHandle connectorTableHandle)
     {
-        return getTableMetadata(connectorTableHandle).getColumns().stream()
-                .collect(toMap(ColumnMetadata::getName, column -> new OpenApiColumnHandle(column.getName(), column.getType())));
+        OpenApiTableHandle tableHandle = (OpenApiTableHandle) connectorTableHandle;
+        return spec.getTables().get(tableHandle.getSchemaTableName().getTableName()).stream()
+                .collect(toMap(OpenApiColumn::getName, OpenApiColumn::getHandle));
     }
 
     public Map<String, OpenApiColumnHandle> getColumnHandles(ConnectorTableHandle connectorTableHandle)
     {
-        return getTableMetadata(connectorTableHandle).getColumns().stream()
-                .collect(toMap(ColumnMetadata::getName, column -> new OpenApiColumnHandle(column.getName(), column.getType())));
+        OpenApiTableHandle tableHandle = (OpenApiTableHandle) connectorTableHandle;
+        return spec.getTables().get(tableHandle.getSchemaTableName().getTableName()).stream()
+                .collect(toMap(OpenApiColumn::getName, OpenApiColumn::getHandle));
+    }
+
+    public Map<String, OpenApiColumn> getColumns(ConnectorTableHandle connectorTableHandle)
+    {
+        OpenApiTableHandle tableHandle = (OpenApiTableHandle) connectorTableHandle;
+        return spec.getTables().get(tableHandle.getSchemaTableName().getTableName()).stream()
+                .collect(toMap(OpenApiColumn::getName, identity()));
     }
 
     @Override
@@ -153,18 +153,12 @@ public class OpenApiMetadata
     }
 
     @Override
-    public ConnectorTableProperties getTableProperties(ConnectorSession session, ConnectorTableHandle table)
-    {
-        return new ConnectorTableProperties();
-    }
-
-    @Override
     public Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
     {
         return spec.getTables().entrySet().stream()
                 .map(entry -> TableColumnsMetadata.forTable(
                         new SchemaTableName(prefix.getSchema().orElse(""), entry.getKey()),
-                        entry.getValue()))
+                        entry.getValue().stream().map(OpenApiColumn::getMetadata).toList()))
                 .iterator();
     }
 
@@ -176,7 +170,7 @@ public class OpenApiMetadata
     {
         OpenApiTableHandle openApiTable = (OpenApiTableHandle) table;
 
-        Map<String, OpenApiColumnHandle> columns = getColumnHandles(table);
+        Map<String, OpenApiColumn> columns = getColumns(table);
         TupleDomain<ColumnHandle> summary = constraint.getSummary();
         // the only reason not to use isNone is so the linter doesn't complain about not checking an Optional
         if (summary.isAll() || summary.getDomains().isEmpty()) {
@@ -186,36 +180,35 @@ public class OpenApiMetadata
         TupleDomain<ColumnHandle> currentConstraint = openApiTable.getConstraint();
 
         boolean found = false;
-        Map<String, Parameter> requiredParameters = spec.getRequiredParameters().get(openApiTable.getSelectPath()).get(PathItem.HttpMethod.GET);
-        requireNonNull(requiredParameters, "requiredParameters is null");
-        for (Map.Entry<String, Parameter> entry : requiredParameters.entrySet()) {
-            String columnName = entry.getKey();
-            OpenApiColumnHandle column = columns.get(columnName);
+        for (OpenApiColumn column : columns.values()) {
+            if (column.getRequiresPredicate().isEmpty()) {
+                continue;
+            }
 
-            TupleDomain<ColumnHandle> newConstraint = normalizeConstraint(column, summary);
+            TupleDomain<ColumnHandle> newConstraint = normalizeConstraint(column.getHandle(), summary);
             if (newConstraint == null || newConstraint.getDomains().isEmpty()) {
                 continue;
             }
-            if (!validateConstraint(column, currentConstraint, newConstraint)) {
+            if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
                 continue;
             }
             // merge with other pushed down constraints
-            Domain domain = newConstraint.getDomains().get().get(column);
+            Domain domain = newConstraint.getDomains().get().get(column.getHandle());
             if (currentConstraint.getDomains().isEmpty()) {
                 currentConstraint = newConstraint;
             }
-            else if (!currentConstraint.getDomains().get().containsKey(column)) {
+            else if (!currentConstraint.getDomains().get().containsKey(column.getHandle())) {
                 Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().get());
-                domains.put(column, domain);
+                domains.put(column.getHandle(), domain);
                 currentConstraint = TupleDomain.withColumnDomains(domains);
             }
             else {
-                currentConstraint.getDomains().get().get(column).union(domain);
+                currentConstraint.getDomains().get().get(column.getHandle()).union(domain);
             }
             found = true;
             // remove from remaining constraints
             summary = summary.filter(
-                    (columnHandle, tupleDomain) -> !columnHandle.equals(column));
+                    (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
         }
         if (!found) {
             return Optional.empty();
@@ -272,19 +265,7 @@ public class OpenApiMetadata
         if (retryMode != RetryMode.NO_RETRIES) {
             throw new TrinoException(NOT_SUPPORTED, "This connector does not support query retries");
         }
-        List<OpenApiColumnHandle> columnHandles = columns.stream()
-                .map(OpenApiColumnHandle.class::cast)
-                .collect(toImmutableList());
-        ImmutableList.Builder<String> columnNames = ImmutableList.builder();
-        ImmutableList.Builder<Type> columnTypes = ImmutableList.builder();
-        for (OpenApiColumnHandle column : columnHandles) {
-            if (getColumnMetadata(session, tableHandle, column).isHidden()) {
-                continue;
-            }
-            columnNames.add(column.getName());
-            columnTypes.add(column.getType());
-        }
-        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle, columnNames.build(), columnTypes.build());
+        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle);
     }
 
     @Override
@@ -325,15 +306,7 @@ public class OpenApiMetadata
         if (retryMode != RetryMode.NO_RETRIES) {
             throw new TrinoException(NOT_SUPPORTED, "This connector does not support query retries");
         }
-        ImmutableList.Builder<String> columnNames = ImmutableList.builder();
-        ImmutableList.Builder<Type> columnTypes = ImmutableList.builder();
-        getTableMetadata(tableHandle).getColumns().stream()
-                .filter(column -> !column.isHidden())
-                .forEach(column -> {
-                    columnNames.add(column.getName());
-                    columnTypes.add(column.getType());
-                });
-        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle, columnNames.build(), columnTypes.build());
+        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle);
     }
 
     @Override
