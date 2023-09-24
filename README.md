@@ -80,6 +80,7 @@ environmental variable is set.
 | [Starburst Galaxy](https://galaxy.starburst.io/public-api)                                        | `GALAXY_URL`, `GALAXY_TOKEN` |
 | [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version) | `JIRA_URL`                   |
 | [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`               |
+| [DataDog API](https://docs.datadoghq.com/api/latest/)                                             | `DATADOG_URL`                |
 
 ## Build
 
