@@ -55,7 +55,7 @@ public class OpenApiRecordSetProvider
     {
         List<OpenApiColumnHandle> columnHandles = list.stream()
                 .map(c -> (OpenApiColumnHandle) c)
-                .collect(toList());
+                .toList();
         ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
 
         List<Integer> columnIndexes = columnHandles.stream()
@@ -69,17 +69,18 @@ public class OpenApiRecordSetProvider
                     }
                     throw new IllegalStateException("Unknown column: " + column.getName());
                 })
-                .collect(toList());
+                .toList();
 
         Iterable<List<?>> rows = client.getRows((OpenApiTableHandle) table);
         Iterable<List<?>> mappedRows = StreamSupport.stream(rows.spliterator(), false)
                 .map(row -> columnIndexes.stream()
                         .map(row::get)
-                        .collect(toList())).collect(toList());
+                        .collect(toList()))
+                .collect(toList());
 
         List<Type> mappedTypes = columnHandles.stream()
                 .map(OpenApiColumnHandle::getType)
-                .collect(toList());
+                .toList();
         return new InMemoryRecordSet(mappedTypes, mappedRows);
     }
 }

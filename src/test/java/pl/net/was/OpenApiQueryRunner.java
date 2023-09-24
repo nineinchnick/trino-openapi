@@ -26,6 +26,7 @@ import java.util.Map;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
 import static java.util.Objects.requireNonNullElse;
+import static java.util.Objects.requireNonNullElseGet;
 
 public class OpenApiQueryRunner
 {
@@ -50,8 +51,8 @@ public class OpenApiQueryRunner
 
         ImmutableMap.Builder<String, String> catalogProperties = ImmutableMap.builder();
         catalogProperties.putAll(Map.of(
-                "spec-location", requireNonNullElse(System.getenv("OPENAPI_SPEC_LOCATION"), server.getSpecUrl()),
-                "base-uri", requireNonNullElse(System.getenv("OPENAPI_BASE_URI"), server.getApiUrl()),
+                "spec-location", requireNonNullElseGet(System.getenv("OPENAPI_SPEC_LOCATION"), () -> server.getSpecUrl()),
+                "base-uri", requireNonNullElseGet(System.getenv("OPENAPI_BASE_URI"), () -> server.getApiUrl()),
                 "openApi.http-client.log.enabled", "true",
                 "openApi.http-client.log.path", "logs"));
         catalogProperties.putAll(Map.of(
@@ -64,9 +65,16 @@ public class OpenApiQueryRunner
                 "authentication.grant-type", requireNonNullElse(System.getenv("OPENAPI_GRANT_TYPE"), "password"),
                 "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "user"),
                 "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "user"),
-                "authentication.bearer-token", requireNonNullElse(System.getenv("OPENAPI_BEARER_TOKEN"), ""),
-                "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
-                "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
+                "authentication.bearer-token", requireNonNullElse(System.getenv("OPENAPI_BEARER_TOKEN"), "")));
+        if (System.getenv("OPENAPI_API_KEYS") != null) {
+            catalogProperties.putAll(Map.of(
+                    "authentication.api-keys", System.getenv("OPENAPI_API_KEYS")));
+        }
+        else {
+            catalogProperties.putAll(Map.of(
+                    "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
+                    "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
+        }
         queryRunner.createCatalog("openapi", "openapi", catalogProperties.build());
 
         return queryRunner;
@@ -80,7 +88,10 @@ public class OpenApiQueryRunner
         logger.setLevel("io.trino", Level.INFO);
         logger.setLevel("io.airlift", Level.DEBUG);
 
-        TestingOpenApiServer server = new TestingOpenApiServer();
+        TestingOpenApiServer server = null;
+        if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
+            server = new TestingOpenApiServer();
+        }
         QueryRunner queryRunner = createQueryRunner(server);
 
         Logger log = Logger.get(OpenApiQueryRunner.class);

@@ -126,29 +126,6 @@ public class OpenApiSpec
         this.securityRequirements = openApi.getSecurity();
     }
 
-    private List<OpenApiColumn> mergeColumns(List<OpenApiColumn> columns)
-    {
-        return columns.stream()
-                // merge all columns with same name and data type
-                .collect(groupingBy(OpenApiColumn::getPrimaryKey))
-                .values().stream()
-                .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
-                        .setRequiresPredicate(sameColumns.stream()
-                                .map(OpenApiColumn::getRequiresPredicate)
-                                .flatMap(map -> map.entrySet().stream())
-                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a)))
-                        .build())
-                .collect(groupingBy(OpenApiColumn::getName))
-                .values().stream()
-                // make sure column names are also unique, append incrementing suffixes for columns of different types
-                .flatMap(sameColumns -> IntStream
-                        .range(0, sameColumns.size())
-                        .mapToObj(i -> OpenApiColumn.builderFrom(sameColumns.get(i))
-                                .setName(sameColumns.get(i).getName() + (i > 0 ? "_" + i : ""))
-                                .build()))
-                .toList();
-    }
-
     private String stripPathParams(String key)
     {
         return key.replaceAll("/\\{[^\\}]+\\}", "");
@@ -197,8 +174,10 @@ public class OpenApiSpec
         }
         return new OpenApiTableHandle(
                 name,
-                paths.get(PathItem.HttpMethod.GET),
+                // some APIs use POST to query resources
+                paths.containsKey(PathItem.HttpMethod.GET) ? paths.get(PathItem.HttpMethod.GET) : paths.get(PathItem.HttpMethod.POST),
                 paths.get(PathItem.HttpMethod.POST),
+                // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
                 paths.containsKey(PathItem.HttpMethod.PUT) ? paths.get(PathItem.HttpMethod.PUT) : paths.get(PathItem.HttpMethod.POST),
                 paths.get(PathItem.HttpMethod.DELETE),
                 TupleDomain.none());
@@ -233,31 +212,8 @@ public class OpenApiSpec
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream().flatMap(entry -> {
             PathItem.HttpMethod method = entry.getKey();
             Operation op = entry.getValue();
-            Map<String, Schema> properties = new LinkedHashMap<>();
-            List<String> requiredProperties = new ArrayList<>();
+            List<OpenApiColumn> result = new ArrayList<>();
 
-            Map<String, Parameter> requiredParameters;
-            if (op.getParameters() != null && filterPath(pathItem.toString(), method)) {
-                // add required parameters as columns, so they can be set as predicates;
-                // predicate values will be saved in the table handle and copied to result rows
-                requiredParameters = op.getParameters().stream()
-                        .filter(Parameter::getRequired)
-                        .collect(toMap(Parameter::getName, identity()));
-                requiredParameters.forEach((key, value) -> properties.put(key, value.getSchema()));
-            }
-            else {
-                requiredParameters = Map.of();
-            }
-            if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null) {
-                Schema<?> schema = op.getRequestBody()
-                        .getContent()
-                        .get("application/json")
-                        .getSchema();
-                properties.putAll(getSchemaProperties(schema, op.getOperationId()));
-                if (schema.getRequired() != null) {
-                    requiredProperties.addAll(schema.getRequired());
-                }
-            }
             if (op.getResponses().get("200") != null
                     && op.getResponses().get("200").getContent() != null
                     && op.getResponses().get("200").getContent().get("application/json") != null) {
@@ -265,26 +221,58 @@ public class OpenApiSpec
                         .get("200").getContent()
                         .get("application/json")
                         .getSchema();
-                properties.putAll(getSchemaProperties(schema, op.getOperationId()));
-                if (schema.getRequired() != null) {
-                    requiredProperties.addAll(schema.getRequired());
-                }
+                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+                getSchemaProperties(schema, op.getOperationId())
+                        .entrySet().stream()
+                        .filter(propEntry -> convertType(propEntry.getValue()).isPresent())
+                        .forEach(propEntry -> result.add(getColumn(
+                                propEntry.getKey(),
+                                "",
+                                propEntry.getValue(),
+                                Map.of(),
+                                !requiredProperties.contains(propEntry.getKey()))));
+            }
+            if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null) {
+                List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
+                // TODO how to treat op.getRequestBody().getRequired()?
+                Schema<?> schema = op.getRequestBody()
+                        .getContent()
+                        .get("application/json")
+                        .getSchema();
+                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+                getSchemaProperties(schema, op.getOperationId())
+                        .entrySet().stream()
+                        .filter(propEntry -> convertType(propEntry.getValue()).isPresent())
+                        .forEach(propEntry -> result.add(getColumn(
+                                propEntry.getKey(),
+                                // if the request param is also a response field,
+                                // append `_req` to its name to disambiguate it,
+                                // otherwise it'll get a number suffix, like `_2`
+                                names.contains(propEntry.getKey()) ? "_req" : "",
+                                propEntry.getValue(),
+                                Map.of(method, "body"),
+                                !requiredProperties.contains(propEntry.getKey()))));
+            }
+            if (op.getParameters() != null && filterPath(pathItem.toString(), method)) {
+                List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
+                // add required parameters as columns, so they can be set as predicates;
+                // predicate values will be saved in the table handle and copied to result rows
+                op.getParameters().stream()
+                        .filter(Parameter::getRequired)
+                        .filter(parameter -> convertType(parameter.getSchema()).isPresent())
+                        .forEach(parameter -> result.add(getColumn(
+                                parameter.getName(),
+                                // if the filter param is also a request or response field,
+                                // append `_req` to its name to disambiguate it,
+                                // otherwise it'll get a number suffix, like `_2`
+                                names.contains(parameter.getName()) ? "_req" : "",
+                                parameter.getSchema(),
+                                Map.of(method, parameter.getIn()),
+                                // always nullable, because they're only required as predicates, not in INSERT statements
+                                true)));
             }
 
-            return properties.entrySet().stream()
-                    .filter(property -> convertType(property.getValue()).isPresent())
-                    .map(property -> {
-                        Schema<?> value = property.getValue();
-                        return OpenApiColumn.builder()
-                                .setName(getIdentifier(property.getKey()))
-                                .setSourceName(property.getKey())
-                                .setType(convertType(value).orElseThrow())
-                                .setSourceType(value)
-                                .setRequiresPredicate(requiredParameters.containsKey(property.getKey()) ? Map.of(method, requiredParameters.get(property.getKey()).getIn()) : Map.of())
-                                .setIsNullable(Optional.ofNullable(value.getNullable()).orElse(!requiredProperties.contains(property.getKey())))
-                                .setComment(value.getDescription())
-                                .build();
-                    });
+            return result.stream();
         }).distinct();
         if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getDelete() != null) {
             // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
@@ -298,6 +286,19 @@ public class OpenApiSpec
                     .toList();
         }
         return columns.toList();
+    }
+
+    private OpenApiColumn getColumn(String name, String suffix, Schema<?> schema, Map<PathItem.HttpMethod, String> requiredPredicate, boolean isNullable)
+    {
+        return OpenApiColumn.builder()
+                .setName(getIdentifier(name) + suffix)
+                .setSourceName(name)
+                .setType(convertType(schema).orElseThrow())
+                .setSourceType(schema)
+                .setRequiresPredicate(requiredPredicate)
+                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setComment(schema.getDescription())
+                .build();
     }
 
     private boolean filterPath(String path, PathItem.HttpMethod method)
@@ -378,6 +379,30 @@ public class OpenApiSpec
         }
         // TODO log unknown type
         return Optional.of(VARCHAR);
+    }
+
+    private List<OpenApiColumn> mergeColumns(List<OpenApiColumn> columns)
+    {
+        return columns.stream()
+                // merge all columns with same name and data type
+                .collect(groupingBy(OpenApiColumn::getPrimaryKey))
+                .values().stream()
+                .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
+                        .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))
+                        .setRequiresPredicate(sameColumns.stream()
+                                .map(OpenApiColumn::getRequiresPredicate)
+                                .flatMap(map -> map.entrySet().stream())
+                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a)))
+                        .build())
+                .collect(groupingBy(OpenApiColumn::getName))
+                .values().stream()
+                // make sure column names are also unique, append incrementing suffixes for columns of different types
+                .flatMap(sameColumns -> IntStream
+                        .range(0, sameColumns.size())
+                        .mapToObj(i -> OpenApiColumn.builderFrom(sameColumns.get(i))
+                                .setName(sameColumns.get(i).getName() + (i > 0 ? "_" + (i + 1) : ""))
+                                .build()))
+                .toList();
     }
 
     public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()

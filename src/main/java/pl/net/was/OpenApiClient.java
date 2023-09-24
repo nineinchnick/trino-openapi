@@ -48,6 +48,7 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
@@ -58,9 +59,11 @@ import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.Request.Builder.preparePut;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSpec.ROW_ID;
@@ -84,12 +87,17 @@ public class OpenApiClient
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
-        return makeRequest(table, PathItem.HttpMethod.GET, table.getSelectPath(), prepareGet(), new JsonResponseHandler(table));
+        Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
+        if (bodyParams.isEmpty()) {
+            return makeRequest(table, PathItem.HttpMethod.GET, table.getSelectPath(), prepareGet(), new JsonResponseHandler(table));
+        }
+        Request.Builder builder = preparePost().setBodyGenerator(new JsonBodyGenerator(serializeMap(table, bodyParams)));
+        return makeRequest(table, PathItem.HttpMethod.POST, table.getSelectPath(), builder, new JsonResponseHandler(table));
     }
 
     public void postRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        postRows(table, serializePage(table, page, position));
+        postRows(table, serializePage(table.getTableHandle(), page, position));
     }
 
     public void postRows(OpenApiOutputTableHandle table, JsonNode data)
@@ -100,7 +108,7 @@ public class OpenApiClient
 
     public void putRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        putRows(table, serializePage(table, page, position));
+        putRows(table, serializePage(table.getTableHandle(), page, position));
     }
 
     public void putRows(OpenApiOutputTableHandle table, JsonNode data)
@@ -145,7 +153,7 @@ public class OpenApiClient
     {
         URI oldUri = uri.resolve(uri.getPath() + path);
         String query = queryParams.entrySet().stream()
-                .map(entry -> format("%s=%s", entry.getKey(), URLEncoder.encode(entry.getValue().toString(), UTF_8)))
+                .map(entry -> encodeQueryParam(entry.getKey(), entry.getValue()))
                 .collect(joining("&"));
         return new URI(
                 oldUri.getScheme(),
@@ -155,9 +163,23 @@ public class OpenApiClient
                 oldUri.getFragment());
     }
 
+    private static String encodeQueryParam(String name, Object value)
+    {
+        if (value instanceof Block block) {
+            return IntStream
+                    .range(0, block.getPositionCount())
+                    .mapToObj(i -> VARCHAR.getSlice(block, i).toStringUtf8())
+                    .map(arrayValue -> encodeQueryParam(name, arrayValue))
+                    .collect(joining("&"));
+        }
+        return format("%s=%s", name, URLEncoder.encode(value.toString(), UTF_8));
+    }
+
     private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, String in)
     {
-        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+        String tableName = table.getSchemaTableName().getTableName();
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
+        return columns.stream()
                 .filter(column -> column.getRequiresPredicate().containsKey(method) && (in == null || column.getRequiresPredicate().get(method).equals(in)))
                 .collect(toMap(OpenApiColumn::getSourceName, column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
@@ -179,17 +201,18 @@ public class OpenApiClient
             return defaultValue;
         }
         return switch (column.getType().getBaseName()) {
+            case StandardTypes.ARRAY, StandardTypes.ROW -> ((Block) domain.getSingleValue());
             case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
             case StandardTypes.BIGINT, StandardTypes.INTEGER -> domain.getSingleValue();
             default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
         };
     }
 
-    public ObjectNode serializePage(OpenApiOutputTableHandle table, Page page, int position)
+    public ObjectNode serializePage(OpenApiTableHandle table, Page page, int position)
     {
         ObjectMapper objectMapper = new ObjectMapper();
         ObjectNode node = objectMapper.createObjectNode();
-        String tableName = table.getTableHandle().getSchemaTableName().getTableName();
+        String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
                 .filter(column -> !column.getName().equals(ROW_ID))
                 .toList();
@@ -201,6 +224,28 @@ public class OpenApiClient
 
             OpenApiColumn column = columns.get(channel);
             Object value = JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), objectMapper);
+            nodePut(node, column.getName(), value);
+        }
+        return node;
+    }
+
+    public ObjectNode serializeMap(OpenApiTableHandle table, Map<String, Object> params)
+    {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode node = objectMapper.createObjectNode();
+        String tableName = table.getSchemaTableName().getTableName();
+        Map<String, OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
+                .filter(column -> !column.getName().equals(ROW_ID))
+                // only get columns for body params to avoid name conflicts
+                .filter(column -> column.getRequiresPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body"))
+                .collect(toMap(OpenApiColumn::getSourceName, identity()));
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            String name = entry.getKey();
+            Object value = entry.getValue();
+            OpenApiColumn column = columns.get(name);
+            if (value instanceof Block block) {
+                value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), objectMapper);
+            }
             nodePut(node, column.getName(), value);
         }
         return node;
@@ -258,9 +303,6 @@ public class OpenApiClient
             if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
                 return List.of();
             }
-            if (response.getStatusCode() != HttpStatus.OK.code()) {
-                throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Response code for getRows request was not 200: %s", response.getStatusCode()));
-            }
             String result = "";
             try {
                 result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
@@ -269,6 +311,9 @@ public class OpenApiClient
                 throw new RuntimeException(e);
             }
             log.debug("Received response code " + response.getStatusCode() + ": " + result);
+            if (response.getStatusCode() != HttpStatus.OK.code()) {
+                throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Response code for getRows request was not 200: %s", response.getStatusCode()), new IllegalArgumentException(result));
+            }
 
             try {
                 JsonNode jsonNode = objectMapper.readTree(result);
@@ -316,7 +361,7 @@ public class OpenApiClient
                 continue;
             }
             String parameterName = column.getSourceName();
-            if (!jsonNode.has(parameterName)) {
+            if (pathParams.containsKey(parameterName)) {
                 // this might be a virtual column for a required parameter, if so, copy the value from the constraint
                 recordBuilder.add(pathParams.getOrDefault(parameterName, null));
                 continue;

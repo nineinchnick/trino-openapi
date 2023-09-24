@@ -14,15 +14,22 @@
 
 package pl.net.was;
 
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.Schema;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.RowType;
 import org.assertj.core.api.Assertions;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
@@ -102,16 +109,71 @@ class TestOpenApiSpec
         Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/pet");
         Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/pet");
         Assertions.assertThat(tableHandle.getDeletePath()).isEqualTo("/pet/{petId}");
-        Assertions.assertThat(tables.get("pet").stream().map(OpenApiColumn::getName).toList())
+        List<OpenApiColumn> petColumns = tables.get("pet").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+        Schema<?> intSchema = new Schema<>();
+        intSchema.setType("integer");
+        Schema<?> stringSchema = new Schema<>();
+        stringSchema.setType("string");
+        Schema<?> arraySchema = new Schema<>();
+        arraySchema.setType("array");
+        Schema<?> objectSchema = new Schema<>();
+        objectSchema.setType("object");
+        RowType categoryType = RowType.from(List.of(
+                new RowType.Field(Optional.of("id"), INTEGER),
+                new RowType.Field(Optional.of("name"), VARCHAR)));
+        ArrayType photosType = new ArrayType(VARCHAR);
+        ArrayType tagsType = new ArrayType(categoryType);
+        Assertions.assertThat(petColumns)
                 .containsExactly(
-                        "name",
-                        "__trino_row_id",
-                        "id",
-                        "category",
-                        "photo_urls",
-                        "status",
-                        "tags",
-                        "pet_id");
+                        OpenApiColumn.builder()
+                                .setName("name").setSourceName("name")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("category").setSourceName("category")
+                                .setType(categoryType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("A category for a pet")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("photo_urls").setSourceName("photoUrls")
+                                .setType(photosType).setSourceType(arraySchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("status").setSourceName("status")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .setComment("pet status in the store")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("pet_id").setSourceName("petId")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("tags").setSourceName("tags")
+                                .setType(tagsType).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .build());
     }
 
     private OpenApiSpec loadSpec(String name)
