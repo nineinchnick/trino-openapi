@@ -14,15 +14,20 @@
 
 package pl.net.was;
 
+import com.google.common.base.Splitter;
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
+import io.airlift.configuration.InvalidConfigurationException;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
 
 import javax.validation.constraints.NotNull;
 
 import java.net.URI;
+import java.util.Map;
+
+import static java.util.Objects.requireNonNull;
 
 public class OpenApiConfig
 {
@@ -36,6 +41,7 @@ public class OpenApiConfig
     private String password;
     private String bearerToken;
 
+    private Map<String, String> apiKeys = Map.of();
     private String apiKeyName;
     private String apiKeyValue;
 
@@ -140,6 +146,28 @@ public class OpenApiConfig
         return this;
     }
 
+    @NotNull
+    public Map<String, String> getApiKeys()
+    {
+        return apiKeys;
+    }
+
+    @Config("authentication.api-keys")
+    public OpenApiConfig setApiKeys(String apiKeys)
+            throws InvalidConfigurationException
+    {
+        if (this.apiKeyName != null || this.apiKeyValue != null) {
+            throw new InvalidConfigurationException("Cannot use authentication.api-keys if authentication.api-key-name or authentication.api-key-name is set");
+        }
+        this.apiKeys = Splitter
+                .on(',')
+                .trimResults()
+                .omitEmptyStrings()
+                .withKeyValueSeparator("=")
+                .split(requireNonNull(apiKeys, "apiKeys is null"));
+        return this;
+    }
+
     public String getApiKeyName()
     {
         return apiKeyName;
@@ -148,7 +176,11 @@ public class OpenApiConfig
     @Config("authentication.api-key-name")
     @ConfigDescription("API key name")
     public OpenApiConfig setApiKeyName(String apiKeyName)
+            throws InvalidConfigurationException
     {
+        if (!this.apiKeys.isEmpty()) {
+            throw new InvalidConfigurationException("Cannot use authentication.api-key-name if authentication.api-keys is set");
+        }
         this.apiKeyName = apiKeyName;
         return this;
     }
@@ -162,7 +194,11 @@ public class OpenApiConfig
     @ConfigDescription("API key value")
     @ConfigSecuritySensitive
     public OpenApiConfig setApiKeyValue(String apiKeyValue)
+            throws InvalidConfigurationException
     {
+        if (!this.apiKeys.isEmpty()) {
+            throw new InvalidConfigurationException("Cannot use authentication.api-key-value if authentication.api-keys is set");
+        }
         this.apiKeyValue = apiKeyValue;
         return this;
     }

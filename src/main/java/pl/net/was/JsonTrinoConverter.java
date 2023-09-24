@@ -129,128 +129,6 @@ public class JsonTrinoConverter
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
 
-    public static Object convert(Block block, int position, Type type, Schema<?> schemaType, ObjectMapper objectMapper)
-    {
-        if (block.isNull(position)) {
-            return null;
-        }
-        if (type instanceof BooleanType) {
-            return type.getBoolean(block, position);
-        }
-        if (type instanceof TinyintType || type instanceof SmallintType || type instanceof IntegerType || type instanceof BigintType) {
-            return type.getLong(block, position);
-        }
-        if (type instanceof DoubleType || type instanceof RealType) {
-            return type.getDouble(block, position);
-        }
-        if (type instanceof VarcharType) {
-            return type.getSlice(block, position).toStringUtf8();
-        }
-        if (type instanceof DateType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            return dateFormatter.format(LocalDate.ofEpochDay(type.getLong(block, position)));
-        }
-        if (type instanceof TimestampType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            // TODO this is probably wrong, handle other types/precisions
-            return dateFormatter.format(Instant.ofEpochMilli(type.getLong(block, position)));
-        }
-        if (type instanceof ArrayType arrayType) {
-            Block arrayBlock = arrayType.getObject(block, position);
-            ArrayNode arrayNode = objectMapper.createArrayNode();
-            for (int i = 0; i < arrayBlock.getPositionCount(); i++) {
-                Object itemValue = convert(arrayBlock, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
-                if (itemValue == null) {
-                    arrayNode.addNull();
-                }
-                else if (itemValue instanceof Boolean booleanValue) {
-                    arrayNode.add(booleanValue);
-                }
-                else if (itemValue instanceof Long longValue) {
-                    arrayNode.add(longValue);
-                }
-                else if (itemValue instanceof Double doubleValue) {
-                    arrayNode.add(doubleValue);
-                }
-                else if (itemValue instanceof String stringValue) {
-                    arrayNode.add(stringValue);
-                }
-                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
-                    arrayNode.add((JsonNode) itemValue);
-                }
-                else {
-                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
-                }
-            }
-            return arrayNode;
-        }
-        if (type instanceof MapType mapType) {
-            SqlMap mapBlock = mapType.getObject(block, position);
-            ObjectNode mapNode = objectMapper.createObjectNode();
-            int entryCount = mapBlock.getSize();
-            for (int i = 0; i < entryCount; i++) {
-                // TODO passing schemaType.getItems() to both key and value is probably incorrect
-                String key = convert(mapBlock.getRawKeyBlock(), i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
-                Object itemValue = convert(mapBlock.getRawValueBlock(), i, mapType.getValueType(), schemaType.getItems(), objectMapper);
-                if (itemValue == null) {
-                    mapNode.putNull(key);
-                }
-                else if (itemValue instanceof Boolean booleanValue) {
-                    mapNode.put(key, booleanValue);
-                }
-                else if (itemValue instanceof Long longValue) {
-                    mapNode.put(key, longValue);
-                }
-                else if (itemValue instanceof Double doubleValue) {
-                    mapNode.put(key, doubleValue);
-                }
-                else if (itemValue instanceof String stringValue) {
-                    mapNode.put(key, stringValue);
-                }
-                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
-                    mapNode.set(key, (JsonNode) itemValue);
-                }
-                else {
-                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
-                }
-            }
-            return mapNode;
-        }
-        if (type instanceof RowType rowType) {
-            SqlRow rowBlock = (SqlRow) rowType.getObject(block, position);
-            ObjectNode rowNode = objectMapper.createObjectNode();
-            for (int i = 0; i < rowBlock.getFieldCount(); i++) {
-                RowType.Field field = rowType.getFields().get(i);
-                String key = field.getName().orElse(format("_col%d", i));
-                // TODO passing schemaType.getItems() is incorrect, need to use getProperties().get(originalFieldName)
-                Object itemValue = convert(rowBlock.getRawFieldBlock(i), 0, field.getType(), schemaType.getItems(), objectMapper);
-                if (itemValue == null) {
-                    rowNode.putNull(key);
-                }
-                else if (itemValue instanceof Boolean booleanValue) {
-                    rowNode.put(key, booleanValue);
-                }
-                else if (itemValue instanceof Long longValue) {
-                    rowNode.put(key, longValue);
-                }
-                else if (itemValue instanceof Double doubleValue) {
-                    rowNode.put(key, doubleValue);
-                }
-                else if (itemValue instanceof String stringValue) {
-                    rowNode.put(key, stringValue);
-                }
-                else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
-                    rowNode.set(key, (JsonNode) itemValue);
-                }
-                else {
-                    throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
-                }
-            }
-            return rowNode;
-        }
-        throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
-    }
-
     private static Block buildArray(ArrayNode jsonArray, ArrayType arrayType, Schema<?> schemaType)
     {
         PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(arrayType));
@@ -349,6 +227,146 @@ public class JsonTrinoConverter
         return DateTimeEncoding.packDateTimeWithZone(
                 timestamp.toEpochSecond() * MILLISECONDS_PER_SECOND + roundDiv(timestamp.toLocalTime().getNano(), NANOSECONDS_PER_MILLISECOND),
                 timestamp.getZone().getId());
+    }
+
+    public static Object convert(Block block, int position, Type type, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        if (block.isNull(position)) {
+            return null;
+        }
+        if (type instanceof BooleanType) {
+            return type.getBoolean(block, position);
+        }
+        if (type instanceof TinyintType || type instanceof SmallintType || type instanceof IntegerType || type instanceof BigintType) {
+            return type.getLong(block, position);
+        }
+        if (type instanceof DoubleType || type instanceof RealType) {
+            return type.getDouble(block, position);
+        }
+        if (type instanceof VarcharType) {
+            return type.getSlice(block, position).toStringUtf8();
+        }
+        if (type instanceof DateType) {
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
+            return dateFormatter.format(LocalDate.ofEpochDay(type.getLong(block, position)));
+        }
+        if (type instanceof TimestampType) {
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
+            // TODO this is probably wrong, handle other types/precisions
+            return dateFormatter.format(Instant.ofEpochMilli(type.getLong(block, position)));
+        }
+        if (type instanceof ArrayType arrayType) {
+            Block valueBlock = arrayType.getObject(block, position);
+            return convertArray(valueBlock, arrayType, schemaType, objectMapper);
+        }
+        if (type instanceof MapType mapType) {
+            SqlMap mapBlock = mapType.getObject(block, position);
+            return convertMap(mapBlock, mapType, schemaType, objectMapper);
+        }
+        if (type instanceof RowType rowType) {
+            ObjectNode rowNode = objectMapper.createObjectNode();
+            if (block.getPositionCount() == 0) {
+                return rowNode;
+            }
+            SqlRow rowBlock = rowType.getObject(block, position);
+            convertRow(rowNode, rowBlock, rowType, schemaType, objectMapper);
+            return rowNode;
+        }
+        throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
+    }
+
+    private static ArrayNode convertArray(Block arrayBlock, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        ArrayNode arrayNode = objectMapper.createArrayNode();
+        for (int i = 0; i < arrayBlock.getPositionCount(); i++) {
+            Object itemValue = convert(arrayBlock, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
+            if (itemValue == null) {
+                arrayNode.addNull();
+            }
+            else if (itemValue instanceof Boolean booleanValue) {
+                arrayNode.add(booleanValue);
+            }
+            else if (itemValue instanceof Long longValue) {
+                arrayNode.add(longValue);
+            }
+            else if (itemValue instanceof Double doubleValue) {
+                arrayNode.add(doubleValue);
+            }
+            else if (itemValue instanceof String stringValue) {
+                arrayNode.add(stringValue);
+            }
+            else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
+                arrayNode.add((JsonNode) itemValue);
+            }
+            else {
+                throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
+            }
+        }
+        return arrayNode;
+    }
+
+    private static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        ObjectNode mapNode = objectMapper.createObjectNode();
+        int entryCount = mapBlock.getSize();
+        for (int i = 0; i < entryCount; i++) {
+            // TODO passing schemaType.getItems() to both key and value is probably incorrect
+            String key = convert(mapBlock.getRawKeyBlock(), i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
+            Object itemValue = convert(mapBlock.getRawValueBlock(), i, mapType.getValueType(), schemaType.getItems(), objectMapper);
+            if (itemValue == null) {
+                mapNode.putNull(key);
+            }
+            else if (itemValue instanceof Boolean booleanValue) {
+                mapNode.put(key, booleanValue);
+            }
+            else if (itemValue instanceof Long longValue) {
+                mapNode.put(key, longValue);
+            }
+            else if (itemValue instanceof Double doubleValue) {
+                mapNode.put(key, doubleValue);
+            }
+            else if (itemValue instanceof String stringValue) {
+                mapNode.put(key, stringValue);
+            }
+            else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
+                mapNode.set(key, (JsonNode) itemValue);
+            }
+            else {
+                throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
+            }
+        }
+        return mapNode;
+    }
+
+    public static void convertRow(ObjectNode rowNode, SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        for (int i = 0; i < rowType.getFields().size(); i++) {
+            RowType.Field field = rowType.getFields().get(i);
+            String key = field.getName().orElse(format("_col%d", i));
+            // TODO this doesn't work, somehow getObject fetches two level too deep, need to use getSingleValueBlock()?
+            Object value = convert(row.getRawFieldBlock(i), 0, field.getType(), schemaType.getProperties().get(key), objectMapper);
+            if (value == null) {
+                rowNode.putNull(key);
+            }
+            else if (value instanceof Boolean booleanValue) {
+                rowNode.put(key, booleanValue);
+            }
+            else if (value instanceof Long longValue) {
+                rowNode.put(key, longValue);
+            }
+            else if (value instanceof Double doubleValue) {
+                rowNode.put(key, doubleValue);
+            }
+            else if (value instanceof String stringValue) {
+                rowNode.put(key, stringValue);
+            }
+            else if (value instanceof ArrayNode || value instanceof ObjectNode) {
+                rowNode.set(key, (JsonNode) value);
+            }
+            else {
+                throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
+            }
+        }
     }
 
     public static SqlDate getSqlDate(LocalDate localDate)

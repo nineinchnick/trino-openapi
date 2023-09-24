@@ -26,7 +26,6 @@ import java.util.Optional;
 
 import static io.swagger.v3.oas.models.PathItem.HttpMethod;
 import static java.util.Objects.requireNonNull;
-import static java.util.Objects.requireNonNullElse;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 
 public class OpenApiColumn
@@ -95,8 +94,7 @@ public class OpenApiColumn
 
     public PrimaryKey getPrimaryKey()
     {
-        // for unknown data types fall back to a plain string
-        return new PrimaryKey(name, requireNonNullElse(sourceType.getType(), "String"));
+        return new PrimaryKey(name, type.getDisplayName());
     }
 
     public boolean equals(Object o)
@@ -112,12 +110,26 @@ public class OpenApiColumn
                 && Objects.equals(sourceName, that.sourceName)
                 && Objects.equals(type, that.type)
                 && Objects.equals(sourceType, that.sourceType)
-                && Objects.equals(requiresPredicate, that.requiresPredicate);
+                && Objects.equals(requiresPredicate, that.requiresPredicate)
+                && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public String toString()
+    {
+        return "OpenApiColumn{" +
+                "name='" + name + '\'' +
+                ", sourceName='" + sourceName + '\'' +
+                ", type=" + type +
+                ", sourceType=" + sourceType.getType() +
+                ", requiresPredicate=" + requiresPredicate +
+                ", metadata=" + metadata +
+                '}';
     }
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, metadata);
     }
 
     public static OpenApiColumn.Builder builder()

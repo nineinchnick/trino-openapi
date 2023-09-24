@@ -41,7 +41,7 @@ public class TestOpenApiQueries
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT name FROM pet_find_by_status WHERE status='available' AND id != 100",
+        assertQuery("SELECT name FROM pet_find_by_status WHERE status_req = array['available'] AND id != 100",
                 "VALUES ('Cat 1'), ('Cat 2'), ('Dog 1'), ('Lion 1'), ('Lion 2'), ('Lion 3'), ('Rabbit 1')");
         assertQuery("SELECT name FROM pet WHERE pet_id = 1",
                 "VALUES ('Cat 1')");

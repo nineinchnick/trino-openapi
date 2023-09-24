@@ -35,6 +35,7 @@ public class TestingOpenApiServer
     {
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("openapitools/openapi-petstore:latest")
+                .withExposedPorts(8080)
                 .withStartupAttempts(3)
                 .withEnv("OPENAPI_BASE_PATH", BASE_PATH)
                 .waitingFor(new HttpWaitStrategy().forPort(8080).forPath("/openapi.yaml").forStatusCode(200));

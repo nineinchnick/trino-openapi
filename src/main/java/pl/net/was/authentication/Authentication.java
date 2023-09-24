@@ -59,6 +59,7 @@ public class Authentication
     private final String username;
     private final String password;
     private final String bearerToken;
+    private final Map<String, String> apiKeys;
     private final String apiKeyName;
     private final String apiKeyValue;
 
@@ -85,12 +86,18 @@ public class Authentication
         this.username = config.getUsername();
         this.password = config.getPassword();
         this.bearerToken = config.getBearerToken();
+        this.apiKeys = config.getApiKeys();
         this.apiKeyName = config.getApiKeyName();
         this.apiKeyValue = config.getApiKeyValue();
 
         this.baseUri = requireNonNull(config.getBaseUri(), "baseUri is null");
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
-        this.bodyGenerator = createStaticBodyGenerator(getBody(config.getGrantType(), config.getUsername(), config.getPassword()), UTF_8);
+        if (config.getGrantType() != null) {
+            this.bodyGenerator = createStaticBodyGenerator(getBody(config.getGrantType(), config.getUsername(), config.getPassword()), UTF_8);
+        }
+        else {
+            this.bodyGenerator = null;
+        }
         this.tokenEndpoint = config.getTokenEndpoint();
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
@@ -149,12 +156,19 @@ public class Authentication
     {
         String name = requireNonNullElse(scheme.getName(), apiKeyName);
         requireNonNull(name, "Cannot use API Key authentication method, authentication.api-key-name configuration property is not set");
-        requireNonNull(apiKeyValue, "Cannot use API Key authentication method, authentication.api-key-value configuration property is not set");
+        String value;
+        if (!apiKeys.isEmpty()) {
+            value = apiKeys.get(name);
+            requireNonNull(value, format("Missing API Key %s in authentication.api-keys configuration property", name));
+        }
+        else {
+            value = requireNonNull(apiKeyValue, "Cannot use API Key authentication method, authentication.api-key-value configuration property is not set");
+        }
         switch (scheme.getIn()) {
-            case COOKIE -> builder.addHeader("Cookie", encodePair(name, apiKeyValue));
-            case HEADER -> builder.addHeader(name, apiKeyValue);
+            case COOKIE -> builder.addHeader("Cookie", encodePair(name, value));
+            case HEADER -> builder.addHeader(name, value);
             case QUERY -> {
-                String query = encodePair(name, apiKeyValue);
+                String query = encodePair(name, value);
                 try {
                     builder.setUri(new URI(
                             uri.getScheme(),
@@ -218,6 +232,7 @@ public class Authentication
 
     private String getToken()
     {
+        requireNonNull(bodyGenerator, "bodyGenerator is null");
         return httpClient.execute(
                         preparePost()
                                 .setUri(uriBuilderFrom(baseUri)
@@ -233,6 +248,7 @@ public class Authentication
 
     private static String getBody(String grantType, String username, String password)
     {
+        requireNonNull(grantType, "grantType is null");
         ImmutableMap.Builder<String, String> params = ImmutableMap.<String, String>builder()
                 .put("grant_type", grantType);
         if (username != null && !username.isEmpty()) {
