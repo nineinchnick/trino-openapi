@@ -19,5 +19,8 @@ fi
 if [ -n "$GALAXY_URI" ]; then
     cp $catalog_dir/disabled/galaxy.properties $catalog_dir/galaxy.properties
 fi
+if [ -n "$DATADOG_URL" ]; then
+    cp $catalog_dir/disabled/datadog.properties $catalog_dir/datadog.properties
+fi
 
 exec "$@"
