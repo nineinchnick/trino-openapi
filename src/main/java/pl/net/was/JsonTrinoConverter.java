@@ -123,7 +123,8 @@ public class JsonTrinoConverter
             BlockBuilder blockBuilder = pageBuilder.getBlockBuilder(0);
             writeRow(blockBuilder, jsonNode, rowType, schemaType);
             pageBuilder.declarePosition();
-            return rowType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
+            Block block = blockBuilder.build();
+            return rowType.getObject(block, block.getPositionCount() - 1);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
@@ -268,7 +269,8 @@ public class JsonTrinoConverter
         });
 
         pageBuilder.declarePosition();
-        return arrayType.getObject(blockBuilder, blockBuilder.getPositionCount() - 1);
+        Block block = blockBuilder.build();
+        return arrayType.getObject(block, block.getPositionCount() - 1);
     }
 
     private static Block buildMap(JsonNode node, MapType mapType, Schema<?> schemaType)
@@ -281,7 +283,8 @@ public class JsonTrinoConverter
                 writeTo(valueBuilder, value, mapType.getValueType());
             });
         });
-        return mapType.getObject(blockBuilder, 0);
+        Block block = blockBuilder.build();
+        return mapType.getObject(block, 0);
     }
 
     private static void writeRow(BlockBuilder blockBuilder, JsonNode node, RowType rowType, Schema<?> schemaType)
