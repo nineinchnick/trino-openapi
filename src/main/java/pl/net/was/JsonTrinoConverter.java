@@ -28,8 +28,8 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
-import io.trino.spi.block.SingleMapBlock;
-import io.trino.spi.block.SingleRowBlock;
+import io.trino.spi.block.SqlMap;
+import io.trino.spi.block.SqlRow;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
@@ -185,13 +185,13 @@ public class JsonTrinoConverter
             return arrayNode;
         }
         if (type instanceof MapType mapType) {
-            SingleMapBlock mapBlock = (SingleMapBlock) mapType.getObject(block, position);
+            SqlMap mapBlock = mapType.getObject(block, position);
             ObjectNode mapNode = objectMapper.createObjectNode();
-            int entryCount = mapBlock.getPositionCount() / 2;
+            int entryCount = mapBlock.getSize();
             for (int i = 0; i < entryCount; i++) {
                 // TODO passing schemaType.getItems() to both key and value is probably incorrect
-                String key = convert(mapBlock, 2 * i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
-                Object itemValue = convert(mapBlock, 2 * i + 1, mapType.getValueType(), schemaType.getItems(), objectMapper);
+                String key = convert(mapBlock.getRawKeyBlock(), i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
+                Object itemValue = convert(mapBlock.getRawValueBlock(), i, mapType.getValueType(), schemaType.getItems(), objectMapper);
                 if (itemValue == null) {
                     mapNode.putNull(key);
                 }
@@ -217,13 +217,13 @@ public class JsonTrinoConverter
             return mapNode;
         }
         if (type instanceof RowType rowType) {
-            SingleRowBlock rowBlock = (SingleRowBlock) rowType.getObject(block, position);
+            SqlRow rowBlock = (SqlRow) rowType.getObject(block, position);
             ObjectNode rowNode = objectMapper.createObjectNode();
-            for (int i = 0; i < rowBlock.getPositionCount(); i++) {
+            for (int i = 0; i < rowBlock.getFieldCount(); i++) {
                 RowType.Field field = rowType.getFields().get(i);
                 String key = field.getName().orElse(format("_col%d", i));
                 // TODO passing schemaType.getItems() is incorrect, need to use getProperties().get(originalFieldName)
-                Object itemValue = convert(rowBlock, i, field.getType(), schemaType.getItems(), objectMapper);
+                Object itemValue = convert(rowBlock.getRawFieldBlock(i), 0, field.getType(), schemaType.getItems(), objectMapper);
                 if (itemValue == null) {
                     rowNode.putNull(key);
                 }
@@ -273,7 +273,7 @@ public class JsonTrinoConverter
         return arrayType.getObject(block, block.getPositionCount() - 1);
     }
 
-    private static Block buildMap(JsonNode node, MapType mapType, Schema<?> schemaType)
+    private static SqlMap buildMap(JsonNode node, MapType mapType, Schema<?> schemaType)
     {
         MapBlockBuilder blockBuilder = mapType.createBlockBuilder(null, node.size());
         blockBuilder.buildEntry((keyBuilder, valueBuilder) -> {
