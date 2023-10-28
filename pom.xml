@@ -48,7 +48,7 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>430</dep.trino.version>
+        <dep.trino.version>431</dep.trino.version>
         <dep.airlift.version>237</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
         <dep.opentelemetry.version>1.31.0</dep.opentelemetry.version>
@@ -66,7 +66,7 @@
         <dep.logback.version>1.4.11</dep.logback.version>
         <dep.swagger-parser.version>2.1.18</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.18</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.17</dep.swagger-models.version>
+        <dep.swagger-models.version>2.2.18</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
