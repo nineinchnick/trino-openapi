@@ -48,7 +48,7 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>431</dep.trino.version>
+        <dep.trino.version>432</dep.trino.version>
         <dep.airlift.version>237</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
         <dep.opentelemetry.version>1.31.0</dep.opentelemetry.version>
@@ -240,7 +240,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-api</artifactId>
-            <version>3.3.3</version>
+            <version>3.3.4</version>
             <scope>test</scope>
         </dependency>
 
