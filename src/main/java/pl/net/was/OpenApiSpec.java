@@ -94,6 +94,7 @@ public class OpenApiSpec
 
         this.tables = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
+                .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 .collect(toMap(
                         entry -> getIdentifier(stripPathParams(entry.getKey())),
                         entry -> getColumns(entry.getValue()),
