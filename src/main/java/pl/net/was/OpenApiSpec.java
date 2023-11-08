@@ -222,16 +222,18 @@ public class OpenApiSpec
                         .get("200").getContent()
                         .get("application/json")
                         .getSchema();
-                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-                getSchemaProperties(schema, op.getOperationId())
-                        .entrySet().stream()
-                        .filter(propEntry -> convertType(propEntry.getValue()).isPresent())
-                        .forEach(propEntry -> result.add(getColumn(
-                                propEntry.getKey(),
-                                "",
-                                propEntry.getValue(),
-                                Map.of(),
-                                !requiredProperties.contains(propEntry.getKey()))));
+                if (schema != null) {
+                    List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+                    getSchemaProperties(schema, op.getOperationId())
+                            .entrySet().stream()
+                            .filter(propEntry -> convertType(propEntry.getValue()).isPresent())
+                            .forEach(propEntry -> result.add(getColumn(
+                                    propEntry.getKey(),
+                                    "",
+                                    propEntry.getValue(),
+                                    Map.of(),
+                                    !requiredProperties.contains(propEntry.getKey()))));
+                }
             }
             if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null) {
                 List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
