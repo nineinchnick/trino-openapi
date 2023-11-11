@@ -48,7 +48,7 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>432</dep.trino.version>
+        <dep.trino.version>433</dep.trino.version>
         <dep.airlift.version>237</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
         <dep.opentelemetry.version>1.31.0</dep.opentelemetry.version>
@@ -60,10 +60,11 @@
         <dep.jackson.version>2.15.3</dep.jackson.version>
         <dep.testng.version>7.8.0</dep.testng.version>
         <dep.joda.version>2.12.5</dep.joda.version>
-        <dep.junit.version>5.10.0</dep.junit.version>
+        <dep.junit.version>5.10.1</dep.junit.version>
         <dep.slf4j.version>2.0.9</dep.slf4j.version>
         <dep.assertj-core.version>3.24.2</dep.assertj-core.version>
         <dep.logback.version>1.4.11</dep.logback.version>
+        <dep.plugin.surefire.version>3.1.2</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.18</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.18</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.18</dep.swagger-models.version>
@@ -79,7 +80,7 @@
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-bom</artifactId>
-                <version>1.9.10</version>
+                <version>1.9.20</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
