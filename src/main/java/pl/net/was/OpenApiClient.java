@@ -34,11 +34,15 @@ import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
+import io.trino.spi.block.SqlMap;
+import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -201,7 +205,9 @@ public class OpenApiClient
             return defaultValue;
         }
         return switch (column.getType().getBaseName()) {
-            case StandardTypes.ARRAY, StandardTypes.ROW -> ((Block) domain.getSingleValue());
+            case StandardTypes.ARRAY -> (Block) domain.getSingleValue();
+            case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
+            case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
             case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
             case StandardTypes.BIGINT, StandardTypes.INTEGER -> domain.getSingleValue();
             default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
@@ -246,7 +252,12 @@ public class OpenApiClient
             if (value instanceof Block block) {
                 value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), objectMapper);
             }
-            nodePut(node, column.getName(), value);
+            else if (value instanceof SqlRow sqlRow) {
+                ObjectNode rowNode = objectMapper.createObjectNode();
+                JsonTrinoConverter.convertRow(rowNode, sqlRow, (RowType) column.getType(), column.getSourceType(), objectMapper);
+                value = rowNode;
+            }
+            nodePut(node, column.getSourceName(), value);
         }
         return node;
     }
@@ -391,7 +402,11 @@ public class OpenApiClient
                 throws IOException
         {
             ObjectMapper objectMapper = new ObjectMapper();
-            objectMapper.createGenerator(out).writeTree(rootNode);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            objectMapper.createGenerator(baos).writeTree(rootNode);
+            byte[] output = baos.toByteArray();
+            log.debug("Request body: " + new String(output, UTF_8));
+            out.write(output);
         }
     }
 

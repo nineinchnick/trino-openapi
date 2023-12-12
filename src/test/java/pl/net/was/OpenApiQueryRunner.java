@@ -22,19 +22,21 @@ import io.trino.Session;
 import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
 
+import java.util.HashMap;
 import java.util.Map;
 
+import static com.google.common.base.Verify.verify;
 import static io.trino.testing.TestingSession.testSessionBuilder;
 import static java.util.Objects.requireNonNullElse;
-import static java.util.Objects.requireNonNullElseGet;
 
 public class OpenApiQueryRunner
 {
     private OpenApiQueryRunner() {}
 
-    public static QueryRunner createQueryRunner(TestingOpenApiServer server)
+    public static QueryRunner createQueryRunner(Map<String, String> catalogProperties)
             throws Exception
     {
+        verify(catalogProperties.containsKey("spec-location") && catalogProperties.containsKey("base-uri"), "catalogProperties must include spec-location and base-uri");
         Session defaultSession = testSessionBuilder()
                 .setCatalog("openapi")
                 .setSchema("default")
@@ -49,33 +51,35 @@ public class OpenApiQueryRunner
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
 
-        ImmutableMap.Builder<String, String> catalogProperties = ImmutableMap.builder();
-        catalogProperties.putAll(Map.of(
-                "spec-location", requireNonNullElseGet(System.getenv("OPENAPI_SPEC_LOCATION"), () -> server.getSpecUrl()),
-                "base-uri", requireNonNullElseGet(System.getenv("OPENAPI_BASE_URI"), () -> server.getApiUrl()),
+        Map<String, String> defaultProperties = new HashMap<>();
+        defaultProperties.putAll(Map.of(
                 "openApi.http-client.log.enabled", "true",
                 "openApi.http-client.log.path", "logs"));
-        catalogProperties.putAll(Map.of(
+        defaultProperties.putAll(Map.of(
                 "authentication.type", requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "oauth"),
                 "authentication.scheme", requireNonNullElse(System.getenv("OPENAPI_AUTH_SCHEME"), "basic")));
-        catalogProperties.putAll(Map.of(
-                "authentication.token-endpoint", requireNonNullElse(System.getenv("OPENAPI_TOKEN_ENDPOINT"), "/oauth/token"),
-                "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
-                "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
-                "authentication.grant-type", requireNonNullElse(System.getenv("OPENAPI_GRANT_TYPE"), "password"),
+        defaultProperties.putAll(Map.of(
                 "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "user"),
                 "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "user"),
                 "authentication.bearer-token", requireNonNullElse(System.getenv("OPENAPI_BEARER_TOKEN"), "")));
+        if (System.getenv("OPENAPI_GRANT_TYPE") != null) {
+            defaultProperties.putAll(Map.of(
+                    "authentication.token-endpoint", requireNonNullElse(System.getenv("OPENAPI_TOKEN_ENDPOINT"), "/oauth/token"),
+                    "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
+                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
+                    "authentication.grant-type", System.getenv("OPENAPI_GRANT_TYPE")));
+        }
         if (System.getenv("OPENAPI_API_KEYS") != null) {
-            catalogProperties.putAll(Map.of(
-                    "authentication.api-keys", System.getenv("OPENAPI_API_KEYS")));
+            defaultProperties.put(
+                    "authentication.api-keys", System.getenv("OPENAPI_API_KEYS"));
         }
         else {
-            catalogProperties.putAll(Map.of(
+            defaultProperties.putAll(Map.of(
                     "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
                     "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
         }
-        queryRunner.createCatalog("openapi", "openapi", catalogProperties.build());
+        defaultProperties.putAll(catalogProperties);
+        queryRunner.createCatalog("openapi", "openapi", defaultProperties);
 
         return queryRunner;
     }
@@ -88,11 +92,19 @@ public class OpenApiQueryRunner
         logger.setLevel("io.trino", Level.INFO);
         logger.setLevel("io.airlift", Level.DEBUG);
 
-        TestingOpenApiServer server = null;
+        Map<String, String> properties;
         if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
-            server = new TestingOpenApiServer();
+            TestingOpenApiServer server = new TestingOpenApiServer();
+            properties = Map.of(
+                    "spec-location", server.getSpecUrl(),
+                    "base-uri", server.getApiUrl());
         }
-        QueryRunner queryRunner = createQueryRunner(server);
+        else {
+            properties = Map.of(
+                    "spec-location", System.getenv("OPENAPI_SPEC_LOCATION"),
+                    "base-uri", System.getenv("OPENAPI_BASE_URI"));
+        }
+        QueryRunner queryRunner = createQueryRunner(properties);
 
         Logger log = Logger.get(OpenApiQueryRunner.class);
         log.info("======== SERVER STARTED ========");

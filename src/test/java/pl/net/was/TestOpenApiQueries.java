@@ -18,6 +18,8 @@ import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.testng.annotations.Test;
 
+import java.util.Map;
+
 public class TestOpenApiQueries
         extends AbstractTestQueryFramework
 {
@@ -26,7 +28,13 @@ public class TestOpenApiQueries
             throws Exception
     {
         TestingOpenApiServer server = new TestingOpenApiServer();
-        return OpenApiQueryRunner.createQueryRunner(server);
+        return OpenApiQueryRunner.createQueryRunner(Map.of(
+                "spec-location", server.getSpecUrl(),
+                "base-uri", server.getApiUrl(),
+                "authentication.token-endpoint", "/oauth/token",
+                "authentication.client-id", "sample-client-id",
+                "authentication.client-secret", "secret",
+                "authentication.grant-type", "password"));
     }
 
     @Test

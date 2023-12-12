@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.ArrayBlock;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
@@ -47,6 +48,7 @@ import io.trino.spi.type.TinyintType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -200,7 +202,11 @@ public class JsonTrinoConverter
             return;
         }
         if (type instanceof BigintType bigintType) {
-            bigintType.writeLong(rowBuilder, (Long) value);
+            bigintType.writeLong(rowBuilder, ((BigInteger) value).longValue());
+            return;
+        }
+        if (type instanceof DoubleType doubleType) {
+            doubleType.writeDouble(rowBuilder, (Double) value);
             return;
         }
         if (type instanceof TimestampType timestampType) {
@@ -214,6 +220,10 @@ public class JsonTrinoConverter
         }
         if (type instanceof ArrayType arrayType) {
             arrayType.writeObject(rowBuilder, value);
+            return;
+        }
+        if (type instanceof RowType rowType) {
+            rowType.writeObject(rowBuilder, value);
             return;
         }
         throw new RuntimeException(format("Unsupported array element type %s", type.getClass().getCanonicalName()));
@@ -233,6 +243,10 @@ public class JsonTrinoConverter
     {
         if (block.isNull(position)) {
             return null;
+        }
+        // TODO this is obviously wrong, the field name should have some suffix to help figure out which union type to use
+        if (schemaType.getOneOf() != null && !schemaType.getOneOf().isEmpty()) {
+            schemaType = schemaType.getOneOf().get(0);
         }
         if (type instanceof BooleanType) {
             return type.getBoolean(block, position);
@@ -256,8 +270,12 @@ public class JsonTrinoConverter
             return dateFormatter.format(Instant.ofEpochMilli(type.getLong(block, position)));
         }
         if (type instanceof ArrayType arrayType) {
-            Block valueBlock = arrayType.getObject(block, position);
-            return convertArray(valueBlock, arrayType, schemaType, objectMapper);
+            if (block instanceof ArrayBlock arrayBlock) {
+                Schema<?> finalSchemaType = schemaType;
+                return arrayBlock.apply((valuesBlock, start, length) -> convertArray(valuesBlock, start, length, arrayType, finalSchemaType, objectMapper), position);
+            }
+            Block arrayBlock = arrayType.getObject(block, position);
+            return convertArray(arrayBlock, 0, arrayBlock.getPositionCount(), arrayType, schemaType, objectMapper);
         }
         if (type instanceof MapType mapType) {
             SqlMap mapBlock = mapType.getObject(block, position);
@@ -275,11 +293,11 @@ public class JsonTrinoConverter
         throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
     }
 
-    private static ArrayNode convertArray(Block arrayBlock, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
+    private static ArrayNode convertArray(Block arrayBlock, int start, int length, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ArrayNode arrayNode = objectMapper.createArrayNode();
-        for (int i = 0; i < arrayBlock.getPositionCount(); i++) {
-            Object itemValue = convert(arrayBlock, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
+        for (int i = 0; i < length; i++) {
+            Object itemValue = convert(arrayBlock, i + start, arrayType.getElementType(), schemaType.getItems(), objectMapper);
             if (itemValue == null) {
                 arrayNode.addNull();
             }
@@ -308,11 +326,10 @@ public class JsonTrinoConverter
     private static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ObjectNode mapNode = objectMapper.createObjectNode();
-        int entryCount = mapBlock.getSize();
-        for (int i = 0; i < entryCount; i++) {
+        for (int i = 0; i < mapBlock.getSize(); i++) {
             // TODO passing schemaType.getItems() to both key and value is probably incorrect
-            String key = convert(mapBlock.getRawKeyBlock(), i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
-            Object itemValue = convert(mapBlock.getRawValueBlock(), i, mapType.getValueType(), schemaType.getItems(), objectMapper);
+            String key = convert(mapBlock.getRawKeyBlock(), mapBlock.getRawOffset() + i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
+            Object itemValue = convert(mapBlock.getRawValueBlock(), mapBlock.getRawOffset() + i, mapType.getValueType(), schemaType.getItems(), objectMapper);
             if (itemValue == null) {
                 mapNode.putNull(key);
             }
@@ -340,11 +357,10 @@ public class JsonTrinoConverter
 
     public static void convertRow(ObjectNode rowNode, SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
-        for (int i = 0; i < rowType.getFields().size(); i++) {
+        for (int i = 0; i < row.getFieldCount(); i++) {
             RowType.Field field = rowType.getFields().get(i);
             String key = field.getName().orElse(format("_col%d", i));
-            // TODO this doesn't work, somehow getObject fetches two level too deep, need to use getSingleValueBlock()?
-            Object value = convert(row.getRawFieldBlock(i), 0, field.getType(), schemaType.getProperties().get(key), objectMapper);
+            Object value = convert(row.getRawFieldBlock(i), row.getRawIndex(), field.getType(), schemaType.getProperties().get(key), objectMapper);
             if (value == null) {
                 rowNode.putNull(key);
             }
