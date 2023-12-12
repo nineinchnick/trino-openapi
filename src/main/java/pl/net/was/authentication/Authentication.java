@@ -140,16 +140,25 @@ public class Authentication
         if (requirements == null) {
             return;
         }
-        requirements.forEach(requirement -> requirement.forEach((name, options) -> {
-            SecurityScheme securitySchema = securitySchemas.get(name);
-            requireNonNull(securitySchema, "securitySchema is null");
-            switch (securitySchema.getType()) {
-                case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
-                case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
-                case OAUTH2 -> applyOAuth(builder);
-                default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
+        // only one of the requirements needs to be satisfied - test which methods are configured, pick first one, and only fail if there are none
+        for (SecurityRequirement requirement : requirements) {
+            try {
+                requirement.forEach((name, options) -> {
+                    SecurityScheme securitySchema = securitySchemas.get(name);
+                    requireNonNull(securitySchema, "securitySchema is null");
+                    switch (securitySchema.getType()) {
+                        case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
+                        case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
+                        case OAUTH2 -> applyOAuth(builder);
+                        default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
+                    }
+                });
+                return;
             }
-        }));
+            catch (NullPointerException ignored) {
+                // ignore
+            }
+        }
     }
 
     private void applyApiKeyAuth(Request.Builder builder, URI uri, SecurityScheme scheme)

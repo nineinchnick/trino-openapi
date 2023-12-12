@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
-import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
@@ -128,7 +128,7 @@ class TestOpenApiSpec
         Schema<?> objectSchema = new Schema<>();
         objectSchema.setType("object");
         RowType categoryType = RowType.from(List.of(
-                new RowType.Field(Optional.of("id"), INTEGER),
+                new RowType.Field(Optional.of("id"), BIGINT),
                 new RowType.Field(Optional.of("name"), VARCHAR)));
         ArrayType photosType = new ArrayType(VARCHAR);
         ArrayType tagsType = new ArrayType(categoryType);
@@ -144,7 +144,7 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -158,6 +158,11 @@ class TestOpenApiSpec
                                 .setType(photosType).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
+                                .setName("tags").setSourceName("tags")
+                                .setType(tagsType).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
@@ -165,13 +170,8 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("pet_id").setSourceName("petId")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("tags").setSourceName("tags")
-                                .setType(tagsType).setSourceType(arraySchema)
                                 .setIsNullable(true)
                                 .build());
     }

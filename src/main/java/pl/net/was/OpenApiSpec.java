@@ -57,6 +57,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.DecimalType.createDecimalType;
@@ -320,6 +321,10 @@ public class OpenApiSpec
 
     private Optional<Type> convertType(Schema<?> property)
     {
+        // TODO this is obviously wrong, generate separate fields for every union type
+        if (property.getOneOf() != null && !property.getOneOf().isEmpty()) {
+            property = property.getOneOf().get(0);
+        }
         // ignore arrays with `oneOf`, `anyOf`, `allOf` and `multipleOf` response type
         if (property.getOneOf() != null
                 || property.getAnyOf() != null
@@ -335,11 +340,14 @@ public class OpenApiSpec
         if (property instanceof MapSchema map && map.getAdditionalProperties() instanceof Schema<?> valueSchema) {
             return convertType(valueSchema).map(type -> new MapType(VARCHAR, type, new TypeOperators()));
         }
+        Optional<String> format = Optional.ofNullable(property.getFormat());
         if (property instanceof IntegerSchema) {
+            if (format.filter("int64"::equals).isPresent()) {
+                return Optional.of(BIGINT);
+            }
             return Optional.of(INTEGER);
         }
         if (property instanceof NumberSchema) {
-            Optional<String> format = Optional.ofNullable(property.getFormat());
             if (format.filter("float"::equals).isPresent()) {
                 return Optional.of(REAL);
             }
