@@ -92,7 +92,7 @@ public class Authentication
 
         this.baseUri = requireNonNull(config.getBaseUri(), "baseUri is null");
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
-        if (config.getGrantType() != null) {
+        if (config.getGrantType() != null && !config.getGrantType().isEmpty()) {
             this.bodyGenerator = createStaticBodyGenerator(getBody(config.getGrantType(), config.getUsername(), config.getPassword()), UTF_8);
         }
         else {
