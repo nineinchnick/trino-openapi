@@ -16,7 +16,7 @@ package pl.net.was;
 
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
-import org.testng.annotations.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
