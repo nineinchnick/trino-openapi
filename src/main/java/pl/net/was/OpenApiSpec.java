@@ -236,7 +236,8 @@ public class OpenApiSpec
                                     !requiredProperties.contains(propEntry.getKey()))));
                 }
             }
-            if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null) {
+            if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
+                    && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
                 List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
                 // TODO how to treat op.getRequestBody().getRequired()?
                 Schema<?> schema = op.getRequestBody()

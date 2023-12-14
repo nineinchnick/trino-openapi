@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.google.common.collect.ImmutableMap;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
@@ -28,13 +29,22 @@ public class TestOpenApiQueries
             throws Exception
     {
         TestingOpenApiServer server = new TestingOpenApiServer();
-        return OpenApiQueryRunner.createQueryRunner(Map.of(
+        ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
+        properties.putAll(Map.of(
                 "spec-location", server.getSpecUrl(),
                 "base-uri", server.getApiUrl(),
+                "authentication.type", "oauth",
+                "authentication.scheme", "basic",
+                "authentication.username", "user",
+                "authentication.password", "user",
+                "authentication.api-key-name", "api_key",
+                "authentication.api-key-value", "special-key"));
+        properties.putAll(Map.of(
                 "authentication.token-endpoint", "/oauth/token",
                 "authentication.client-id", "sample-client-id",
                 "authentication.client-secret", "secret",
                 "authentication.grant-type", "password"));
+        return OpenApiQueryRunner.createQueryRunner(properties.buildOrThrow());
     }
 
     @Test

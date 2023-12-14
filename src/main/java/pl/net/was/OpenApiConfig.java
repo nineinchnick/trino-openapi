@@ -156,6 +156,9 @@ public class OpenApiConfig
     public OpenApiConfig setApiKeys(String apiKeys)
             throws InvalidConfigurationException
     {
+        if (apiKeys.isEmpty()) {
+            return this;
+        }
         if (this.apiKeyName != null || this.apiKeyValue != null) {
             throw new InvalidConfigurationException("Cannot use authentication.api-keys if authentication.api-key-name or authentication.api-key-name is set");
         }
