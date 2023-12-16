@@ -178,10 +178,14 @@ public class OpenApiSpec
                 name,
                 // some APIs use POST to query resources
                 paths.containsKey(PathItem.HttpMethod.GET) ? paths.get(PathItem.HttpMethod.GET) : paths.get(PathItem.HttpMethod.POST),
+                paths.containsKey(PathItem.HttpMethod.GET) ? PathItem.HttpMethod.GET : PathItem.HttpMethod.POST,
                 paths.get(PathItem.HttpMethod.POST),
+                PathItem.HttpMethod.POST,
                 // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
                 paths.containsKey(PathItem.HttpMethod.PUT) ? paths.get(PathItem.HttpMethod.PUT) : paths.get(PathItem.HttpMethod.POST),
+                paths.containsKey(PathItem.HttpMethod.PUT) ? PathItem.HttpMethod.PUT : PathItem.HttpMethod.POST,
                 paths.get(PathItem.HttpMethod.DELETE),
+                PathItem.HttpMethod.DELETE,
                 TupleDomain.none());
     }
 

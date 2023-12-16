@@ -91,12 +91,19 @@ public class OpenApiClient
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
-        Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
-        if (bodyParams.isEmpty()) {
-            return makeRequest(table, PathItem.HttpMethod.GET, table.getSelectPath(), prepareGet(), new JsonResponseHandler(table));
+        PathItem.HttpMethod method = table.getSelectMethod();
+        Request.Builder builder;
+        if (method == PathItem.HttpMethod.GET) {
+            builder = prepareGet();
         }
-        Request.Builder builder = preparePost().setBodyGenerator(new JsonBodyGenerator(serializeMap(table, bodyParams)));
-        return makeRequest(table, PathItem.HttpMethod.POST, table.getSelectPath(), builder, new JsonResponseHandler(table));
+        else if (method == PathItem.HttpMethod.POST) {
+            Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
+            builder = preparePost().setBodyGenerator(new JsonBodyGenerator(serializeMap(table, bodyParams)));
+        }
+        else {
+            throw new IllegalArgumentException("Unsupported SELECT method: " + method);
+        }
+        return makeRequest(table, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
     }
 
     public void postRows(OpenApiOutputTableHandle table, Page page, int position)
@@ -149,6 +156,7 @@ public class OpenApiClient
                 .addHeader("X-Trino-OpenAPI-Path", path);
         getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
 
+        log.debug("Request URL: " + uri);
         return httpClient.execute(builder.build(), responseHandler);
     }
 
@@ -328,11 +336,7 @@ public class OpenApiClient
 
             try {
                 JsonNode jsonNode = objectMapper.readTree(result);
-
-                log.debug("Marshalled response to json %s", jsonNode);
-
                 JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(jsonNode)).orElse(jsonNode);
-
                 return convertJson(table, jsonNodeToUse);
             }
             catch (JsonProcessingException ex) {

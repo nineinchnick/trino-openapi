@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
+import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSink;
 
@@ -47,7 +48,16 @@ public class OpenApiPageSink
 
     protected void insertedPage(Page page, int position)
     {
-        client.postRows(table, page, position);
+        PathItem.HttpMethod method = this.table.getTableHandle().getUpdateMethod();
+        if (method == PathItem.HttpMethod.POST) {
+            client.postRows(table, page, position);
+        }
+        else if (method == PathItem.HttpMethod.PUT) {
+            client.putRows(table, page, position);
+        }
+        else {
+            throw new IllegalArgumentException("Unsupported INSERT method: " + method);
+        }
     }
 
     @Override
