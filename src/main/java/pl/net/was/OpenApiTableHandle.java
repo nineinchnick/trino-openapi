@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
@@ -26,25 +27,37 @@ public class OpenApiTableHandle
 {
     private final SchemaTableName schemaTableName;
     private final String selectPath;
+    private final PathItem.HttpMethod selectMethod;
     private final String insertPath;
+    private final PathItem.HttpMethod insertMethod;
     private final String updatePath;
+    private final PathItem.HttpMethod updateMethod;
     private final String deletePath;
+    private final PathItem.HttpMethod deleteMethod;
     private TupleDomain<ColumnHandle> constraint;
 
     @JsonCreator
     public OpenApiTableHandle(
             SchemaTableName schemaTableName,
             String selectPath,
+            PathItem.HttpMethod selectMethod,
             String insertPath,
+            PathItem.HttpMethod insertMethod,
             String updatePath,
+            PathItem.HttpMethod updateMethod,
             String deletePath,
+            PathItem.HttpMethod deleteMethod,
             TupleDomain<ColumnHandle> constraint)
     {
         this.schemaTableName = schemaTableName;
         this.selectPath = selectPath;
+        this.selectMethod = selectMethod;
         this.insertPath = insertPath;
+        this.insertMethod = insertMethod;
         this.updatePath = updatePath;
+        this.updateMethod = updateMethod;
         this.deletePath = deletePath;
+        this.deleteMethod = deleteMethod;
         this.constraint = constraint;
     }
 
@@ -61,9 +74,21 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
+    public PathItem.HttpMethod getSelectMethod()
+    {
+        return selectMethod;
+    }
+
+    @JsonProperty
     public String getInsertPath()
     {
         return insertPath;
+    }
+
+    @JsonProperty
+    public PathItem.HttpMethod getInsertMethod()
+    {
+        return insertMethod;
     }
 
     @JsonProperty
@@ -73,9 +98,21 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
+    public PathItem.HttpMethod getUpdateMethod()
+    {
+        return updateMethod;
+    }
+
+    @JsonProperty
     public String getDeletePath()
     {
         return deletePath;
+    }
+
+    @JsonProperty
+    public PathItem.HttpMethod getDeleteMethod()
+    {
+        return deleteMethod;
     }
 
     @JsonProperty("constraint")

@@ -19,10 +19,11 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.type.Type;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import static io.swagger.v3.oas.models.PathItem.HttpMethod;
 import static java.util.Objects.requireNonNull;
@@ -148,7 +149,7 @@ public class OpenApiColumn
         private String sourceName;
         private Type type;
         private Schema<?> sourceType;
-        private final Map<HttpMethod, String> requiresPredicate = new LinkedHashMap<>();
+        private final SortedMap<HttpMethod, String> requiresPredicate = new TreeMap<>();
         private boolean isNullable;
         private String comment;
 
