@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
-import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlock;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
@@ -36,6 +35,7 @@ import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
 import io.trino.spi.type.DateTimeEncoding;
 import io.trino.spi.type.DateType;
+import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.DoubleType;
 import io.trino.spi.type.IntegerType;
 import io.trino.spi.type.MapType;
@@ -44,6 +44,7 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.SmallintType;
 import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.Timestamps;
 import io.trino.spi.type.TinyintType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
@@ -51,15 +52,15 @@ import io.trino.spi.type.VarcharType;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAccessor;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
-import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
+import static io.trino.spi.type.DecimalConversions.doubleToLongDecimal;
+import static io.trino.spi.type.DecimalConversions.doubleToShortDecimal;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
@@ -89,27 +90,32 @@ public class JsonTrinoConverter
         if (type instanceof DoubleType) {
             return jsonNode.doubleValue();
         }
+        if (type instanceof DecimalType decimalType) {
+            double value = jsonNode.doubleValue();
+            return decimalType.isShort() ?
+                    doubleToShortDecimal(value, decimalType.getPrecision(), decimalType.getScale()) :
+                    doubleToLongDecimal(value, decimalType.getPrecision(), decimalType.getScale());
+        }
         if (type instanceof VarcharType) {
             return jsonNode.asText();
         }
         if (type instanceof DateType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonNode.asText());
-            return getSqlDate(LocalDate.from(temporalAccessor));
+            String format = schemaType.getFormat();
+            if (format.equals("date")) {
+                format = "yyyy-MM-dd";
+            }
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
+            return getSqlDate(dateFormatter.parse(jsonNode.asText(), LocalDate::from));
         }
-        if (type instanceof TimestampType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            TemporalAccessor temporalAccessor = dateFormatter.parse(jsonNode.asText());
-            if (temporalAccessor instanceof Instant instant) {
-                return instant.toEpochMilli();
+        if (type instanceof TimestampType timestampType) {
+            String format = schemaType.getFormat();
+            if (format.equals("date-time")) {
+                format = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX";
             }
-            if (temporalAccessor instanceof OffsetDateTime offsetDateTime) {
-                return offsetDateTime.toEpochSecond();
-            }
-            if (temporalAccessor instanceof ZonedDateTime zonedDateTime) {
-                return zonedDateTime.toEpochSecond();
-            }
-            throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Unsupported TemporalAccessor type %s", temporalAccessor.getClass().getCanonicalName()));
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
+            Instant instant = dateFormatter.parse(jsonNode.asText(), Instant::from);
+            long epochMicros = instant.toEpochMilli() * MICROSECONDS_PER_MILLISECOND;
+            return Timestamps.round(epochMicros, 6 - timestampType.getPrecision());
         }
         if (type instanceof BooleanType) {
             return jsonNode.asBoolean();
@@ -193,6 +199,10 @@ public class JsonTrinoConverter
             rowBuilder.appendNull();
             return;
         }
+        if (type instanceof BooleanType booleanType) {
+            booleanType.writeBoolean(rowBuilder, (Boolean) value);
+            return;
+        }
         if (type instanceof VarcharType varcharType) {
             varcharType.writeString(rowBuilder, (String) value);
             return;
@@ -209,9 +219,22 @@ public class JsonTrinoConverter
             doubleType.writeDouble(rowBuilder, (Double) value);
             return;
         }
+        if (type instanceof DecimalType decimalType) {
+            if (decimalType.isShort()) {
+                decimalType.writeLong(rowBuilder, (Long) value);
+            }
+            else {
+                decimalType.writeObject(rowBuilder, value);
+            }
+            return;
+        }
         if (type instanceof TimestampType timestampType) {
-            // TODO check precision
-            timestampType.writeLong(rowBuilder, packTimestamp((ZonedDateTime) value));
+            if (timestampType.isShort()) {
+                timestampType.writeLong(rowBuilder, (Long) value);
+            }
+            else {
+                timestampType.writeLong(rowBuilder, packTimestamp((ZonedDateTime) value));
+            }
             return;
         }
         if (type instanceof MapType mapType) {
