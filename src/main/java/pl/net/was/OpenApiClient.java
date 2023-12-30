@@ -64,6 +64,8 @@ import static io.airlift.http.client.Request.Builder.preparePut;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Double.longBitsToDouble;
+import static java.lang.Float.intBitsToFloat;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -217,7 +219,9 @@ public class OpenApiClient
             case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
             case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
             case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
-            case StandardTypes.BIGINT, StandardTypes.INTEGER -> domain.getSingleValue();
+            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.BOOLEAN -> domain.getSingleValue();
+            case StandardTypes.DOUBLE -> longBitsToDouble((Long) domain.getSingleValue());
+            case StandardTypes.REAL -> intBitsToFloat(((Long) domain.getSingleValue()).intValue());
             default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
         };
     }
@@ -376,7 +380,7 @@ public class OpenApiClient
                 continue;
             }
             String parameterName = column.getSourceName();
-            if (pathParams.containsKey(parameterName)) {
+            if (pathParams.containsKey(parameterName) && (column.getName().endsWith("_req") || !jsonNode.has(parameterName))) {
                 // this might be a virtual column for a required parameter, if so, copy the value from the constraint
                 recordBuilder.add(pathParams.getOrDefault(parameterName, null));
                 continue;
