@@ -68,6 +68,7 @@ import static java.lang.Double.longBitsToDouble;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.AbstractMap.SimpleEntry;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
@@ -194,14 +195,28 @@ public class OpenApiClient
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         return columns.stream()
-                .filter(column -> column.getRequiresPredicate().containsKey(method) && (in == null || column.getRequiresPredicate().get(method).equals(in)))
-                .collect(toMap(OpenApiColumn::getSourceName, column -> {
+                .filter(column -> isRequiredPredicate(column, method, in) || isOptionalPredicate(column, method, in))
+                .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
-                    if (value == null) {
+                    if (value == null && isRequiredPredicate(column, method, in)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
-                    return value;
-                }));
+                    return new SimpleEntry<>(column.getSourceName(), value);
+                })
+                .filter(entry -> entry.getValue() != null)
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private static boolean isRequiredPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    {
+        String requiredIn = column.getRequiresPredicate().get(method);
+        return requiredIn != null && (in == null || requiredIn.equals(in));
+    }
+
+    private static boolean isOptionalPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    {
+        String optionalIn = column.getOptionalPredicate().get(method);
+        return optionalIn != null && (in == null || optionalIn.equals(in));
     }
 
     private static Object getFilter(OpenApiColumn column, TupleDomain<ColumnHandle> constraint, Object defaultValue)

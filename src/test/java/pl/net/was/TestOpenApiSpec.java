@@ -40,6 +40,7 @@ import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 class TestOpenApiSpec
 {
     private final Schema<?> intSchema = newSchema("integer");
+    private final Schema<?> numberSchema = newSchema("number");
     private final Schema<?> stringSchema = newSchema("string");
     private final Schema<?> booleanSchema = newSchema("boolean");
     private final Schema<?> arraySchema = newSchema("array");
@@ -143,6 +144,12 @@ class TestOpenApiSpec
         ArrayType tagsType = new ArrayType(categoryType);
         Assertions.assertThat(petColumns)
                 .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("api_key").setSourceName("api_key")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.DELETE, "header"))
+                                .setIsNullable(true)
+                                .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
@@ -328,7 +335,69 @@ class TestOpenApiSpec
                 RowType.field("total_count", createDecimalType(18, 8))));
         Assertions.assertThat(columns)
                 .containsExactly(
-                        // TODO missing all query params
+                        OpenApiColumn.builder()
+                                .setName("identifier").setSourceName("identifier")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path", PathItem.HttpMethod.PATCH, "path"))
+                                .setIsNullable(true)
+                                .setComment("Identifier")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("per_page").setSourceName("per_page")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Number of zones per page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("account.id").setSourceName("account.id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("An account ID")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("paused").setSourceName("paused")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
+                                        "true value means the zone will not receive security or performance\n" +
+                                        "benefits.\n")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("vanity_name_servers").setSourceName("vanity_name_servers")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("An array of domains used for custom name servers. This is only\n" +
+                                        "available for Business and Enterprise plans.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("result_info").setSourceName("result_info")
+                                .setType(resultInfoType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("match").setSourceName("match")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Whether to match all search requirements or at least one (any).")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("type").setSourceName("type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
+                                        "typically a partner-hosted zone or a CNAME setup.\n")
+                                .build(),
                         OpenApiColumn.builder()
                                 .setName("result").setSourceName("result")
                                 .setType(new ArrayType(resultType)).setSourceType(arraySchema)
@@ -345,21 +414,19 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("identifier").setSourceName("identifier")
+                                .setName("account.name").setSourceName("account.name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path", PathItem.HttpMethod.PATCH, "path"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
-                                .setComment("Identifier")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("paused").setSourceName("paused")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
-                                        "true value means the zone will not receive security or performance\n" +
-                                        "benefits.\n")
+                                .setComment("An account Name. Optional filter operators can be provided to extend refine the search:\n" +
+                                        "  * `equal` (default)\n" +
+                                        "  * `not_equal`\n" +
+                                        "  * `starts_with`\n" +
+                                        "  * `ends_with`\n" +
+                                        "  * `contains`\n" +
+                                        "  * `starts_with_case_sensitive`\n" +
+                                        "  * `ends_with_case_sensitive`\n" +
+                                        "  * `contains_case_sensitive`\n")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("success").setSourceName("success")
@@ -367,23 +434,20 @@ class TestOpenApiSpec
                                 .setComment("Whether the API call was successful")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("vanity_name_servers").setSourceName("vanity_name_servers")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("An array of domains used for custom name servers. This is only\n" +
-                                        "available for Business and Enterprise plans.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("result_info").setSourceName("result_info")
-                                .setType(resultInfoType).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
-                                .setComment("The domain name")
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setComment("A domain name. Optional filter operators can be provided to extend refine the search:\n" +
+                                        "  * `equal` (default)\n" +
+                                        "  * `not_equal`\n" +
+                                        "  * `starts_with`\n" +
+                                        "  * `ends_with`\n" +
+                                        "  * `contains`\n" +
+                                        "  * `starts_with_case_sensitive`\n" +
+                                        "  * `ends_with_case_sensitive`\n" +
+                                        "  * `contains_case_sensitive`\n")
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("messages").setSourceName("messages")
@@ -392,16 +456,11 @@ class TestOpenApiSpec
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("type").setSourceName("type")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
+                                .setName("page").setSourceName("page")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
-                                .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
-                                        "typically a partner-hosted zone or a CNAME setup.\n")
+                                .setComment("Page number of paginated results.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
@@ -423,6 +482,27 @@ class TestOpenApiSpec
                                 .setType(new ArrayType(RowType.from(List.of(
                                         RowType.field("code", INTEGER),
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("order").setSourceName("order")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Field to order zones by.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("status").setSourceName("status")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("A zone status")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("direction").setSourceName("direction")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Direction to order zones.")
                                 .build());
     }
 

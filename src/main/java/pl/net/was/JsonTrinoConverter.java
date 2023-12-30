@@ -215,6 +215,10 @@ public class JsonTrinoConverter
             bigintType.writeLong(rowBuilder, ((BigInteger) value).longValue());
             return;
         }
+        if (type instanceof RealType realType) {
+            realType.writeFloat(rowBuilder, (Float) value);
+            return;
+        }
         if (type instanceof DoubleType doubleType) {
             doubleType.writeDouble(rowBuilder, (Double) value);
             return;

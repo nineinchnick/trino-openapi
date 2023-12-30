@@ -181,7 +181,7 @@ public class OpenApiMetadata
 
         boolean found = false;
         for (OpenApiColumn column : columns.values()) {
-            if (column.getRequiresPredicate().isEmpty()) {
+            if (column.getRequiresPredicate().isEmpty() && column.getOptionalPredicate().isEmpty()) {
                 continue;
             }
 

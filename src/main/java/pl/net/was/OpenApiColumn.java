@@ -36,16 +36,18 @@ public class OpenApiColumn
     private final Type type;
     private final Schema<?> sourceType;
     private final Map<HttpMethod, String> requiresPredicate;
+    private final Map<HttpMethod, String> optionalPredicate;
     private final ColumnMetadata metadata;
     private final OpenApiColumnHandle handle;
 
-    private OpenApiColumn(String name, String sourceName, Type type, Schema<?> sourceType, Map<HttpMethod, String> requiresPredicate, boolean isNullable, String comment)
+    private OpenApiColumn(String name, String sourceName, Type type, Schema<?> sourceType, Map<HttpMethod, String> requiresPredicate, Map<HttpMethod, String> optionalPredicate, boolean isNullable, String comment)
     {
         this.name = name;
         this.sourceName = sourceName;
         this.type = type;
         this.sourceType = sourceType;
         this.requiresPredicate = ImmutableMap.copyOf(requiresPredicate);
+        this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
         this.metadata = ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
@@ -81,6 +83,11 @@ public class OpenApiColumn
         return requiresPredicate;
     }
 
+    public Map<HttpMethod, String> getOptionalPredicate()
+    {
+        return optionalPredicate;
+    }
+
     public ColumnMetadata getMetadata()
     {
         return metadata;
@@ -112,6 +119,7 @@ public class OpenApiColumn
                 && Objects.equals(type, that.type)
                 && Objects.equals(sourceType, that.sourceType)
                 && Objects.equals(requiresPredicate, that.requiresPredicate)
+                && Objects.equals(optionalPredicate, that.optionalPredicate)
                 && Objects.equals(metadata, that.metadata);
     }
 
@@ -124,13 +132,14 @@ public class OpenApiColumn
                 ", type=" + type +
                 ", sourceType=" + sourceType.getType() +
                 ", requiresPredicate=" + requiresPredicate +
+                ", optionalPredicate=" + optionalPredicate +
                 ", metadata=" + metadata +
                 '}';
     }
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, metadata);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, metadata);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -150,6 +159,7 @@ public class OpenApiColumn
         private Type type;
         private Schema<?> sourceType;
         private final SortedMap<HttpMethod, String> requiresPredicate = new TreeMap<>();
+        private final SortedMap<HttpMethod, String> optionalPredicate = new TreeMap<>();
         private boolean isNullable;
         private String comment;
 
@@ -162,6 +172,7 @@ public class OpenApiColumn
             this.type = handle.getType();
             this.sourceType = handle.getSourceType();
             this.requiresPredicate.putAll(handle.getRequiresPredicate());
+            this.optionalPredicate.putAll(handle.getOptionalPredicate());
             this.isNullable = handle.getMetadata().isNullable();
             this.comment = handle.getMetadata().getComment();
         }
@@ -196,6 +207,12 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setOptionalPredicate(Map<HttpMethod, String> optionalPredicate)
+        {
+            this.optionalPredicate.putAll(requireNonNull(optionalPredicate, "optionalPredicate is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setIsNullable(boolean isNullable)
         {
             this.isNullable = isNullable;
@@ -218,6 +235,7 @@ public class OpenApiColumn
                     type,
                     sourceType,
                     requiresPredicate,
+                    optionalPredicate,
                     isNullable,
                     comment);
         }
