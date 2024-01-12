@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import io.trino.testing.containers.junit.ReportLeakedContainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 
@@ -43,6 +44,7 @@ public class TestingOpenApiServer
                 .withHostConfig(requireNonNull(cmd.getHostConfig(), "hostConfig is null")
                         .withPublishAllPorts(true)));
         dockerContainer.start();
+        ReportLeakedContainers.ignoreContainerId(dockerContainer.getContainerId());
     }
 
     public String getSpecUrl()

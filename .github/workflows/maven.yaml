@@ -12,8 +12,8 @@ jobs:
       - name: Set up the JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'adopt'
+          java-version: '21'
+          distribution: 'temurin'
           server-id: github
           cache: 'maven'
       - name: Configure Problem Matchers
