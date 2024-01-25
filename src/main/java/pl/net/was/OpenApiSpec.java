@@ -197,7 +197,7 @@ public class OpenApiSpec
     private Map<String, Schema> getSchemaProperties(Schema<?> schema, String operationId)
     {
         Map<String, Schema> properties;
-        if (schema instanceof ArraySchema) {
+        if (schema instanceof ArraySchema || schema.getItems() != null) {
             properties = schema.getItems().getProperties();
         }
         else {
