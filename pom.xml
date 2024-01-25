@@ -10,7 +10,7 @@
 
     <groupId>pl.net.was</groupId>
     <artifactId>trino-openapi</artifactId>
-    <version>1.30-SNAPSHOT</version>
+    <version>1.30</version>
     <packaging>trino-plugin</packaging>
 
     <licenses>
@@ -23,7 +23,7 @@
 
     <scm>
         <developerConnection>scm:git:https://github.com/nineinchnick/trino-openapi.git</developerConnection>
-        <tag>HEAD</tag>
+        <tag>v1.30</tag>
     </scm>
 
     <distributionManagement>
