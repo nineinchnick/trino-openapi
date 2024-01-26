@@ -31,6 +31,7 @@ import io.airlift.http.client.ResponseHandler;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
@@ -39,6 +40,8 @@ import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.Int128;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 
@@ -49,6 +52,10 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.text.NumberFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +70,8 @@ import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.Request.Builder.preparePut;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
+import static io.trino.spi.type.DecimalConversions.shortDecimalToDouble;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Double.longBitsToDouble;
 import static java.lang.Float.intBitsToFloat;
@@ -83,6 +92,22 @@ public class OpenApiClient
 
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
+
+    static final long[] POWERS_OF_TEN = {
+            1L,
+            10L,
+            100L,
+            1000L,
+            10_000L,
+            100_000L,
+            1_000_000L,
+            10_000_000L,
+            100_000_000L,
+            1_000_000_000L,
+            10_000_000_000L,
+            100_000_000_000L,
+            1000_000_000_000L
+    };
 
     @Inject
     public OpenApiClient(OpenApiConfig config, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
@@ -230,15 +255,51 @@ public class OpenApiClient
             return defaultValue;
         }
         return switch (column.getType().getBaseName()) {
-            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT, StandardTypes.BOOLEAN -> domain.getSingleValue();
+            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> domain.getSingleValue();
             case StandardTypes.REAL -> intBitsToFloat(((Long) domain.getSingleValue()).intValue());
             case StandardTypes.DOUBLE -> longBitsToDouble((Long) domain.getSingleValue());
+            case StandardTypes.DECIMAL -> toDecimal(domain.getSingleValue(), (DecimalType) column.getType());
             case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
+            case StandardTypes.DATE -> toDate((Long) domain.getSingleValue(), column.getSourceType());
+            case StandardTypes.TIMESTAMP -> toDatetime((Long) domain.getSingleValue(), column.getSourceType());
+            case StandardTypes.BOOLEAN -> domain.getSingleValue();
             case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
             case StandardTypes.ARRAY -> (Block) domain.getSingleValue();
             case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
             default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
         };
+    }
+
+    private static String toDecimal(Object object, DecimalType type)
+    {
+        double value;
+        if (type.isShort()) {
+            value = shortDecimalToDouble((Long) object, POWERS_OF_TEN[type.getScale()]);
+        }
+        else {
+            value = longDecimalToDouble((Int128) object, type.getScale());
+        }
+        return NumberFormat.getInstance().format(value);
+    }
+
+    private static String toDate(long days, Schema<?> schema)
+    {
+        String format = schema.getFormat();
+        if (format.equals("date")) {
+            format = "yyyy-MM-dd";
+        }
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
+        return dateFormatter.format(LocalDate.ofEpochDay(days));
+    }
+
+    private static String toDatetime(long millis, Schema<?> schema)
+    {
+        String format = schema.getFormat();
+        if (format.equals("date-time")) {
+            format = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX";
+        }
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
+        return dateFormatter.format(Instant.ofEpochMilli(millis));
     }
 
     public ObjectNode serializePage(OpenApiTableHandle table, Page page, int position)
