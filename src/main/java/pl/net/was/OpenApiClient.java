@@ -230,13 +230,13 @@ public class OpenApiClient
             return defaultValue;
         }
         return switch (column.getType().getBaseName()) {
-            case StandardTypes.ARRAY -> (Block) domain.getSingleValue();
-            case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
-            case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
-            case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
-            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.BOOLEAN -> domain.getSingleValue();
-            case StandardTypes.DOUBLE -> longBitsToDouble((Long) domain.getSingleValue());
+            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT, StandardTypes.BOOLEAN -> domain.getSingleValue();
             case StandardTypes.REAL -> intBitsToFloat(((Long) domain.getSingleValue()).intValue());
+            case StandardTypes.DOUBLE -> longBitsToDouble((Long) domain.getSingleValue());
+            case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
+            case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
+            case StandardTypes.ARRAY -> (Block) domain.getSingleValue();
+            case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
             default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
         };
     }
@@ -398,6 +398,11 @@ public class OpenApiClient
             if (pathParams.containsKey(parameterName) && (column.getName().endsWith("_req") || !jsonNode.has(parameterName))) {
                 // this might be a virtual column for a required parameter, if so, copy the value from the constraint
                 recordBuilder.add(pathParams.getOrDefault(parameterName, null));
+                continue;
+            }
+            if (column.getName().endsWith("_req")) {
+                // never get request params from the response, because they could be of different types
+                recordBuilder.add(null);
                 continue;
             }
             recordBuilder.add(

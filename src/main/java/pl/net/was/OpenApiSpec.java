@@ -351,9 +351,15 @@ public class OpenApiSpec
                     array.items(elementType.schema())));
         }
         if (property instanceof MapSchema map && map.getAdditionalProperties() instanceof Schema<?> valueSchema) {
-            return convertType(valueSchema).map(mapType -> new TypeTuple(
-                    new MapType(VARCHAR, mapType.type(), new TypeOperators()),
-                    map.additionalProperties(mapType.schema())));
+            Optional<TypeTuple> mapType = convertType(valueSchema);
+            if (mapType.isEmpty()) {
+                // fallback for invalid types - the value will be serialized json,
+                // which can be later processed using SQL json functions
+                return Optional.of(new TypeTuple(VARCHAR, new StringSchema()));
+            }
+            return mapType.map(type -> new TypeTuple(
+                    new MapType(VARCHAR, type.type(), new TypeOperators()),
+                    map.additionalProperties(type.schema())));
         }
         Optional<String> format = Optional.ofNullable(property.getFormat());
         if (property instanceof IntegerSchema) {

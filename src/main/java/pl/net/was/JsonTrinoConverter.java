@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -22,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlock;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
@@ -58,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.type.DecimalConversions.doubleToLongDecimal;
 import static io.trino.spi.type.DecimalConversions.doubleToShortDecimal;
 import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
@@ -97,6 +100,16 @@ public class JsonTrinoConverter
                     doubleToLongDecimal(value, decimalType.getPrecision(), decimalType.getScale());
         }
         if (type instanceof VarcharType) {
+            // fallback for unknown/invalid types
+            if (jsonNode instanceof ObjectNode objectNode) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                try {
+                    return objectMapper.writeValueAsString(objectNode);
+                }
+                catch (JsonProcessingException e) {
+                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to serialize node to string: %s", jsonNode));
+                }
+            }
             return jsonNode.asText();
         }
         if (type instanceof DateType) {
