@@ -25,6 +25,7 @@ import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
+import io.airlift.http.client.HttpUriBuilder;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
@@ -51,7 +52,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -80,7 +80,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.AbstractMap.SimpleEntry;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 
@@ -192,27 +191,20 @@ public class OpenApiClient
             throws URISyntaxException
     {
         URI oldUri = uri.resolve(uri.getPath() + path);
-        String query = queryParams.entrySet().stream()
-                .map(entry -> encodeQueryParam(entry.getKey(), entry.getValue()))
-                .collect(joining("&"));
-        return new URI(
-                oldUri.getScheme(),
-                oldUri.getAuthority(),
-                oldUri.getPath(),
-                oldUri.getQuery() == null ? query : oldUri.getQuery() + "&" + query,
-                oldUri.getFragment());
+        HttpUriBuilder builder = HttpUriBuilder.uriBuilderFrom(oldUri);
+        queryParams.forEach((key, value) -> builder.addParameter(key, encodeQueryParamValue(value)));
+        return builder.build();
     }
 
-    private static String encodeQueryParam(String name, Object value)
+    private static Iterable<String> encodeQueryParamValue(Object value)
     {
         if (value instanceof Block block) {
             return IntStream
                     .range(0, block.getPositionCount())
                     .mapToObj(i -> VARCHAR.getSlice(block, i).toStringUtf8())
-                    .map(arrayValue -> encodeQueryParam(name, arrayValue))
-                    .collect(joining("&"));
+                    .toList();
         }
-        return format("%s=%s", name, URLEncoder.encode(value.toString(), UTF_8));
+        return List.of(value.toString());
     }
 
     private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, String in)
