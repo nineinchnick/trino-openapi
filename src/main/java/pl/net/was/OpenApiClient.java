@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
 import com.google.inject.Inject;
@@ -364,6 +365,9 @@ public class OpenApiClient
         }
         else if (value instanceof ArrayNode || value instanceof ObjectNode) {
             node.set(name, (JsonNode) value);
+        }
+        else if (value instanceof RawValue rawValue) {
+            node.putRawValue(name, rawValue);
         }
         else {
             throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));

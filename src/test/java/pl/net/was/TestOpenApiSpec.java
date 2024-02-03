@@ -242,10 +242,7 @@ class TestOpenApiSpec
                                         RowType.field("order", VARCHAR)))))))),
                         RowType.field("from", BIGINT),
                         RowType.field("interval", BIGINT),
-                        RowType.field("queries", new ArrayType(RowType.from(List.of(
-                                RowType.field("data_source", VARCHAR),
-                                RowType.field("name", VARCHAR),
-                                RowType.field("query", VARCHAR))))),
+                        RowType.field("queries", new ArrayType(VARCHAR)),
                         RowType.field("to", BIGINT)))),
                 RowType.field("type", VARCHAR)));
         Assertions.assertThat(columns)
