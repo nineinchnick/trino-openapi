@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
@@ -60,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import static com.google.common.base.Verify.verify;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.type.DecimalConversions.doubleToLongDecimal;
 import static io.trino.spi.type.DecimalConversions.doubleToShortDecimal;
@@ -100,17 +102,17 @@ public class JsonTrinoConverter
                     doubleToLongDecimal(value, decimalType.getPrecision(), decimalType.getScale());
         }
         if (type instanceof VarcharType) {
-            // fallback for unknown/invalid types
-            if (jsonNode instanceof ObjectNode objectNode) {
-                ObjectMapper objectMapper = new ObjectMapper();
-                try {
-                    return objectMapper.writeValueAsString(objectNode);
-                }
-                catch (JsonProcessingException e) {
-                    throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to serialize node to string: %s", jsonNode));
-                }
+            if (jsonNode.isValueNode()) {
+                return jsonNode.asText();
             }
-            return jsonNode.asText();
+            // fallback for unknown/invalid types
+            ObjectMapper objectMapper = new ObjectMapper();
+            try {
+                return objectMapper.writeValueAsString(jsonNode);
+            }
+            catch (JsonProcessingException e) {
+                throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to serialize node to string: %s", jsonNode));
+            }
         }
         if (type instanceof DateType) {
             String format = schemaType.getFormat();
@@ -284,9 +286,11 @@ public class JsonTrinoConverter
         if (block.isNull(position)) {
             return null;
         }
-        // TODO this is obviously wrong, the field name should have some suffix to help figure out which union type to use
-        if (schemaType.getOneOf() != null && !schemaType.getOneOf().isEmpty()) {
-            schemaType = schemaType.getOneOf().get(0);
+        if (schemaType.getOneOf() != null
+                || schemaType.getAnyOf() != null
+                || schemaType.getAllOf() != null) {
+            verify(type instanceof VarcharType, "OpenAPI union types must map to Trino VARCHAR");
+            return new RawValue(type.getSlice(block, position).toStringUtf8());
         }
         if (type instanceof BooleanType) {
             return type.getBoolean(block, position);
@@ -355,6 +359,9 @@ public class JsonTrinoConverter
             }
             else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
                 arrayNode.add((JsonNode) itemValue);
+            }
+            else if (itemValue instanceof RawValue rawValue) {
+                arrayNode.addRawValue(rawValue);
             }
             else {
                 throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));

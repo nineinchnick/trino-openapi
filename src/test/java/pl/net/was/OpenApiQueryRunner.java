@@ -87,10 +87,14 @@ public class OpenApiQueryRunner
                     "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
                     "authentication.grant-type", System.getenv("OPENAPI_GRANT_TYPE")));
         }
-        properties.putAll(Map.of(
-                "authentication.api-keys", requireNonNullElse(System.getenv("OPENAPI_API_KEYS"), ""),
-                "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
-                "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
+        if (System.getenv("OPENAPI_API_KEYS") != null) {
+            properties.put("authentication.api-keys", System.getenv("OPENAPI_API_KEYS"));
+        }
+        else {
+            properties.putAll(Map.of(
+                    "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
+                    "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
+        }
         QueryRunner queryRunner = createQueryRunner(properties.buildOrThrow());
 
         Logger log = Logger.get(OpenApiQueryRunner.class);

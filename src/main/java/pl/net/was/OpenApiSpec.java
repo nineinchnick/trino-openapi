@@ -73,6 +73,7 @@ public class OpenApiSpec
 {
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID = "__trino_row_id";
+    private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new StringSchema());
     // should only be used to manually resolving references
     private final OpenAPI openApi;
     private final Map<String, List<OpenApiColumn>> tables;
@@ -332,18 +333,12 @@ public class OpenApiSpec
 
     private Optional<TypeTuple> convertType(Schema<?> property)
     {
-        // TODO this is obviously wrong, generate separate fields for every union type
-        if (property.getOneOf() != null && !property.getOneOf().isEmpty()) {
-            property = property.getOneOf().get(0);
-        }
-        // ignore arrays with `oneOf`, `anyOf`, `allOf` and `multipleOf` response type
         if (property.getOneOf() != null
                 || property.getAnyOf() != null
-                || property.getAllOf() != null
-                || property.getMultipleOf() != null
-                // ignore `$ref` as well
-                || property.get$ref() != null) {
-            return Optional.empty();
+                || property.getAllOf() != null) {
+            // TODO oneOf types can be incompatible (object and an array), so it would require generating separate fields for every type
+            // TODO allOf and anyOf types could be merged into a single type
+            return Optional.of(new TypeTuple(VARCHAR, property));
         }
         if (property instanceof ArraySchema array) {
             return convertType(array.getItems()).map(elementType -> new TypeTuple(
@@ -355,7 +350,7 @@ public class OpenApiSpec
             if (mapType.isEmpty()) {
                 // fallback for invalid types - the value will be serialized json,
                 // which can be later processed using SQL json functions
-                return Optional.of(new TypeTuple(VARCHAR, new StringSchema()));
+                return Optional.of(FALLBACK_TYPE);
             }
             return mapType.map(type -> new TypeTuple(
                     new MapType(VARCHAR, type.type(), new TypeOperators()),
@@ -395,7 +390,7 @@ public class OpenApiSpec
             // composite type
             Map<String, Schema> properties = object.getProperties();
             if (properties == null) {
-                return Optional.empty();
+                return Optional.of(FALLBACK_TYPE);
             }
             Map<String, TypeTuple> fieldTypes = properties.entrySet().stream()
                     .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
@@ -409,7 +404,7 @@ public class OpenApiSpec
                     .map(prop -> RowType.field(prop.getKey(), prop.getValue().type()))
                     .toList();
             if (fields.isEmpty()) {
-                return Optional.empty();
+                return Optional.of(FALLBACK_TYPE);
             }
             Map<String, Schema> newProperties = fieldTypes.entrySet().stream()
                     .collect(toMap(
@@ -420,7 +415,7 @@ public class OpenApiSpec
             return Optional.of(new TypeTuple(RowType.from(fields), object.properties(newProperties)));
         }
         if (property.getType() == null) {
-            return Optional.empty();
+            return Optional.of(FALLBACK_TYPE);
         }
         if (property.getType().equals("float")) {
             return Optional.of(new TypeTuple(REAL, property));
@@ -432,8 +427,8 @@ public class OpenApiSpec
         if (referenced != null) {
             return convertType(referenced).map(type -> new TypeTuple(type.type(), referenced));
         }
-        // TODO log unknown type
-        return Optional.empty();
+        // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
+        return Optional.of(FALLBACK_TYPE);
     }
 
     private record TypeTuple(Type type, Schema<?> schema) {}
