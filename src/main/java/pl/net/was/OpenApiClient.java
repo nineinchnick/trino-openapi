@@ -457,7 +457,7 @@ public class OpenApiClient
                 recordBuilder.add(pathParams.getOrDefault(parameterName, null));
                 continue;
             }
-            if (column.getName().endsWith("_req")) {
+            if (column.getName().matches(".*_req(_\\d+)?")) {
                 // never get request params from the response, because they could be of different types
                 recordBuilder.add(null);
                 continue;
