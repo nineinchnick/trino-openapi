@@ -21,6 +21,10 @@ jobs:
           echo "::add-matcher::.github/problem-matcher.json"
           echo "::remove-matcher owner=java::"
       - name: Build with Maven
+        env:
+          JIRA_SITE: ${{ secrets.JIRA_SITE }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
         run: mvn -B package
       - name: Upload test report
         uses: actions/upload-artifact@v3
