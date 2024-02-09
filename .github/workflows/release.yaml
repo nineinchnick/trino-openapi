@@ -43,6 +43,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare release
+        env:
+          JIRA_SITE: ${{ secrets.JIRA_SITE }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
         run: ./mvnw -B release:prepare
 
       - name: Build and push Docker image
