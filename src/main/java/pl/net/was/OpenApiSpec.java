@@ -99,7 +99,7 @@ public class OpenApiSpec
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 .collect(toMap(
                         entry -> getIdentifier(stripPathParams(entry.getKey())),
-                        entry -> getColumns(entry.getValue()),
+                        entry -> getColumns(entry.getValue(), entry.getKey()),
                         (a, b) -> Stream.concat(a.stream(), b.stream()).distinct().toList()))
                 .entrySet().stream()
                 .collect(toMap(Map.Entry::getKey, entry -> mergeColumns(entry.getValue())));
@@ -214,7 +214,7 @@ public class OpenApiSpec
         return properties;
     }
 
-    private List<OpenApiColumn> getColumns(PathItem pathItem)
+    private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream().flatMap(entry -> {
             PathItem.HttpMethod method = entry.getKey();
@@ -267,7 +267,7 @@ public class OpenApiSpec
                         .filter(Optional::isPresent)
                         .forEach(column -> result.add(column.get()));
             }
-            if (op.getParameters() != null && filterPath(pathItem.toString(), method)) {
+            if (op.getParameters() != null && filterPath(path, method)) {
                 List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
                 // add required parameters as columns, so they can be set as predicates;
                 // predicate values will be saved in the table handle and copied to result rows
@@ -328,7 +328,12 @@ public class OpenApiSpec
 
     public static String getIdentifier(String string)
     {
-        return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, string.replaceAll("^/", "").replace('/', '_'));
+        return CaseFormat.LOWER_CAMEL.to(
+                CaseFormat.LOWER_UNDERSCORE,
+                string
+                        .replaceAll("^/", "")
+                        .replace('/', '_')
+                        .replace('-', '_'));
     }
 
     private Optional<TypeTuple> convertType(Schema<?> property)
