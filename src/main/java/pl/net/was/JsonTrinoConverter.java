@@ -318,8 +318,7 @@ public class JsonTrinoConverter
                 Schema<?> finalSchemaType = schemaType;
                 return arrayBlock.apply((valuesBlock, start, length) -> convertArray(valuesBlock, start, length, arrayType, finalSchemaType, objectMapper), position);
             }
-            Block arrayBlock = arrayType.getObject(block, position);
-            return convertArray(arrayBlock, 0, arrayBlock.getPositionCount(), arrayType, schemaType, objectMapper);
+            return convertArray(block, 0, block.getPositionCount(), arrayType, schemaType, objectMapper);
         }
         if (type instanceof MapType mapType) {
             SqlMap mapBlock = mapType.getObject(block, position);
