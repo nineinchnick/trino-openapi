@@ -62,7 +62,7 @@
         <dep.junit.version>5.10.2</dep.junit.version>
         <dep.slf4j.version>2.0.12</dep.slf4j.version>
         <dep.assertj-core.version>3.25.3</dep.assertj-core.version>
-        <dep.logback.version>1.5.0</dep.logback.version>
+        <dep.logback.version>1.5.1</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.20</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.20</dep.swagger-core.version>
@@ -240,7 +240,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-api</artifactId>
-            <version>3.3.5</version>
+            <version>3.3.6</version>
             <scope>test</scope>
         </dependency>
 
@@ -339,7 +339,7 @@
             <plugin>
                 <groupId>io.trino</groupId>
                 <artifactId>trino-maven-plugin</artifactId>
-                <version>12</version>
+                <version>13</version>
                 <extensions>true</extensions>
                 <configuration>
                     <pluginClassName>io.trino.spi.Plugin</pluginClassName>
@@ -351,7 +351,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>1.0.20</version>
+                <version>1.0.21</version>
                 <extensions>true</extensions>
             </plugin>
         </plugins>
