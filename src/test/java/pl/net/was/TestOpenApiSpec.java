@@ -357,7 +357,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("paused").setSourceName("paused")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
                                         "true value means the zone will not receive security or performance\n" +
@@ -366,7 +366,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("vanity_name_servers").setSourceName("vanity_name_servers")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("An array of domains used for custom name servers. This is only\n" +
                                         "available for Business and Enterprise plans.")
@@ -390,7 +390,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("type").setSourceName("type")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
                                         "typically a partner-hosted zone or a CNAME setup.\n")
@@ -462,7 +462,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
                                 .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("(Deprecated) Please use the `/zones/{identifier}/subscription` API\n" +
                                         "to update a zone's plan. Changing this value will create/cancel\n" +
