@@ -246,7 +246,6 @@ public class OpenApiSpec
             if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
                     && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
                 List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
-                // TODO how to treat op.getRequestBody().getRequired()?
                 Schema<?> schema = op.getRequestBody()
                         .getContent()
                         .get("application/json")
@@ -261,8 +260,8 @@ public class OpenApiSpec
                                 // otherwise it'll get a number suffix, like `_2`
                                 names.contains(propEntry.getKey()) ? "_req" : "",
                                 propEntry.getValue(),
-                                Map.of(method, "body"),
-                                Map.of(),
+                                requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
+                                !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
                                 !requiredProperties.contains(propEntry.getKey())))
                         .filter(Optional::isPresent)
                         .forEach(column -> result.add(column.get()));
