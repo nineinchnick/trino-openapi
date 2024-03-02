@@ -184,8 +184,9 @@ public class OpenApiClient
                 .addHeader("X-Trino-OpenAPI-Path", path);
         getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
 
-        log.debug("Request URL: " + uri);
-        return httpClient.execute(builder.build(), responseHandler);
+        Request request = builder.build();
+        log.debug(request.toString());
+        return httpClient.execute(request, responseHandler);
     }
 
     private static URI buildUri(URI uri, String path, Map<String, Object> queryParams)
