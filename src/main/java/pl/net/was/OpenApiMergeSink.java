@@ -19,6 +19,8 @@ import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorMergeSink;
 
+import static io.trino.spi.type.TinyintType.TINYINT;
+
 public class OpenApiMergeSink
         extends OpenApiPageSink
         implements ConnectorMergeSink
@@ -34,7 +36,7 @@ public class OpenApiMergeSink
         Block rowIds = page.getBlock(page.getChannelCount() - 1);
         Block ops = page.getBlock(page.getChannelCount() - 2);
         for (int position = 0; position < page.getPositionCount(); position++) {
-            byte op = ops.getByte(position, 0);
+            byte op = TINYINT.getByte(ops, position);
             switch (op) {
                 case INSERT_OPERATION_NUMBER -> insertedPage(page, position);
                 case UPDATE_OPERATION_NUMBER -> updatedPage(page, position);

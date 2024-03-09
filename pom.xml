@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>150</version>
+        <version>151</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -48,10 +48,10 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
 
-        <dep.trino.version>439</dep.trino.version>
-        <dep.airlift.version>240</dep.airlift.version>
+        <dep.trino.version>440</dep.trino.version>
+        <dep.airlift.version>241</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
-        <dep.opentelemetry.version>1.35.0</dep.opentelemetry.version>
+        <dep.opentelemetry.version>1.36.0</dep.opentelemetry.version>
         <dep.opentelemetry-instrumentation.version>2.1.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.0.0-jre</dep.guava.version>
@@ -62,10 +62,10 @@
         <dep.junit.version>5.10.2</dep.junit.version>
         <dep.slf4j.version>2.0.12</dep.slf4j.version>
         <dep.assertj-core.version>3.25.3</dep.assertj-core.version>
-        <dep.logback.version>1.5.1</dep.logback.version>
+        <dep.logback.version>1.5.3</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.20</dep.swagger-parser.version>
-        <dep.swagger-core.version>2.1.20</dep.swagger-core.version>
+        <dep.swagger-parser.version>2.1.21</dep.swagger-parser.version>
+        <dep.swagger-core.version>2.1.21</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.20</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
@@ -79,7 +79,7 @@
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-bom</artifactId>
-                <version>1.9.22</version>
+                <version>1.9.23</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -307,7 +307,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>1.19.6</version>
+            <version>1.19.7</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

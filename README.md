@@ -16,7 +16,7 @@ docker run \
   -e OPENAPI_SPEC_LOCATION=http://api.example/api/spec.yaml \
   -e OPENAPI_BASE_URI=http://api.example/api/v1 \
   -p 8080:8080 \
-  nineinchnick/trino-openapi:1.10
+  nineinchnick/trino-openapi:1.39
 ```
 
 Then use your favourite SQL client to connect to Trino running at
@@ -24,7 +24,7 @@ http://localhost:8080
 
 ## Usage
 
-Download one of the ZIP packages, unzip it and copy the `trino-openapi-1.10`
+Download one of the ZIP packages, unzip it and copy the `trino-openapi-1.39`
 directory to the plugin directory on every node in your Trino cluster. Create a
 `openapi.properties` file in your Trino catalog directory and set all the
 required properties.
