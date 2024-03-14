@@ -19,10 +19,9 @@ import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
 import io.airlift.configuration.InvalidConfigurationException;
+import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
-
-import javax.validation.constraints.NotNull;
 
 import java.net.URI;
 import java.util.Map;
