@@ -41,11 +41,12 @@ public class OpenApiQueryRunner
                 .setSchema("default")
                 .build();
 
-        Map<String, String> extraProperties = ImmutableMap.<String, String>builder()
-                .put("http-server.http.port", requireNonNullElse(System.getenv("TRINO_PORT"), "8080"))
-                .build();
+        ImmutableMap.Builder<String, String> extraProperties = ImmutableMap.<String, String>builder();
+        if (System.getenv("TRINO_PORT") != null) {
+            extraProperties.put("http-server.http.port", System.getenv("TRINO_PORT"));
+        }
         QueryRunner queryRunner = DistributedQueryRunner.builder(defaultSession)
-                .setExtraProperties(extraProperties)
+                .setExtraProperties(extraProperties.buildOrThrow())
                 .setWorkerCount(1)
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
