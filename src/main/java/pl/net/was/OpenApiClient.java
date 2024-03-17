@@ -64,6 +64,7 @@ import java.util.stream.IntStream;
 
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareDelete;
 import static io.airlift.http.client.Request.Builder.prepareGet;
@@ -87,6 +88,7 @@ import static pl.net.was.OpenApiSpec.ROW_ID;
 public class OpenApiClient
 {
     private static final Logger log = Logger.get(OpenApiRecordSetProvider.class);
+    public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
 
     private final URI baseUri;
 
@@ -179,6 +181,7 @@ public class OpenApiClient
         }
         builder
                 .setUri(uri)
+                .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader("X-Trino-OpenAPI-Path", path);
