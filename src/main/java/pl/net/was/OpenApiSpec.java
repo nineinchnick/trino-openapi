@@ -15,6 +15,8 @@
 package pl.net.was;
 
 import com.google.common.base.CaseFormat;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ListMultimap;
 import com.google.inject.Inject;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -234,7 +236,6 @@ public class OpenApiSpec
                             .entrySet().stream()
                             .map(propEntry -> getColumn(
                                     propEntry.getKey(),
-                                    "",
                                     propEntry.getValue(),
                                     Map.of(),
                                     Map.of(),
@@ -245,7 +246,9 @@ public class OpenApiSpec
             }
             if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
                     && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
-                List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
+                ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
+                        (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                        ArrayListMultimap::putAll);
                 Schema<?> schema = op.getRequestBody()
                         .getContent()
                         .get("application/json")
@@ -255,35 +258,53 @@ public class OpenApiSpec
                         .entrySet().stream()
                         .map(propEntry -> getColumn(
                                 propEntry.getKey(),
-                                // if the request param is also a response field,
-                                // append `_req` to its name to disambiguate it,
-                                // otherwise it'll get a number suffix, like `_2`
-                                names.contains(propEntry.getKey()) ? "_req" : "",
                                 propEntry.getValue(),
                                 requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
                                 !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
                                 !requiredProperties.contains(propEntry.getKey())))
                         .filter(Optional::isPresent)
-                        .forEach(column -> result.add(column.get()));
+                        .map(Optional::get)
+                        .map(column -> {
+                            while (hasAmbiguousName(column, keys)) {
+                                // if the request param is also a response field,
+                                // append `_req` to its name to disambiguate it,
+                                // otherwise it'll get a number suffix, like `_2`
+                                column = OpenApiColumn.builderFrom(column)
+                                        .setName(column.getName() + "_req")
+                                        .build();
+                            }
+                            return column;
+                        })
+                        .forEach(result::add);
             }
             if (op.getParameters() != null && filterPath(path, method)) {
-                List<String> names = result.stream().map(OpenApiColumn::getName).distinct().toList();
+                ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
+                        (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                        ArrayListMultimap::putAll);
                 // add required parameters as columns, so they can be set as predicates;
                 // predicate values will be saved in the table handle and copied to result rows
                 op.getParameters().stream()
                         .map(parameter -> getColumn(
                                 parameter.getName(),
-                                // if the filter param is also a request or response field,
-                                // append `_req` to its name to disambiguate it,
-                                // otherwise it'll get a number suffix, like `_2`
-                                names.contains(parameter.getName()) ? "_req" : "",
                                 parameter.getSchema(),
                                 parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
                                 !parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
                                 // always nullable, because they're only required as predicates, not in INSERT statements
                                 true))
                         .filter(Optional::isPresent)
-                        .forEach(column -> result.add(column.get()));
+                        .map(Optional::get)
+                        .map(column -> {
+                            while (hasAmbiguousName(column, keys)) {
+                                // if the request param is also a response field,
+                                // append `_req` to its name to disambiguate it,
+                                // otherwise it'll get a number suffix, like `_2`
+                                column = OpenApiColumn.builderFrom(column)
+                                        .setName(column.getName() + "_req")
+                                        .build();
+                            }
+                            return column;
+                        })
+                        .forEach(result::add);
             }
 
             return result.stream();
@@ -302,10 +323,15 @@ public class OpenApiSpec
         return columns.toList();
     }
 
-    private Optional<OpenApiColumn> getColumn(String name, String suffix, Schema<?> schema, Map<PathItem.HttpMethod, String> requiredPredicate, Map<PathItem.HttpMethod, String> optionalPredicate, boolean isNullable)
+    private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)
+    {
+        return keys.get(column.getName()).stream().anyMatch(existingKey -> !existingKey.equals(column.getPrimaryKey()));
+    }
+
+    private Optional<OpenApiColumn> getColumn(String name, Schema<?> schema, Map<PathItem.HttpMethod, String> requiredPredicate, Map<PathItem.HttpMethod, String> optionalPredicate, boolean isNullable)
     {
         return convertType(schema).map(type -> OpenApiColumn.builder()
-                .setName(getIdentifier(name) + suffix)
+                .setName(getIdentifier(name))
                 .setSourceName(name)
                 .setType(type.type())
                 .setSourceType(type.schema())
