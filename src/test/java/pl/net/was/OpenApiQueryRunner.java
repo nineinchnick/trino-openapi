@@ -35,6 +35,11 @@ public class OpenApiQueryRunner
     public static QueryRunner createQueryRunner(Map<String, String> catalogProperties)
             throws Exception
     {
+        Logging logger = Logging.initialize();
+        logger.setLevel("pl.net.was", Level.DEBUG);
+        logger.setLevel("io.trino", Level.INFO);
+        logger.setLevel("io.airlift", Level.INFO);
+
         verify(catalogProperties.containsKey("spec-location") && catalogProperties.containsKey("base-uri"), "catalogProperties must include spec-location and base-uri");
         Session defaultSession = testSessionBuilder()
                 .setCatalog("openapi")
@@ -58,11 +63,6 @@ public class OpenApiQueryRunner
     public static void main(String[] args)
             throws Exception
     {
-        Logging logger = Logging.initialize();
-        logger.setLevel("pl.net.was", Level.DEBUG);
-        logger.setLevel("io.trino", Level.INFO);
-        logger.setLevel("io.airlift", Level.DEBUG);
-
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
             TestingOpenApiServer server = new TestingOpenApiServer();

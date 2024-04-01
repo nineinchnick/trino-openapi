@@ -14,8 +14,10 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import com.google.common.base.CaseFormat;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.inject.Inject;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -51,6 +53,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -75,7 +79,14 @@ public class OpenApiSpec
     public static final String ROW_ID = "__trino_row_id";
     public static final String HTTP_OK = "200";
     public static final String MIME_JSON = "application/json";
+
     private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new StringSchema());
+
+    private static final String EXTENSION_PAGINATION = "x-pagination";
+    private static final String PAGINATION_RESULTS_PATH = "resultsPath";
+    private static final String PAGINATION_PAGE_PARAM = "pageParam";
+    private static final Pattern RESULTS_PATH_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
+
     // should only be used to manually resolving references
     private final OpenAPI openApi;
     private final Map<String, List<OpenApiColumn>> tables;
@@ -186,21 +197,6 @@ public class OpenApiSpec
                 TupleDomain.none());
     }
 
-    private Map<String, Schema> getSchemaProperties(Schema<?> schema, String operationId)
-    {
-        Map<String, Schema> properties;
-        if (schema instanceof ArraySchema || schema.getItems() != null) {
-            properties = schema.getItems().getProperties();
-        }
-        else {
-            properties = schema.getProperties();
-        }
-        if (properties == null) {
-            return new LinkedHashMap<>();
-        }
-        return properties;
-    }
-
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
@@ -213,6 +209,7 @@ public class OpenApiSpec
                                     .setName(ROW_ID)
                                     .setType(VARCHAR)
                                     .setSourceType(new StringSchema())
+                                    .setIsHidden(true)
                                     .build()),
                             columns)
                     .toList();
@@ -226,17 +223,30 @@ public class OpenApiSpec
         Operation op = entry.getValue();
         List<OpenApiColumn> result = new ArrayList<>();
 
+        Map<String, String> pagination = op.getExtensions() == null ? ImmutableMap.of() : getMapOfStrings(op.getExtensions().get(EXTENSION_PAGINATION));
+        JsonPointer resultsPointer = getResultsPath(pagination);
+
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
             List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-            getSchemaProperties(schema, op.getOperationId())
+            getSchemaProperties(schema)
                     .entrySet().stream()
-                    .map(propEntry -> getColumn(
+                    .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
+                    .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
                             propEntry.getValue(),
-                            Map.of(),
-                            Map.of(),
-                            !requiredProperties.contains(propEntry.getKey())))
+                            !requiredProperties.contains(propEntry.getKey()),
+                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
+                    .filter(Optional::isPresent)
+                    .forEach(column -> result.add(column.get()));
+            getResultsSchema(schema, resultsPointer)
+                    .entrySet().stream()
+                    .map(propEntry -> getResultColumn(
+                            propEntry.getKey(),
+                            resultsPointer,
+                            propEntry.getValue(),
+                            !requiredProperties.contains(propEntry.getKey()),
+                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
         }
@@ -247,14 +257,16 @@ public class OpenApiSpec
                             (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
                             ArrayListMultimap::putAll);
             List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-            getSchemaProperties(schema, op.getOperationId())
+            getSchemaProperties(schema)
                     .entrySet().stream()
-                    .map(propEntry -> getColumn(
+                    .map(propEntry -> getPredicateColumn(
                             propEntry.getKey(),
                             propEntry.getValue(),
                             requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
                             !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
-                            !requiredProperties.contains(propEntry.getKey())))
+                            !requiredProperties.contains(propEntry.getKey()),
+                            false,
+                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .map(column -> {
@@ -278,13 +290,17 @@ public class OpenApiSpec
             // add required parameters as columns, so they can be set as predicates;
             // predicate values will be saved in the table handle and copied to result rows
             op.getParameters().stream()
-                    .map(parameter -> getColumn(
+                    .map(parameter -> getPredicateColumn(
                             parameter.getName(),
                             parameter.getSchema(),
                             parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
                             !parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
                             // always nullable, because they're only required as predicates, not in INSERT statements
-                            true))
+                            true,
+                            // keep pagination parameters as hidden columns, so it's possible to
+                            // see the page number (how many requests were made) and change the default per-page limit
+                            pagination.containsValue(parameter.getName()),
+                            parameter.getName().equals(pagination.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .map(column -> {
@@ -302,6 +318,29 @@ public class OpenApiSpec
         }
 
         return result.stream();
+    }
+
+    private static JsonPointer getResultsPath(Map<String, String> pagination)
+    {
+        if (!pagination.containsKey(PAGINATION_RESULTS_PATH)) {
+            return JsonPointer.empty();
+        }
+        String resultsPath = pagination.get(PAGINATION_RESULTS_PATH);
+        Matcher matcher = RESULTS_PATH_PATTERN.matcher(resultsPath);
+        if (matcher.matches()) {
+            return JsonPointer.compile(matcher.group(1));
+        }
+        if (!resultsPath.contains("/") && (resultsPath.contains(".") || resultsPath.contains("["))) {
+            // it might be a JSON path, which are not supported, so ignore them
+            return JsonPointer.empty();
+        }
+        if (resultsPath.startsWith("$")) {
+            throw new IllegalArgumentException("Invalid value of %s.%s: %s, complex JSON pointer or JSON path expressions are not supported".formatted(EXTENSION_PAGINATION, RESULTS_PATH_PATTERN, resultsPath));
+        }
+        if (!resultsPath.startsWith("/")) {
+            resultsPath = "/" + resultsPath;
+        }
+        return JsonPointer.compile(resultsPath);
     }
 
     private static Schema<?> getResponseSchema(Operation op)
@@ -333,21 +372,111 @@ public class OpenApiSpec
                 .getSchema();
     }
 
+    private static Map<String, String> getMapOfStrings(Object object)
+    {
+        if (!(object instanceof Map<?, ?>)) {
+            return ImmutableMap.of();
+        }
+
+        return ((Map<?, ?>) object).entrySet().stream()
+                .filter(entry -> entry.getKey() instanceof String && entry.getValue() instanceof String)
+                .collect(toImmutableMap(entry -> (String) entry.getKey(), entry -> (String) entry.getValue()));
+    }
+
+    private static Map<String, Schema> getSchemaProperties(Schema<?> schema)
+    {
+        Map<String, Schema> properties;
+        if (schema instanceof ArraySchema || schema.getItems() != null) {
+            properties = schema.getItems().getProperties();
+        }
+        else {
+            properties = schema.getProperties();
+        }
+        if (properties == null) {
+            return Map.of();
+        }
+        return properties;
+    }
+
+    private static Map<String, Schema> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
+    {
+        while (resultsPointer != JsonPointer.empty()) {
+            String name = resultsPointer.getMatchingProperty();
+            schema = getSchemaProperties(schema).get(name);
+            if (schema == null) {
+                throw new IllegalArgumentException("Invalid value of %s.%s: unknown field %s".formatted(EXTENSION_PAGINATION, RESULTS_PATH_PATTERN, resultsPointer));
+            }
+            // TODO validate that the schema is an array?
+            resultsPointer = resultsPointer.tail();
+        }
+        return getSchemaProperties(schema);
+    }
+
     private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)
     {
         return keys.get(column.getName()).stream().anyMatch(existingKey -> !existingKey.equals(column.getPrimaryKey()));
     }
 
-    private Optional<OpenApiColumn> getColumn(String name, Schema<?> schema, Map<PathItem.HttpMethod, String> requiredPredicate, Map<PathItem.HttpMethod, String> optionalPredicate, boolean isNullable)
+    private Optional<OpenApiColumn> getResultColumn(
+            String sourceName,
+            Schema<?> schema,
+            boolean isNullable,
+            boolean isPageNumber)
     {
+        String name = getIdentifier(sourceName);
         return convertType(schema).map(type -> OpenApiColumn.builder()
-                .setName(getIdentifier(name))
-                .setSourceName(name)
+                .setName(name)
+                .setSourceName(sourceName)
+                .setType(type.type())
+                .setSourceType(type.schema())
+                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setIsHidden(false)
+                .setIsPageNumber(isPageNumber)
+                .setComment(schema.getDescription())
+                .build());
+    }
+
+    private Optional<OpenApiColumn> getResultColumn(
+            String sourceName,
+            JsonPointer resultsPointer,
+            Schema<?> schema,
+            boolean isNullable,
+            boolean isPageNumber)
+    {
+        String name = getIdentifier(sourceName);
+        return convertType(schema).map(type -> OpenApiColumn.builder()
+                .setName(name)
+                .setSourceName(sourceName)
+                .setResultsPointer(resultsPointer)
+                .setType(type.type())
+                .setSourceType(type.schema())
+                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setIsHidden(false)
+                .setIsPageNumber(isPageNumber)
+                .setComment(schema.getDescription())
+                .build());
+    }
+
+    private Optional<OpenApiColumn> getPredicateColumn(
+            String sourceName,
+            Schema<?> schema,
+            Map<PathItem.HttpMethod, String> requiredPredicate,
+            Map<PathItem.HttpMethod, String> optionalPredicate,
+            boolean isNullable,
+            boolean isHidden,
+            boolean isPageNumber)
+    {
+        String name = getIdentifier(sourceName);
+        return convertType(schema).map(type -> OpenApiColumn.builder()
+                .setName(name)
+                .setSourceName(sourceName)
                 .setType(type.type())
                 .setSourceType(type.schema())
                 .setRequiresPredicate(requiredPredicate)
                 .setOptionalPredicate(optionalPredicate)
                 .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setIsHidden(isHidden)
+                .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
                 .build());
     }

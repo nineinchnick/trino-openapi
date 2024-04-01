@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,7 +42,9 @@ import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
+import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.BigintType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.RowType;
@@ -58,8 +61,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.IntFunction;
 import java.util.stream.IntStream;
 
 import static com.google.common.net.HttpHeaders.ACCEPT;
@@ -133,7 +139,23 @@ public class OpenApiClient
         else {
             throw new IllegalArgumentException("Unsupported SELECT method: " + method);
         }
-        return makeRequest(table, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
+        Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(OpenApiColumn::isPageNumber)
+                .findFirst();
+        if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint(), null) != null) {
+            return makeRequest(table, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
+        }
+        return pageIterator(
+                page -> {
+                    TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
+                            pageColumn.get().getHandle(),
+                            NullableValue.of(pageColumn.get().getType(), pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
+                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
+                    return makeRequest(pageTable, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
+                },
+                0,
+                Integer.MAX_VALUE,
+                1);
     }
 
     public void postRows(OpenApiOutputTableHandle table, Page page, int position)
@@ -166,15 +188,9 @@ public class OpenApiClient
 
     public <T> T makeRequest(OpenApiTableHandle table, PathItem.HttpMethod method, String path, Request.Builder builder, ResponseHandler<T, RuntimeException> responseHandler)
     {
-        String uriPath = requireNonNull(path, "path is null");
-        Map<String, Object> pathParams = getFilterValues(table, method, "path");
-        for (Map.Entry<String, Object> entry : pathParams.entrySet()) {
-            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
-        }
-
         URI uri;
         try {
-            uri = buildUri(baseUri, uriPath, getFilterValues(table, method, "query"));
+            uri = buildUri(baseUri, buildPath(table, method, path), getFilterValues(table, method, "query"));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -190,6 +206,16 @@ public class OpenApiClient
         Request request = builder.build();
         log.debug(request.toString());
         return httpClient.execute(request, responseHandler);
+    }
+
+    private String buildPath(OpenApiTableHandle table, PathItem.HttpMethod method, String path)
+    {
+        String uriPath = requireNonNull(path, "path is null");
+        Map<String, Object> pathParams = getFilterValues(table, method, "path");
+        for (Map.Entry<String, Object> entry : pathParams.entrySet()) {
+            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
+        }
+        return uriPath;
     }
 
     private static URI buildUri(URI uri, String path, Map<String, Object> queryParams)
@@ -430,48 +456,79 @@ public class OpenApiClient
         Map<String, Object> pathParams = getFilterValues(table, PathItem.HttpMethod.GET, null);
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.add(convertJsonToRecord(table, pathParams, jsonRecord));
+                resultRecordsBuilder.addAll(convertJsonToRecords(table, pathParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.add(convertJsonToRecord(table, pathParams, jsonNode));
+            resultRecordsBuilder.addAll(convertJsonToRecords(table, pathParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private List<?> convertJsonToRecord(OpenApiTableHandle table, Map<String, Object> pathParams, JsonNode jsonNode)
+    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, Map<String, Object> pathParams, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
         }
 
-        List<Object> recordBuilder = new ArrayList<>();
-        for (OpenApiColumn column : openApiSpec.getTables().get(table.getSchemaTableName().getTableName())) {
-            if (column.getName().equals(ROW_ID)) {
-                // TODO this is dangerous, make it configurable and required?
-                recordBuilder.add(pathParams.values().stream().findFirst().map(Object::toString).orElse(null));
-                continue;
+        Iterable<JsonNode> resultNodes = List.of(jsonNode);
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        Optional<JsonPointer> resultsPointer = columns.stream()
+                .map(OpenApiColumn::getResultsPointer)
+                .filter(pointer -> pointer != null && pointer.length() != 0)
+                .reduce((a, b) -> {
+                    if (!a.equals(b)) {
+                        throw new IllegalStateException("More than one results pointer found");
+                    }
+                    return a;
+                });
+        if (resultsPointer.isPresent()) {
+            JsonNode resultNode = jsonNode.at(resultsPointer.get());
+            if (!(resultNode instanceof ArrayNode)) {
+                throw new IllegalArgumentException("Result path points to a node that's not an array");
             }
-            String parameterName = column.getSourceName();
-            if (pathParams.containsKey(parameterName) && (column.getName().endsWith("_req") || !jsonNode.has(parameterName))) {
-                // this might be a virtual column for a required parameter, if so, copy the value from the constraint
-                recordBuilder.add(pathParams.getOrDefault(parameterName, null));
-                continue;
-            }
-            if (column.getName().matches(".*_req(_\\d+)?")) {
-                // never get request params from the response, because they could be of different types
-                recordBuilder.add(null);
-                continue;
-            }
-            recordBuilder.add(
-                    JsonTrinoConverter.convert(
-                            jsonNode.get(parameterName),
-                            column.getType(),
-                            column.getSourceType()));
+            resultNodes = jsonNode.at(resultsPointer.get());
         }
 
-        return recordBuilder;
+        ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
+        for (JsonNode resultNode : resultNodes) {
+            List<Object> recordBuilder = new ArrayList<>();
+            for (OpenApiColumn column : columns) {
+                if (column.getName().equals(ROW_ID)) {
+                    // TODO this is dangerous, make it configurable and required?
+                    recordBuilder.add(pathParams.values().stream().findFirst().map(Object::toString).orElse(null));
+                    continue;
+                }
+                String parameterName = column.getSourceName();
+                if (column.getResultsPointer() != null && column.getResultsPointer().length() != 0) {
+                    recordBuilder.add(
+                            JsonTrinoConverter.convert(
+                                    resultNode.get(parameterName),
+                                    column.getType(),
+                                    column.getSourceType()));
+                    continue;
+                }
+                if (pathParams.containsKey(parameterName)) {
+                    // this might be a virtual column for a required parameter, if so, copy the value from the constraint
+                    recordBuilder.add(pathParams.getOrDefault(parameterName, null));
+                    continue;
+                }
+                if (!jsonNode.has(parameterName) || column.getName().matches(".*_req(_\\d+)?")) {
+                    // never get request params from the response, because they could be of different types
+                    recordBuilder.add(null);
+                    continue;
+                }
+                recordBuilder.add(
+                        JsonTrinoConverter.convert(
+                                jsonNode.get(parameterName),
+                                column.getType(),
+                                column.getSourceType()));
+            }
+            resultRecordsBuilder.add(recordBuilder);
+        }
+
+        return resultRecordsBuilder.build();
     }
 
     private static class JsonBodyGenerator
@@ -518,5 +575,41 @@ public class OpenApiClient
             }
             return null;
         }
+    }
+
+    private Iterable<List<?>> pageIterator(
+            IntFunction<Iterable<List<?>>> getter,
+            int offset,
+            final int limit,
+            int pageIncrement)
+    {
+        return () -> new Iterator<>()
+        {
+            int resultSize;
+            int page = offset + 1;
+            Iterator<List<?>> rows;
+
+            @Override
+            public boolean hasNext()
+            {
+                if (rows != null && rows.hasNext()) {
+                    return true;
+                }
+                if (resultSize >= limit) {
+                    return false;
+                }
+                Iterable<List<?>> items = getter.apply(page);
+                page += pageIncrement;
+                rows = items.iterator();
+                return rows.hasNext();
+            }
+
+            @Override
+            public List<?> next()
+            {
+                resultSize += 1;
+                return rows.next();
+            }
+        };
     }
 }

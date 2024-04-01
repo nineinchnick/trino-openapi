@@ -32,7 +32,6 @@ public class TestingOpenApiServer
     private final GenericContainer<?> dockerContainer;
 
     public TestingOpenApiServer()
-            throws InterruptedException
     {
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("openapitools/openapi-petstore:latest")
