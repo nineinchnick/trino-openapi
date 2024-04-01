@@ -64,7 +64,6 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
-import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
@@ -74,6 +73,8 @@ public class OpenApiSpec
 {
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID = "__trino_row_id";
+    public static final String HTTP_OK = "200";
+    public static final String MIME_JSON = "application/json";
     private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new StringSchema());
     // should only be used to manually resolving references
     private final OpenAPI openApi;
@@ -145,15 +146,15 @@ public class OpenApiSpec
 
     private static boolean hasOpsWithJson(PathItem pathItem)
     {
-        return pathItem.readOperations().stream().anyMatch(OpenApiSpec::hasJson);
+        return pathItem.readOperations().stream().anyMatch(OpenApiSpec::hasJsonResponse);
     }
 
-    private static boolean hasJson(Operation op)
+    private static boolean hasJsonResponse(Operation op)
     {
         return op != null && (op.getDeprecated() == null || !op.getDeprecated()) &&
-                op.getResponses().get("200") != null &&
-                op.getResponses().get("200").getContent() != null &&
-                op.getResponses().get("200").getContent().get("application/json") != null;
+                op.getResponses().get(HTTP_OK) != null &&
+                op.getResponses().get(HTTP_OK).getContent() != null &&
+                op.getResponses().get(HTTP_OK).getContent().get(MIME_JSON) != null;
     }
 
     public Map<String, List<OpenApiColumn>> getTables()
@@ -225,36 +226,26 @@ public class OpenApiSpec
         Operation op = entry.getValue();
         List<OpenApiColumn> result = new ArrayList<>();
 
-        if (op.getResponses().get("200") != null
-                && op.getResponses().get("200").getContent() != null
-                && op.getResponses().get("200").getContent().get("application/json") != null) {
-            Schema<?> schema = op.getResponses()
-                    .get("200").getContent()
-                    .get("application/json")
-                    .getSchema();
-            if (schema != null) {
-                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-                getSchemaProperties(schema, op.getOperationId())
-                        .entrySet().stream()
-                        .map(propEntry -> getColumn(
-                                propEntry.getKey(),
-                                propEntry.getValue(),
-                                Map.of(),
-                                Map.of(),
-                                !requiredProperties.contains(propEntry.getKey())))
-                        .filter(Optional::isPresent)
-                        .forEach(column -> result.add(column.get()));
-            }
+        Schema<?> schema = getResponseSchema(op);
+        if (schema != null) {
+            List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+            getSchemaProperties(schema, op.getOperationId())
+                    .entrySet().stream()
+                    .map(propEntry -> getColumn(
+                            propEntry.getKey(),
+                            propEntry.getValue(),
+                            Map.of(),
+                            Map.of(),
+                            !requiredProperties.contains(propEntry.getKey())))
+                    .filter(Optional::isPresent)
+                    .forEach(column -> result.add(column.get()));
         }
-        if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
-                && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
-            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
-                    (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
-                    ArrayListMultimap::putAll);
-            Schema<?> schema = op.getRequestBody()
-                    .getContent()
-                    .get("application/json")
-                    .getSchema();
+        schema = getRequestSchema(op);
+        if (schema != null) {
+            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream()
+                    .collect(ArrayListMultimap::create,
+                            (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                            ArrayListMultimap::putAll);
             List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
             getSchemaProperties(schema, op.getOperationId())
                     .entrySet().stream()
@@ -280,9 +271,10 @@ public class OpenApiSpec
                     .forEach(result::add);
         }
         if (op.getParameters() != null && filterPath(path, method)) {
-            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
-                    (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
-                    ArrayListMultimap::putAll);
+            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream()
+                    .collect(ArrayListMultimap::create,
+                            (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                            ArrayListMultimap::putAll);
             // add required parameters as columns, so they can be set as predicates;
             // predicate values will be saved in the table handle and copied to result rows
             op.getParameters().stream()
@@ -310,6 +302,35 @@ public class OpenApiSpec
         }
 
         return result.stream();
+    }
+
+    private static Schema<?> getResponseSchema(Operation op)
+    {
+        if (op.getResponses() == null
+                || op.getResponses().get(HTTP_OK) == null
+                || op.getResponses().get(HTTP_OK).getContent() == null
+                || op.getResponses().get(HTTP_OK).getContent().get(MIME_JSON) == null) {
+            return null;
+        }
+        return op.getResponses()
+                .get(HTTP_OK)
+                .getContent()
+                .get(MIME_JSON)
+                .getSchema();
+    }
+
+    private static Schema<?> getRequestSchema(Operation op)
+    {
+        if (op.getRequestBody() == null
+                || op.getRequestBody().getContent() == null
+                || op.getRequestBody().getContent().get(MIME_JSON) == null
+                || op.getRequestBody().getContent().get(MIME_JSON).getSchema() == null) {
+            return null;
+        }
+        return op.getRequestBody()
+                .getContent()
+                .get(MIME_JSON)
+                .getSchema();
     }
 
     private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)
