@@ -415,9 +415,7 @@ public class OpenApiClient
             }
 
             try {
-                JsonNode jsonNode = objectMapper.readTree(result);
-                JsonNode jsonNodeToUse = openApiSpec.getAdapter().map(adapter -> adapter.runAdapter(jsonNode)).orElse(jsonNode);
-                return convertJson(table, jsonNodeToUse);
+                return convertJson(table, objectMapper.readTree(result));
             }
             catch (JsonProcessingException ex) {
                 throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Could not marshal JSON from API response: %s", result), ex);

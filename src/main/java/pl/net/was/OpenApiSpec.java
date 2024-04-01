@@ -21,7 +21,6 @@ import com.google.inject.Inject;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.DateSchema;
@@ -46,7 +45,6 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
-import pl.net.was.adapters.GalaxyAdapter;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -80,9 +78,6 @@ public class OpenApiSpec
     private final OpenAPI openApi;
     private final Map<String, List<OpenApiColumn>> tables;
     private final Map<String, Map<PathItem.HttpMethod, String>> paths;
-    private static final Map<String, OpenApiSpecAdapter> adapters = Map.of(
-            "Starburst Galaxy Public API", new GalaxyAdapter());
-    private final Optional<OpenApiSpecAdapter> adapter;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -92,9 +87,6 @@ public class OpenApiSpec
     public OpenApiSpec(OpenApiConfig config)
     {
         this.openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
-
-        Info info = openApi.getInfo();
-        this.adapter = Optional.ofNullable(info != null ? adapters.get(info.getTitle()) : null);
 
         this.tables = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
@@ -192,11 +184,6 @@ public class OpenApiSpec
                 TupleDomain.none());
     }
 
-    public Optional<OpenApiSpecAdapter> getAdapter()
-    {
-        return adapter;
-    }
-
     private Map<String, Schema> getSchemaProperties(Schema<?> schema, String operationId)
     {
         Map<String, Schema> properties;
@@ -208,10 +195,6 @@ public class OpenApiSpec
         }
         if (properties == null) {
             return new LinkedHashMap<>();
-        }
-
-        if (adapter.isPresent()) {
-            properties = adapter.get().runAdapter(operationId, properties);
         }
         return properties;
     }
