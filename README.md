@@ -102,6 +102,43 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
   columns, with numeric suffixes (`_2`, `_3`, etc.). Request body fields have a
   `_req` suffix.
 
+## OpenAPI Extensions
+
+OpenAPI allows using custom extensions - adding custom fields anywhere in the
+schema as long as they're prefixed with an `X`. Such custom extensions are used
+to fine-tune this connector.
+
+If the original service cannot be modified to include an extension in a
+generated OpenAPI schema, save it locally and modify as needed.
+
+### Pagination
+
+APIs can use 4 different types of pagination:
+* Offset - every response can include an offset parameter, telling how many
+  results to skip.
+* Page - every response can include a page parameter; the number of results per
+  page can be configurable with another parameter.
+* Cursor/token - the response includes the value of a cursor or token,
+  that needs to be included in the next request.
+* Next page URL - the response includes an URL of the next set of results.
+
+The connector currently supports only the `Page` pagination.
+
+To enable pagination, add a `x-pagination` section in the path's operation section:
+
+```
+paths:
+  /records:
+    get:
+      responses:
+        # ...
+      x-pagination:
+       pageParam: "page"
+       limitParam: "per-page"
+       resultsPath: "$response.body#/workflows"
+       totalResultsPath: "$response.body#/total_count"
+```
+
 ## Build
 
 Run all the unit tests:

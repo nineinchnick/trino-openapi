@@ -47,6 +47,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.joining;
+import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 
 public class Authentication
         implements HttpRequestFilter
@@ -198,7 +199,7 @@ public class Authentication
     {
         scheme = requireNonNullElse(scheme, defaultAuthenticationScheme);
         String value;
-        if (scheme.equals("bearer")) {
+        if (scheme.toUpperCase(Locale.ENGLISH).equals(BEARER.toString())) {
             value = "Bearer " + bearerToken;
         }
         else {

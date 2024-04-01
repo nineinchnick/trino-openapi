@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.type.ArrayType;
@@ -45,6 +46,7 @@ class TestOpenApiSpec
     private final Schema<?> booleanSchema = newSchema("boolean");
     private final Schema<?> arraySchema = newSchema("array");
     private final Schema<?> objectSchema = newSchema("object");
+    private final Schema<?> nullSchema = new Schema<>();
 
     private static Schema<?> newSchema(String type)
     {
@@ -64,6 +66,139 @@ class TestOpenApiSpec
                 "repos_pages",
                 "projects");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
+    }
+
+    @Test
+    public void getGithubExtensionTables()
+    {
+        OpenApiSpec spec = loadSpec("github-patched.json");
+        Map<String, List<OpenApiColumn>> tables = spec.getTables();
+
+        Set<String> expected = Set.of(
+                "repos",
+                "repos_actions_workflows");
+        Assertions.assertThat(tables.keySet()).containsAll(expected);
+        // select a.* from repos_actions_workflows cross join unnest(workflows) a where owner = 'nineinchnick' and repo = 'trino-openapi' and workflow_id = 'a' and per_page=1
+        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
+        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/repos/{owner}/{repo}/actions/workflows");
+        Assertions.assertThat(tableHandle.getInsertPath()).isNull();
+        Assertions.assertThat(tableHandle.getUpdatePath()).isNull();
+        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        List<OpenApiColumn> columns = tables.get("repos_actions_workflows").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+        Assertions.assertThat(columns)
+                .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("owner").setSourceName("owner")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("badge_url").setSourceName("badge_url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("per_page").setSourceName("per_page")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("workflow_id").setSourceName("workflow_id")
+                                .setType(VARCHAR).setSourceType(nullSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("total_count").setSourceName("total_count")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("repo").setSourceName("repo")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("created_at").setSourceName("created_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("deleted_at").setSourceName("deleted_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("url").setSourceName("url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("path").setSourceName("path")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("updated_at").setSourceName("updated_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("html_url").setSourceName("html_url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("name").setSourceName("name")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("state").setSourceName("state")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("page").setSourceName("page")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setIsHidden(true)
+                                .setIsPageNumber(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("node_id").setSourceName("node_id")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build());
     }
 
     @Test
@@ -157,6 +292,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("__trino_row_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
@@ -256,6 +392,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("__trino_row_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("data_req").setSourceName("data")
@@ -386,6 +523,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("__trino_row_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("type").setSourceName("type")
@@ -505,8 +643,8 @@ class TestOpenApiSpec
 
     private OpenApiSpec loadSpec(String name)
     {
-        URL specResource = requireNonNull(getClass().getClassLoader().getResource(name));
         OpenApiConfig config = new OpenApiConfig();
+        URL specResource = requireNonNull(getClass().getClassLoader().getResource(name));
         config.setSpecLocation(specResource.getFile());
         return new OpenApiSpec(config);
     }

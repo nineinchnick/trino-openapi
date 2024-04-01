@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
@@ -28,7 +29,6 @@ import io.trino.spi.connector.RecordSet;
 import io.trino.spi.type.Type;
 
 import java.util.List;
-import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
 
@@ -72,11 +72,10 @@ public class OpenApiRecordSetProvider
                 .toList();
 
         Iterable<List<?>> rows = client.getRows((OpenApiTableHandle) table);
-        Iterable<List<?>> mappedRows = StreamSupport.stream(rows.spliterator(), false)
-                .map(row -> columnIndexes.stream()
-                        .map(row::get)
-                        .collect(toList()))
-                .collect(toList());
+        Iterable<List<?>> mappedRows = Iterables.transform(rows, row -> columnIndexes
+                .stream()
+                .map(row::get)
+                .collect(toList()));
 
         List<Type> mappedTypes = columnHandles.stream()
                 .map(OpenApiColumnHandle::getType)
