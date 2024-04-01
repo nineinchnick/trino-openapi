@@ -64,6 +64,7 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
@@ -201,97 +202,9 @@ public class OpenApiSpec
 
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
-        Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream().flatMap(entry -> {
-            PathItem.HttpMethod method = entry.getKey();
-            Operation op = entry.getValue();
-            List<OpenApiColumn> result = new ArrayList<>();
-
-            if (op.getResponses().get("200") != null
-                    && op.getResponses().get("200").getContent() != null
-                    && op.getResponses().get("200").getContent().get("application/json") != null) {
-                Schema<?> schema = op.getResponses()
-                        .get("200").getContent()
-                        .get("application/json")
-                        .getSchema();
-                if (schema != null) {
-                    List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-                    getSchemaProperties(schema, op.getOperationId())
-                            .entrySet().stream()
-                            .map(propEntry -> getColumn(
-                                    propEntry.getKey(),
-                                    propEntry.getValue(),
-                                    Map.of(),
-                                    Map.of(),
-                                    !requiredProperties.contains(propEntry.getKey())))
-                            .filter(Optional::isPresent)
-                            .forEach(column -> result.add(column.get()));
-                }
-            }
-            if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
-                    && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
-                ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
-                        (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
-                        ArrayListMultimap::putAll);
-                Schema<?> schema = op.getRequestBody()
-                        .getContent()
-                        .get("application/json")
-                        .getSchema();
-                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
-                getSchemaProperties(schema, op.getOperationId())
-                        .entrySet().stream()
-                        .map(propEntry -> getColumn(
-                                propEntry.getKey(),
-                                propEntry.getValue(),
-                                requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
-                                !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
-                                !requiredProperties.contains(propEntry.getKey())))
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .map(column -> {
-                            while (hasAmbiguousName(column, keys)) {
-                                // if the request param is also a response field,
-                                // append `_req` to its name to disambiguate it,
-                                // otherwise it'll get a number suffix, like `_2`
-                                column = OpenApiColumn.builderFrom(column)
-                                        .setName(column.getName() + "_req")
-                                        .build();
-                            }
-                            return column;
-                        })
-                        .forEach(result::add);
-            }
-            if (op.getParameters() != null && filterPath(path, method)) {
-                ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
-                        (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
-                        ArrayListMultimap::putAll);
-                // add required parameters as columns, so they can be set as predicates;
-                // predicate values will be saved in the table handle and copied to result rows
-                op.getParameters().stream()
-                        .map(parameter -> getColumn(
-                                parameter.getName(),
-                                parameter.getSchema(),
-                                parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
-                                !parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
-                                // always nullable, because they're only required as predicates, not in INSERT statements
-                                true))
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .map(column -> {
-                            while (hasAmbiguousName(column, keys)) {
-                                // if the request param is also a response field,
-                                // append `_req` to its name to disambiguate it,
-                                // otherwise it'll get a number suffix, like `_2`
-                                column = OpenApiColumn.builderFrom(column)
-                                        .setName(column.getName() + "_req")
-                                        .build();
-                            }
-                            return column;
-                        })
-                        .forEach(result::add);
-            }
-
-            return result.stream();
-        }).distinct();
+        Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
+                .flatMap(entry -> getColumn(path, entry))
+                .distinct();
         if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getDelete() != null) {
             // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
             return Stream.concat(
@@ -304,6 +217,99 @@ public class OpenApiSpec
                     .toList();
         }
         return columns.toList();
+    }
+
+    private Stream<OpenApiColumn> getColumn(String path, Map.Entry<PathItem.HttpMethod, Operation> entry)
+    {
+        PathItem.HttpMethod method = entry.getKey();
+        Operation op = entry.getValue();
+        List<OpenApiColumn> result = new ArrayList<>();
+
+        if (op.getResponses().get("200") != null
+                && op.getResponses().get("200").getContent() != null
+                && op.getResponses().get("200").getContent().get("application/json") != null) {
+            Schema<?> schema = op.getResponses()
+                    .get("200").getContent()
+                    .get("application/json")
+                    .getSchema();
+            if (schema != null) {
+                List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+                getSchemaProperties(schema, op.getOperationId())
+                        .entrySet().stream()
+                        .map(propEntry -> getColumn(
+                                propEntry.getKey(),
+                                propEntry.getValue(),
+                                Map.of(),
+                                Map.of(),
+                                !requiredProperties.contains(propEntry.getKey())))
+                        .filter(Optional::isPresent)
+                        .forEach(column -> result.add(column.get()));
+            }
+        }
+        if (op.getRequestBody() != null && op.getRequestBody().getContent().get("application/json") != null
+                && op.getRequestBody().getContent().get("application/json").getSchema() != null) {
+            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
+                    (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                    ArrayListMultimap::putAll);
+            Schema<?> schema = op.getRequestBody()
+                    .getContent()
+                    .get("application/json")
+                    .getSchema();
+            List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+            getSchemaProperties(schema, op.getOperationId())
+                    .entrySet().stream()
+                    .map(propEntry -> getColumn(
+                            propEntry.getKey(),
+                            propEntry.getValue(),
+                            requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
+                            !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
+                            !requiredProperties.contains(propEntry.getKey())))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .map(column -> {
+                        while (hasAmbiguousName(column, keys)) {
+                            // if the request param is also a response field,
+                            // append `_req` to its name to disambiguate it,
+                            // otherwise it'll get a number suffix, like `_2`
+                            column = OpenApiColumn.builderFrom(column)
+                                    .setName(column.getName() + "_req")
+                                    .build();
+                        }
+                        return column;
+                    })
+                    .forEach(result::add);
+        }
+        if (op.getParameters() != null && filterPath(path, method)) {
+            ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream().collect(ArrayListMultimap::create,
+                    (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
+                    ArrayListMultimap::putAll);
+            // add required parameters as columns, so they can be set as predicates;
+            // predicate values will be saved in the table handle and copied to result rows
+            op.getParameters().stream()
+                    .map(parameter -> getColumn(
+                            parameter.getName(),
+                            parameter.getSchema(),
+                            parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
+                            !parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
+                            // always nullable, because they're only required as predicates, not in INSERT statements
+                            true))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .map(column -> {
+                        while (hasAmbiguousName(column, keys)) {
+                            // if the request param is also a response field,
+                            // append `_req` to its name to disambiguate it,
+                            // otherwise it'll get a number suffix, like `_2`
+                            column = OpenApiColumn.builderFrom(column)
+                                    .setName(column.getName() + "_req")
+                                    .build();
+                        }
+                        return column;
+                    })
+                    .forEach(result::add);
+        }
+
+        return result.stream();
     }
 
     private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)
