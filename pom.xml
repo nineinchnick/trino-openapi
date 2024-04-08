@@ -65,7 +65,7 @@
         <dep.assertj-core.version>3.25.3</dep.assertj-core.version>
         <dep.logback.version>1.5.3</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.21</dep.swagger-parser.version>
+        <dep.swagger-parser.version>2.1.22</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.21</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.21</dep.swagger-models.version>
 
