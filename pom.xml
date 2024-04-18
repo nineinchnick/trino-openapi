@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>153</version>
+        <version>154</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -49,11 +49,11 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>444</dep.trino.version>
-        <dep.airlift.version>243</dep.airlift.version>
+        <dep.trino.version>445</dep.trino.version>
+        <dep.airlift.version>245</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
-        <dep.opentelemetry.version>1.36.0</dep.opentelemetry.version>
-        <dep.opentelemetry-instrumentation.version>2.2.0</dep.opentelemetry-instrumentation.version>
+        <dep.opentelemetry.version>1.37.0</dep.opentelemetry.version>
+        <dep.opentelemetry-instrumentation.version>2.3.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.1.0-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
@@ -61,11 +61,11 @@
         <dep.jackson.version>2.17.0</dep.jackson.version>
         <dep.joda.version>2.12.7</dep.joda.version>
         <dep.junit.version>5.10.2</dep.junit.version>
-        <dep.slf4j.version>2.0.12</dep.slf4j.version>
+        <dep.slf4j.version>2.0.13</dep.slf4j.version>
         <dep.assertj-core.version>3.25.3</dep.assertj-core.version>
-        <dep.logback.version>1.5.3</dep.logback.version>
+        <dep.logback.version>1.5.6</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.21</dep.swagger-parser.version>
+        <dep.swagger-parser.version>2.1.22</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.21</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.21</dep.swagger-models.version>
 
@@ -118,7 +118,7 @@
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
-                <version>1.14.12</version>
+                <version>1.14.13</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -344,7 +344,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-scm-plugin</artifactId>
-                <version>2.0.1</version>
+                <version>2.1.0</version>
                 <configuration>
                     <pushChanges>true</pushChanges>
                 </configuration>
@@ -352,7 +352,7 @@
             <plugin>
                 <groupId>io.trino</groupId>
                 <artifactId>trino-maven-plugin</artifactId>
-                <version>13</version>
+                <version>14</version>
                 <extensions>true</extensions>
                 <configuration>
                     <pluginClassName>io.trino.spi.Plugin</pluginClassName>
@@ -364,7 +364,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>1.0.22</version>
+                <version>1.0.23</version>
                 <extensions>true</extensions>
             </plugin>
         </plugins>
