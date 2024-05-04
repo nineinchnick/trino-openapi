@@ -82,6 +82,26 @@ environmental variable is set.
 | [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`               |
 | [DataDog API](https://docs.datadoghq.com/api/latest/)                                             | `DATADOG_URL`                |
 
+## Schema mapping
+
+The following rules are used to map the OpenAPI schema to SQL tables and columns:
+* Paths are mapped to tables; table names are paths, with `camelCase` converted
+  to `snake_case` and special characters (like `/`) converted to underscores.
+* SQL operations are mapped to HTTP methods:
+  * SELECT uses GET or POST, if no GET is available;
+  * INSERT uses POST or PUT;
+  * UPDATE uses PATCH or POST;
+  * DELETE uses DELETE.
+* All request parameters are mapped to columns, including path, query, and
+  header parameters.
+* Fields of the HTTP OK (200) response type are mapped to columns.
+* Fields of the request body are also mapped to columns, if a POST request is
+  used for SELECT.
+* All columns are disambiguated - if a field with the same name but a different
+  data type appears in the response and parameters, it'll be mapped to multiple
+  columns, with numeric suffixes (`_2`, `_3`, etc.). Request body fields have a
+  `_req` suffix.
+
 ## Build
 
 Run all the unit tests:
