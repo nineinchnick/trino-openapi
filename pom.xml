@@ -58,7 +58,7 @@
         <dep.guava.version>33.1.0-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
         <dep.errorprone.version>2.27.1</dep.errorprone.version>
-        <dep.jackson.version>2.17.0</dep.jackson.version>
+        <dep.jackson.version>2.17.1</dep.jackson.version>
         <dep.joda.version>2.12.7</dep.joda.version>
         <dep.junit.version>5.10.2</dep.junit.version>
         <dep.slf4j.version>2.0.13</dep.slf4j.version>
@@ -364,7 +364,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>1.0.24</version>
+                <version>1.0.25</version>
                 <extensions>true</extensions>
             </plugin>
         </plugins>
