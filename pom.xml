@@ -35,8 +35,8 @@
     </distributionManagement>
 
     <properties>
-        <project.build.targetJdk>21</project.build.targetJdk>
-        <air.java.version>21.0.1</air.java.version>
+        <project.build.targetJdk>22</project.build.targetJdk>
+        <air.java.version>22.0.1</air.java.version>
 
         <air.main.basedir>${project.basedir}</air.main.basedir>
 
@@ -49,16 +49,16 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>446</dep.trino.version>
-        <dep.airlift.version>246</dep.airlift.version>
+        <dep.trino.version>447</dep.trino.version>
+        <dep.airlift.version>248</dep.airlift.version>
         <dep.slice.version>2.2</dep.slice.version>
         <dep.opentelemetry.version>1.37.0</dep.opentelemetry.version>
         <dep.opentelemetry-instrumentation.version>2.3.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
-        <dep.guava.version>33.1.0-jre</dep.guava.version>
+        <dep.guava.version>33.2.0-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
         <dep.errorprone.version>2.27.1</dep.errorprone.version>
-        <dep.jackson.version>2.17.0</dep.jackson.version>
+        <dep.jackson.version>2.17.1</dep.jackson.version>
         <dep.joda.version>2.12.7</dep.joda.version>
         <dep.junit.version>5.10.2</dep.junit.version>
         <dep.slf4j.version>2.0.13</dep.slf4j.version>
@@ -80,7 +80,7 @@
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-bom</artifactId>
-                <version>1.9.23</version>
+                <version>1.9.24</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -118,7 +118,7 @@
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
-                <version>1.14.14</version>
+                <version>1.14.15</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -320,7 +320,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>1.19.7</version>
+            <version>1.19.8</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -364,7 +364,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>1.0.24</version>
+                <version>1.0.25</version>
                 <extensions>true</extensions>
             </plugin>
         </plugins>
