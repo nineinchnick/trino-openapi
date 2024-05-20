@@ -67,7 +67,7 @@
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.22</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.21</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.21</dep.swagger-models.version>
+        <dep.swagger-models.version>2.2.22</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
