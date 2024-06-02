@@ -514,7 +514,7 @@ public class OpenApiClient
                                     column.getSourceType()));
                     continue;
                 }
-                if (isPredicate(column, PathItem.HttpMethod.GET, null)) {
+                if (isPredicate(column, PathItem.HttpMethod.GET, null) || isPredicate(column, PathItem.HttpMethod.POST, null)) {
                     if (column.getName().equals(column.getSourceName()) && jsonNode.has(parameterName)) {
                         recordBuilder.add(
                                 JsonTrinoConverter.convert(

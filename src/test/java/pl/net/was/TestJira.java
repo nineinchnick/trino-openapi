@@ -34,7 +34,7 @@ public class TestJira
     {
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         properties.putAll(Map.of(
-                "spec-location", "src/test/resources/jira.json",
+                "spec-location", "https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json",
                 "base-uri", requireNonNullElse(System.getenv("JIRA_SITE"), ""),
                 "authentication.type", "http",
                 "authentication.scheme", "basic",

@@ -212,8 +212,156 @@ class TestOpenApiSpec
 
         Set<String> expected = Set.of(
                 "rest_api_3_issue",
-                "rest_api_3_project");
+                "rest_api_3_project",
+                "rest_api_3_search");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
+
+        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "rest_api_3_search"));
+        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        List<OpenApiColumn> columns = tables.get("rest_api_3_search").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+
+        MapType schemaType = new MapType(VARCHAR, RowType.from(List.of(
+                RowType.field("configuration", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
+                RowType.field("custom", VARCHAR),
+                RowType.field("customId", BIGINT),
+                RowType.field("items", VARCHAR),
+                RowType.field("system", VARCHAR),
+                RowType.field("type", VARCHAR))), new TypeOperators());
+        ArrayType issuesType = new ArrayType(RowType.from(List.of(
+                RowType.field("changelog", VARCHAR),
+                RowType.field("editmeta", VARCHAR),
+                RowType.field("expand", VARCHAR),
+                RowType.field("fields", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
+                RowType.field("fieldsToInclude", RowType.from(List.of(
+                        RowType.field("actuallyIncluded", new ArrayType(VARCHAR)),
+                        RowType.field("excluded", new ArrayType(VARCHAR)),
+                        RowType.field("included", new ArrayType(VARCHAR))))),
+                RowType.field("id", VARCHAR),
+                RowType.field("key", VARCHAR),
+                RowType.field("names", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
+                RowType.field("operations", VARCHAR),
+                RowType.field("properties", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
+                RowType.field("renderedFields", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
+                RowType.field("schema", schemaType),
+                RowType.field("self", VARCHAR),
+                RowType.field("transitions", new ArrayType(VARCHAR)),
+                RowType.field("versionedRepresentations", new MapType(VARCHAR, new MapType(VARCHAR, VARCHAR, new TypeOperators()), new TypeOperators())))));
+        Assertions.assertThat(columns)
+                .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("schema").setSourceName("schema")
+                                .setType(schemaType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("The schema describing the field types in the search results.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("fields_by_keys").setSourceName("fieldsByKeys")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("jql").setSourceName("jql")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("warning_messages").setSourceName("warningMessages")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .setComment("Any warnings related to the JQL query.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("expand_req").setSourceName("expand")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setIsNullable(true)
+                                .setComment("Use [expand](em>#expansion) to include additional information about issues in the response. Note that, unlike the majority of instances where `expand` is specified, `expand` is defined as a list of values. The expand options are:\n" +
+                                        "\n" +
+                                        " *  `renderedFields` Returns field values rendered in HTML format.\n" +
+                                        " *  `names` Returns the display name of each field.\n" +
+                                        " *  `schema` Returns the schema describing a field type.\n" +
+                                        " *  `transitions` Returns all possible transitions for the issue.\n" +
+                                        " *  `operations` Returns all possible operations for the issue.\n" +
+                                        " *  `editmeta` Returns information about how each field can be edited.\n" +
+                                        " *  `changelog` Returns a list of recent updates to an issue, sorted by date, starting from the most recent.\n" +
+                                        " *  `versionedRepresentations` Instead of `fields`, returns `versionedRepresentations` a JSON array containing each version of a field's value, with the highest numbered item representing the most recent version.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("start_at").setSourceName("startAt")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("The index of the first item returned on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("issues").setSourceName("issues")
+                                .setType(issuesType).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .setComment("The list of issues found by the search.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("expand").setSourceName("expand")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Expand options that include additional search result details in the response.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("total").setSourceName("total")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .setComment("The number of results on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("names").setSourceName("names")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("The ID and name of each field in the search results.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("validate_query").setSourceName("validateQuery")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("max_results").setSourceName("maxResults")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("The maximum number of results that could be on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("fields").setSourceName("fields")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("properties").setSourceName("properties")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build());
     }
 
     @Test
