@@ -40,13 +40,13 @@ public class TestJira
                 "authentication.scheme", "basic",
                 "authentication.username", requireNonNullElse(System.getenv("JIRA_USER"), ""),
                 "authentication.password", requireNonNullElse(System.getenv("JIRA_TOKEN"), "")));
-        return OpenApiQueryRunner.createQueryRunner(properties.buildOrThrow());
+        return OpenApiQueryRunner.createQueryRunner(Map.of("jira", properties.buildOrThrow()));
     }
 
     @Test
     public void searchIssues()
     {
-        assertQuery("SELECT i.key, i.fields['summary'] FROM rest_api_3_search CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"'",
+        assertQuery("SELECT i.key, i.fields['summary'] FROM jira.default.rest_api_3_search CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"'",
                 "VALUES ('KAN-1', 'First issue')");
     }
 }

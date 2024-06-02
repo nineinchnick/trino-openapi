@@ -243,7 +243,7 @@ public class OpenApiClient
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         return columns.stream()
-                .filter(column -> isRequiredPredicate(column, method, in) || isOptionalPredicate(column, method, in))
+                .filter(column -> isPredicate(column, method, in))
                 .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
                     if (value == null && isRequiredPredicate(column, method, in)) {
@@ -253,6 +253,11 @@ public class OpenApiClient
                 })
                 .filter(entry -> entry.getValue() != null)
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private static boolean isPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    {
+        return isRequiredPredicate(column, method, in) || isOptionalPredicate(column, method, in);
     }
 
     private static boolean isRequiredPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
@@ -509,14 +514,17 @@ public class OpenApiClient
                                     column.getSourceType()));
                     continue;
                 }
-                if (pathParams.containsKey(parameterName)) {
-                    // this might be a virtual column for a required parameter, if so, copy the value from the constraint
-                    recordBuilder.add(pathParams.getOrDefault(parameterName, null));
-                    continue;
-                }
-                if (!jsonNode.has(parameterName) || column.getName().matches(".*_req(_\\d+)?")) {
-                    // never get request params from the response, because they could be of different types
-                    recordBuilder.add(null);
+                if (isPredicate(column, PathItem.HttpMethod.GET, null)) {
+                    if (column.getName().equals(column.getSourceName()) && jsonNode.has(parameterName)) {
+                        recordBuilder.add(
+                                JsonTrinoConverter.convert(
+                                        jsonNode.get(parameterName),
+                                        column.getType(),
+                                        column.getSourceType()));
+                    }
+                    else {
+                        recordBuilder.add(pathParams.getOrDefault(parameterName, null));
+                    }
                     continue;
                 }
                 recordBuilder.add(

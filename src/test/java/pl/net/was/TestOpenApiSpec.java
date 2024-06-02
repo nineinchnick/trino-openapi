@@ -18,7 +18,9 @@ import com.fasterxml.jackson.core.JsonPointer;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
+import io.trino.spi.type.TypeOperators;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +35,7 @@ import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DecimalType.createDecimalType;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
@@ -638,6 +641,217 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .setComment("Direction to order zones.")
+                                .build());
+    }
+
+    @Test
+    public void getOpenMeteoTables()
+    {
+        OpenApiSpec spec = loadSpec("openmeteo.yml");
+        Map<String, List<OpenApiColumn>> tables = spec.getTables();
+
+        Set<String> expected = Set.of(
+                "v1_forecast");
+        Assertions.assertThat(tables.keySet()).containsAll(expected);
+        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "v1_forecast"));
+        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/v1/forecast");
+        Assertions.assertThat(tableHandle.getInsertPath()).isNull();
+        Assertions.assertThat(tableHandle.getUpdatePath()).isNull();
+        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        List<OpenApiColumn> columns = tables.get("v1_forecast").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+        RowType dailyType = RowType.from(List.of(
+                RowType.field("time", new ArrayType(VARCHAR)),
+                RowType.field("temperature_2m_max", new ArrayType(REAL)),
+                RowType.field("temperature_2m_min", new ArrayType(REAL)),
+                RowType.field("apparent_temperature_max", new ArrayType(REAL)),
+                RowType.field("apparent_temperature_min", new ArrayType(REAL)),
+                RowType.field("precipitation_sum", new ArrayType(REAL)),
+                RowType.field("precipitation_hours", new ArrayType(REAL)),
+                RowType.field("weather_code", new ArrayType(REAL)),
+                RowType.field("sunrise", new ArrayType(REAL)),
+                RowType.field("sunset", new ArrayType(REAL)),
+                RowType.field("wind_speed_10m_max", new ArrayType(REAL)),
+                RowType.field("wind_gusts_10m_max", new ArrayType(REAL)),
+                RowType.field("wind_direction_10m_dominant", new ArrayType(REAL)),
+                RowType.field("shortwave_radiation_sum", new ArrayType(REAL)),
+                RowType.field("uv_index_max", new ArrayType(REAL)),
+                RowType.field("uv_index_clear_sky_max", new ArrayType(REAL)),
+                RowType.field("et0_fao_evapotranspiration", new ArrayType(REAL))));
+        RowType hourlyType = RowType.from(List.of(
+                RowType.field("time", new ArrayType(VARCHAR)),
+                RowType.field("temperature_2m", new ArrayType(REAL)),
+                RowType.field("relative_humidity_2m", new ArrayType(REAL)),
+                RowType.field("dew_point_2m", new ArrayType(REAL)),
+                RowType.field("apparent_temperature", new ArrayType(REAL)),
+                RowType.field("pressure_msl", new ArrayType(REAL)),
+                RowType.field("cloud_cover", new ArrayType(REAL)),
+                RowType.field("cloud_cover_low", new ArrayType(REAL)),
+                RowType.field("cloud_cover_mid", new ArrayType(REAL)),
+                RowType.field("cloud_cover_high", new ArrayType(REAL)),
+                RowType.field("wind_speed_10m", new ArrayType(REAL)),
+                RowType.field("wind_speed_80m", new ArrayType(REAL)),
+                RowType.field("wind_speed_120m", new ArrayType(REAL)),
+                RowType.field("wind_speed_180m", new ArrayType(REAL)),
+                RowType.field("wind_direction_10m", new ArrayType(REAL)),
+                RowType.field("wind_direction_80m", new ArrayType(REAL)),
+                RowType.field("wind_direction_120m", new ArrayType(REAL)),
+                RowType.field("wind_direction_180m", new ArrayType(REAL)),
+                RowType.field("wind_gusts_10m", new ArrayType(REAL)),
+                RowType.field("shortwave_radiation", new ArrayType(REAL)),
+                RowType.field("direct_radiation", new ArrayType(REAL)),
+                RowType.field("direct_normal_irradiance", new ArrayType(REAL)),
+                RowType.field("diffuse_radiation", new ArrayType(REAL)),
+                RowType.field("vapour_pressure_deficit", new ArrayType(REAL)),
+                RowType.field("evapotranspiration", new ArrayType(REAL)),
+                RowType.field("precipitation", new ArrayType(REAL)),
+                RowType.field("weather_code", new ArrayType(REAL)),
+                RowType.field("snow_height", new ArrayType(REAL)),
+                RowType.field("freezing_level_height", new ArrayType(REAL)),
+                RowType.field("soil_temperature_0cm", new ArrayType(REAL)),
+                RowType.field("soil_temperature_6cm", new ArrayType(REAL)),
+                RowType.field("soil_temperature_18cm", new ArrayType(REAL)),
+                RowType.field("soil_temperature_54cm", new ArrayType(REAL)),
+                RowType.field("soil_moisture_0_1cm", new ArrayType(REAL)),
+                RowType.field("soil_moisture_1_3cm", new ArrayType(REAL)),
+                RowType.field("soil_moisture_3_9cm", new ArrayType(REAL)),
+                RowType.field("soil_moisture_9_27cm", new ArrayType(REAL)),
+                RowType.field("soil_moisture_27_81cm", new ArrayType(REAL))));
+        RowType currentWeatherType = RowType.from(List.of(
+                RowType.field("time", VARCHAR),
+                RowType.field("temperature", REAL),
+                RowType.field("wind_speed", REAL),
+                RowType.field("wind_direction", REAL),
+                RowType.field("weather_code", INTEGER)));
+        Assertions.assertThat(columns)
+                .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("elevation").setSourceName("elevation")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("The elevation in meters of the selected weather grid-cell. In mountain terrain it might differ from the location you would expect.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hourly_req").setSourceName("hourly")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("temperature_unit").setSourceName("temperature_unit")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("wind_speed_unit").setSourceName("wind_speed_unit")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily_units").setSourceName("daily_units")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected daily weather variable, the unit will be listed here.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily_req").setSourceName("daily")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("timezone").setSourceName("timezone")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("latitude").setSourceName("latitude")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("timeformat").setSourceName("timeformat")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("current_weather_req").setSourceName("current_weather")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("past_days").setSourceName("past_days")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hourly_units").setSourceName("hourly_units")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected weather variable, the unit will be listed here.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("generationtime_ms").setSourceName("generationtime_ms")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("Generation time of the weather forecast in milli seconds. This is mainly used for performance monitoring and improvements.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily").setSourceName("daily")
+                                .setType(dailyType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected daily weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("utc_offset_seconds").setSourceName("utc_offset_seconds")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .setComment("Applied timezone offset from the &timezone= parameter.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hourly").setSourceName("hourly")
+                                .setType(hourlyType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("longitude_req").setSourceName("longitude")
+                                .setType(REAL).setSourceType(numberSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("current_weather").setSourceName("current_weather")
+                                .setType(currentWeatherType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("Current weather conditions with the attributes: time, temperature, wind_speed, wind_direction and weather_code")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("longitude").setSourceName("longitude")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("latitude_req").setSourceName("latitude")
+                                .setType(REAL).setSourceType(numberSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
                                 .build());
     }
 

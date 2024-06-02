@@ -32,7 +32,7 @@ public class OpenApiQueryRunner
 {
     private OpenApiQueryRunner() {}
 
-    public static QueryRunner createQueryRunner(Map<String, String> catalogProperties)
+    public static QueryRunner createQueryRunner(Map<String, Map<String, String>> catalogProperties)
             throws Exception
     {
         Logging logger = Logging.initialize();
@@ -40,9 +40,11 @@ public class OpenApiQueryRunner
         logger.setLevel("io.trino", Level.INFO);
         logger.setLevel("io.airlift", Level.INFO);
 
-        verify(catalogProperties.containsKey("spec-location") && catalogProperties.containsKey("base-uri"), "catalogProperties must include spec-location and base-uri");
+        catalogProperties.values().forEach(properties -> verify(
+                properties.containsKey("spec-location") && properties.containsKey("base-uri"),
+                "catalogProperties must include spec-location and base-uri"));
         Session defaultSession = testSessionBuilder()
-                .setCatalog("openapi")
+                .setCatalog(catalogProperties.keySet().stream().findFirst().orElseThrow())
                 .setSchema("default")
                 .build();
 
@@ -55,7 +57,7 @@ public class OpenApiQueryRunner
                 .setWorkerCount(1)
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
-        queryRunner.createCatalog("openapi", "openapi", catalogProperties);
+        catalogProperties.forEach((name, properties) -> queryRunner.createCatalog(name, "openapi", properties));
 
         return queryRunner;
     }
@@ -96,10 +98,10 @@ public class OpenApiQueryRunner
                     "authentication.api-key-name", requireNonNullElse(System.getenv("OPENAPI_API_KEY_NAME"), "api_key"),
                     "authentication.api-key-value", requireNonNullElse(System.getenv("OPENAPI_API_KEY_VALUE"), "special-key")));
         }
-        QueryRunner queryRunner = createQueryRunner(properties.buildOrThrow());
+        QueryRunner queryRunner = createQueryRunner(Map.of("openapi", properties.buildOrThrow()));
 
         Logger log = Logger.get(OpenApiQueryRunner.class);
         log.info("======== SERVER STARTED ========");
-        log.info("\n====\n%s\n====", ((DistributedQueryRunner) queryRunner).getCoordinator().getBaseUrl());
+        log.info("\n====\n%s\n====", queryRunner.getCoordinator().getBaseUrl());
     }
 }
