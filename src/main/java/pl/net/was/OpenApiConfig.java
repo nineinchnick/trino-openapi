@@ -49,6 +49,9 @@ public class OpenApiConfig
     private String clientSecret;
     private String grantType;
 
+    private double maxRequestsPerSecond = Double.MAX_VALUE;
+    private double maxSplitsPerSecond = Double.MAX_VALUE;
+
     @NotNull
     public String getSpecLocation()
     {
@@ -255,6 +258,30 @@ public class OpenApiConfig
     public OpenApiConfig setGrantType(String grantType)
     {
         this.grantType = grantType;
+        return this;
+    }
+
+    public double getMaxRequestsPerSecond()
+    {
+        return maxRequestsPerSecond;
+    }
+
+    @Config("max-requests-per-second")
+    public OpenApiConfig setMaxRequestsPerSecond(double maxRequestsPerSecond)
+    {
+        this.maxRequestsPerSecond = maxRequestsPerSecond;
+        return this;
+    }
+
+    public double getMaxSplitsPerSecond()
+    {
+        return maxSplitsPerSecond;
+    }
+
+    @Config("max-splits-per-second")
+    public OpenApiConfig setMaxSplitsPerSecond(double maxSplitsPerSecond)
+    {
+        this.maxSplitsPerSecond = maxSplitsPerSecond;
         return this;
     }
 }
