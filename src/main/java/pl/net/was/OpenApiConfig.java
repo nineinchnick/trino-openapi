@@ -19,6 +19,7 @@ import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
 import io.airlift.configuration.InvalidConfigurationException;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
@@ -48,6 +49,14 @@ public class OpenApiConfig
     private String clientId;
     private String clientSecret;
     private String grantType;
+
+    private double maxRequestsPerSecond = Double.MAX_VALUE;
+    private double maxSplitsPerSecond = Double.MAX_VALUE;
+
+    // Pushed domains are transformed into SQL IN lists
+    // (or sequence of range predicates).
+    // Too large IN lists cause too many requests being made, so a hard limit is required.
+    private int domainExpansionLimit = 256;
 
     @NotNull
     public String getSpecLocation()
@@ -255,6 +264,44 @@ public class OpenApiConfig
     public OpenApiConfig setGrantType(String grantType)
     {
         this.grantType = grantType;
+        return this;
+    }
+
+    public double getMaxRequestsPerSecond()
+    {
+        return maxRequestsPerSecond;
+    }
+
+    @Config("max-requests-per-second")
+    public OpenApiConfig setMaxRequestsPerSecond(double maxRequestsPerSecond)
+    {
+        this.maxRequestsPerSecond = maxRequestsPerSecond;
+        return this;
+    }
+
+    public double getMaxSplitsPerSecond()
+    {
+        return maxSplitsPerSecond;
+    }
+
+    @Config("max-splits-per-second")
+    public OpenApiConfig setMaxSplitsPerSecond(double maxSplitsPerSecond)
+    {
+        this.maxSplitsPerSecond = maxSplitsPerSecond;
+        return this;
+    }
+
+    @Min(1)
+    public int getDomainExpansionLimit()
+    {
+        return domainExpansionLimit;
+    }
+
+    @Config("domain-expansion-limit")
+    @ConfigDescription("Maximum number of discrete values in a predicate domain.")
+    public OpenApiConfig setDomainExpansionLimit(int domainExpansionLimit)
+    {
+        this.domainExpansionLimit = domainExpansionLimit;
         return this;
     }
 }

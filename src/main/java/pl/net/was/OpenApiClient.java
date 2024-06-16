@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
+import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
@@ -97,6 +98,7 @@ public class OpenApiClient
 
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
+    private final RateLimiter rateLimiter;
 
     static final long[] POWERS_OF_TEN = {
             1L,
@@ -120,6 +122,12 @@ public class OpenApiClient
         this.baseUri = config.getBaseUri();
         this.httpClient = httpClient;
         this.openApiSpec = openApiSpec;
+        if (config.getMaxRequestsPerSecond() != Double.MAX_VALUE) {
+            rateLimiter = RateLimiter.create(config.getMaxRequestsPerSecond());
+        }
+        else {
+            rateLimiter = null;
+        }
     }
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
@@ -217,6 +225,9 @@ public class OpenApiClient
 
         Request request = builder.build();
         log.debug(request.toString());
+        if (rateLimiter != null) {
+            rateLimiter.acquire();
+        }
         return httpClient.execute(request, responseHandler);
     }
 
