@@ -54,7 +54,7 @@ public class OpenApiQueryRunner
         }
         QueryRunner queryRunner = DistributedQueryRunner.builder(defaultSession)
                 .setExtraProperties(extraProperties.buildOrThrow())
-                .setWorkerCount(1)
+                .setWorkerCount(0)
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
         catalogProperties.forEach((name, properties) -> queryRunner.createCatalog(name, "openapi", properties));

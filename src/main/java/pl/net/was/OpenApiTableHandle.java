@@ -17,10 +17,21 @@ package pl.net.was;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.models.PathItem;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorTableHandle;
+import io.trino.spi.connector.Constraint;
+import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 
 public class OpenApiTableHandle
         implements ConnectorTableHandle, Cloneable
@@ -143,5 +154,92 @@ public class OpenApiTableHandle
         OpenApiTableHandle tableHandle = this.clone();
         tableHandle.constraint = constraint;
         return tableHandle;
+    }
+
+    public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(Constraint constraint, Map<String, OpenApiColumn> columns, int domainExpansionLimit)
+    {
+        TupleDomain<ColumnHandle> summary = constraint.getSummary();
+        // the only reason not to use isNone is so the linter doesn't complain about not checking an Optional
+        if (summary.isAll() || summary.getDomains().isEmpty()) {
+            return Optional.empty();
+        }
+
+        TupleDomain<ColumnHandle> currentConstraint = getConstraint();
+
+        boolean found = false;
+        for (OpenApiColumn column : columns.values()) {
+            if (column.getRequiresPredicate().isEmpty() && column.getOptionalPredicate().isEmpty()) {
+                continue;
+            }
+
+            TupleDomain<ColumnHandle> newConstraint = normalizeConstraint(column.getHandle(), summary, domainExpansionLimit);
+            if (newConstraint == null || newConstraint.getDomains().isEmpty()) {
+                continue;
+            }
+            if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
+                continue;
+            }
+            // merge with other pushed down constraints
+            Domain domain = newConstraint.getDomains().get().get(column.getHandle());
+            if (currentConstraint.getDomains().isEmpty()) {
+                currentConstraint = newConstraint;
+            }
+            else if (!currentConstraint.getDomains().get().containsKey(column.getHandle())) {
+                Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().get());
+                domains.put(column.getHandle(), domain);
+                currentConstraint = TupleDomain.withColumnDomains(domains);
+            }
+            else {
+                currentConstraint.getDomains().get().get(column.getHandle()).union(domain);
+            }
+            found = true;
+            // remove from remaining constraints
+            summary = summary.filter(
+                    (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
+        }
+        if (!found) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new ConstraintApplicationResult<>(
+                cloneWithConstraint(currentConstraint),
+                summary,
+                constraint.getExpression(),
+                true));
+    }
+
+    private TupleDomain<ColumnHandle> normalizeConstraint(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, int domainExpansionLimit)
+    {
+        //noinspection OptionalGetWithoutIsPresent
+        Domain domain = constraint.getDomains().get().get(column);
+        if (domain == null) {
+            return null;
+        }
+        TupleDomain<ColumnHandle> newConstraint = constraint.filter(
+                (columnHandle, tupleDomain) -> columnHandle.equals(column));
+        if (domain.getValues().isDiscreteSet()) {
+            return newConstraint;
+        }
+        return domain.getValues().tryExpandRanges(domainExpansionLimit)
+                .map(ranges -> TupleDomain.withColumnDomains(Map.of(
+                        (ColumnHandle) column,
+                        Domain.multipleValues(domain.getType(), ranges.stream().collect(toImmutableList())))))
+                .orElse(null);
+    }
+
+    private boolean validateConstraint(OpenApiColumnHandle column, TupleDomain<ColumnHandle> currentConstraint, TupleDomain<ColumnHandle> newConstraint)
+    {
+        if (currentConstraint.getDomains().isEmpty() || !currentConstraint.getDomains().get().containsKey(column)) {
+            return true;
+        }
+        Domain currentDomain = currentConstraint.getDomains().get().get(column);
+        Domain newDomain = newConstraint.getDomains().get().get(column);
+        if (currentDomain.equals(newDomain)) {
+            // it is important to avoid processing same constraint multiple times
+            // so that planner doesn't get stuck in a loop
+            return false;
+        }
+        // can push down only the first predicate against this column
+        throw new TrinoException(INVALID_ROW_FILTER, "Already pushed down a predicate for " + column.getName() + " which only supports a single value");
     }
 }

@@ -25,15 +25,12 @@ public class OpenApiSplit
         implements ConnectorSplit
 {
     private final OpenApiTableHandle tableHandle;
-    private final List<HostAddress> addresses;
 
     @JsonCreator
     public OpenApiSplit(
-            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle,
-            @JsonProperty("addresses") List<HostAddress> addresses)
+            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle)
     {
         this.tableHandle = tableHandle;
-        this.addresses = addresses;
     }
 
     @Override

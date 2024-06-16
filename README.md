@@ -57,6 +57,9 @@ After reloading Trino, you should be able to connect to the `openapi` catalog.
 | authentication.bearer-token   | `OPENAPI_BEARER_TOKEN`           | Bearer token for `http` authentication                                                                   |
 | authentication.api-key-name   | `OPENAPI_API_KEY_NAME`           | API key name                                                                                             |
 | authentication.api-key-value  | `OPENAPI_API_KEY_VALUE`          | API key value                                                                                            |
+| max-requests-per-second       | `OPENAPI_MAX_REQUESTS_PER_SECOND`| Maximum HTTP requests per second executed from a single Trino node                                       |
+| max-splits-per-second         | `OPENAPI_MAX_SPLITS_PER_SECOND`  | Maximum number of splits per second generated when executing a query                                     |
+| domain-expansion-limit        | `OPENAPI_DOMAIN_EXPANSION_LIMIT` | Maximum number of discrete domain values generated from range predicates, which correlates with the number of HTTP requests executed |
 
 The connector is using the Airlift HTTP client, which can be configured with
 [additional
