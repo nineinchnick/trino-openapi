@@ -20,20 +20,18 @@ import io.trino.spi.HostAddress;
 import io.trino.spi.connector.ConnectorSplit;
 
 import java.util.List;
+import java.util.Map;
 
 public class OpenApiSplit
         implements ConnectorSplit
 {
     private final OpenApiTableHandle tableHandle;
-    private final List<HostAddress> addresses;
 
     @JsonCreator
     public OpenApiSplit(
-            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle,
-            @JsonProperty("addresses") List<HostAddress> addresses)
+            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle)
     {
         this.tableHandle = tableHandle;
-        this.addresses = addresses;
     }
 
     @Override
@@ -50,9 +48,8 @@ public class OpenApiSplit
     }
 
     @Override
-    public Object getInfo()
-    {
-        return "OpenApi split";
+    public Map<String, String> getSplitInfo() {
+        return Map.of();
     }
 
     @JsonProperty("tableHandle")
