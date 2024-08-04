@@ -99,7 +99,12 @@ public class OpenApiSpec
     @Inject
     public OpenApiSpec(OpenApiConfig config)
     {
-        this.openApi = requireNonNull(parse(config.getSpecLocation()), "openApi is null");
+        this(parse(requireNonNull(config, "config is null").getSpecLocation()));
+    }
+
+    OpenApiSpec(OpenAPI openApi)
+    {
+        this.openApi = requireNonNull(openApi, "openApi is null");
 
         this.tables = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
@@ -483,11 +488,9 @@ public class OpenApiSpec
 
     private boolean filterPath(String path, PathItem.HttpMethod method)
     {
-        // ignore POST operations on paths with parameters, because INSERT doesn't require predicates
-        return (!method.equals(PathItem.HttpMethod.POST) || !path.contains("{"))
-                // ignore PUT operations on paths without parameters, because UPDATE always require a predicate and the required parameter will be the primary key
-                // TODO what if there's no PUT, only POST, on a parametrized endpoint?
-                && (!method.equals(PathItem.HttpMethod.PUT) || path.contains("{"));
+        // ignore PUT operations on paths without parameters, because UPDATE always require a predicate and the required parameter will be the primary key
+        // TODO what if there's no PUT, only POST, on a parametrized endpoint?
+        return !method.equals(PathItem.HttpMethod.PUT) || path.contains("{");
     }
 
     public static String getIdentifier(String string)

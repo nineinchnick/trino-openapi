@@ -17,6 +17,9 @@ package pl.net.was;
 import com.fasterxml.jackson.core.JsonPointer;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.parser.OpenAPIV3Parser;
+import io.swagger.v3.parser.core.models.ParseOptions;
+import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -474,7 +477,10 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("pet_id").setSourceName("petId")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path"))
+                                .setRequiresPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "path",
+                                        PathItem.HttpMethod.GET, "path",
+                                        PathItem.HttpMethod.DELETE, "path"))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -1003,11 +1009,123 @@ class TestOpenApiSpec
                                 .build());
     }
 
+    @Test
+    public void testPathParams()
+    {
+        String specContents = """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /namespaces/{namespace}/indexes/{index}/search:
+                    post:
+                      operationId: index_search
+                      parameters:
+                      - explode: false
+                        in: path
+                        name: namespace
+                        required: true
+                        schema:
+                          type: string
+                        style: simple
+                      - explode: false
+                        in: path
+                        name: index
+                        required: true
+                        schema:
+                          type: string
+                        style: simple
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              $ref: '#/components/schemas/SearchRequest'
+                        description: ""
+                        required: true
+                      responses:
+                        "200":
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/IndexSearchResponse'
+                          description: Index search results
+                        "500":
+                          description: Unable to search index
+                      summary: Search a vector index in a namespace
+                components:
+                  schemas:
+                    SearchRequest:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+                    IndexSearchResponse:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+        Map<String, List<OpenApiColumn>> tables = spec.getTables();
+
+        Set<String> expected = Set.of("namespaces_indexes_search");
+        Assertions.assertThat(tables.keySet()).containsAll(expected);
+        List<OpenApiColumn> columns = tables.get("namespaces_indexes_search").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+        Assertions.assertThat(columns)
+                .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("namespace").setSourceName("namespace")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("index").setSourceName("index")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setIsNullable(true)
+                                .build());
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
         URL specResource = requireNonNull(getClass().getClassLoader().getResource(name));
         config.setSpecLocation(specResource.getFile());
         return new OpenApiSpec(config);
+    }
+
+    private OpenApiSpec parseSpec(String spec)
+    {
+        ParseOptions parseOptions = new ParseOptions();
+        parseOptions.setResolveFully(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readContents(spec, null, parseOptions);
+        if (result.getMessages() != null && !result.getMessages().isEmpty()) {
+            throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
+        }
+        return new OpenApiSpec(result.getOpenAPI());
     }
 }

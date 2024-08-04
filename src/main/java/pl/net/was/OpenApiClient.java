@@ -246,7 +246,8 @@ public class OpenApiClient
                 .filter(column -> isPredicate(column, method, in))
                 .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
-                    if (value == null && isRequiredPredicate(column, method, in)) {
+                    // don't require params in paths, since paths without params can be merged with others
+                    if (!"path".equals(in) && value == null && isRequiredPredicate(column, method, in)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
                     return new SimpleEntry<>(column.getSourceName(), value);
