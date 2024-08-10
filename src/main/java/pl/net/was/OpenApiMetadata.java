@@ -313,6 +313,7 @@ public class OpenApiMetadata
     public void finishMerge(
             ConnectorSession session,
             ConnectorMergeTableHandle tableHandle,
+            List<ConnectorTableHandle> sourceTableHandles,
             Collection<Slice> fragments,
             Collection<ComputedStatistics> computedStatistics)
     {
