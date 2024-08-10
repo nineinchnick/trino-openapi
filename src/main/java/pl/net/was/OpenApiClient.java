@@ -360,12 +360,16 @@ public class OpenApiClient
         Map<String, OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
                 .filter(column -> !column.getName().equals(ROW_ID))
                 // only get columns for body params to avoid name conflicts
-                .filter(column -> column.getRequiresPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body"))
+                .filter(column -> column.getRequiresPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body")
+                        || column.getOptionalPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body"))
                 .collect(toMap(OpenApiColumn::getSourceName, identity()));
         for (Map.Entry<String, Object> entry : params.entrySet()) {
             String name = entry.getKey();
             Object value = entry.getValue();
             OpenApiColumn column = columns.get(name);
+            if (column == null) {
+                continue;
+            }
             if (value instanceof Block block) {
                 value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), objectMapper);
             }
