@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
 import com.google.inject.Inject;
-import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.HttpUriBuilder;
@@ -53,7 +52,7 @@ import io.trino.spi.type.StandardTypes;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.NumberFormat;
@@ -76,6 +75,7 @@ import static io.airlift.http.client.Request.Builder.prepareDelete;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.Request.Builder.preparePut;
+import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
@@ -134,7 +134,12 @@ public class OpenApiClient
         }
         else if (method == PathItem.HttpMethod.POST) {
             Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
-            builder = preparePost().setBodyGenerator(new JsonBodyGenerator(serializeMap(table, bodyParams)));
+            try {
+                builder = preparePost().setBodyGenerator(createStaticBodyGenerator(toBytes(serializeMap(table, bodyParams))));
+            }
+            catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         }
         else {
             throw new IllegalArgumentException("Unsupported SELECT method: " + method);
@@ -165,8 +170,13 @@ public class OpenApiClient
 
     public void postRows(OpenApiOutputTableHandle table, JsonNode data)
     {
-        Request.Builder builder = preparePost().setBodyGenerator(new JsonBodyGenerator(data));
-        makeRequest(table.getTableHandle(), PathItem.HttpMethod.POST, table.getTableHandle().getInsertPath(), builder, new AnyResponseHandler());
+        try {
+            Request.Builder builder = preparePost().setBodyGenerator(createStaticBodyGenerator(toBytes(data)));
+            makeRequest(table.getTableHandle(), PathItem.HttpMethod.POST, table.getTableHandle().getInsertPath(), builder, new AnyResponseHandler());
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public void putRows(OpenApiOutputTableHandle table, Page page, int position)
@@ -176,8 +186,13 @@ public class OpenApiClient
 
     public void putRows(OpenApiOutputTableHandle table, JsonNode data)
     {
-        Request.Builder builder = preparePut().setBodyGenerator(new JsonBodyGenerator(data));
-        makeRequest(table.getTableHandle(), PathItem.HttpMethod.PUT, table.getTableHandle().getUpdatePath(), builder, new AnyResponseHandler());
+        try {
+            Request.Builder builder = preparePut().setBodyGenerator(createStaticBodyGenerator(toBytes(data)));
+            makeRequest(table.getTableHandle(), PathItem.HttpMethod.PUT, table.getTableHandle().getUpdatePath(), builder, new AnyResponseHandler());
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
@@ -544,27 +559,15 @@ public class OpenApiClient
         return resultRecordsBuilder.build();
     }
 
-    private static class JsonBodyGenerator
-            implements BodyGenerator
+    private byte[] toBytes(JsonNode rootNode)
+            throws IOException
     {
-        private final JsonNode rootNode;
-
-        protected JsonBodyGenerator(JsonNode rootNode)
-        {
-            this.rootNode = rootNode;
-        }
-
-        @Override
-        public void write(OutputStream out)
-                throws IOException
-        {
-            ObjectMapper objectMapper = new ObjectMapper();
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            objectMapper.createGenerator(baos).writeTree(rootNode);
-            byte[] output = baos.toByteArray();
-            log.debug("Request body: " + new String(output, UTF_8));
-            out.write(output);
-        }
+        ObjectMapper objectMapper = new ObjectMapper();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        objectMapper.createGenerator(baos).writeTree(rootNode);
+        byte[] output = baos.toByteArray();
+        log.debug("Request body: " + new String(output, UTF_8));
+        return output;
     }
 
     private static class AnyResponseHandler
