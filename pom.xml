@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>170</version>
+        <version>171</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -49,11 +49,11 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>455</dep.trino.version>
-        <dep.airlift.version>261</dep.airlift.version>
+        <dep.trino.version>457</dep.trino.version>
+        <dep.airlift.version>265</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
-        <dep.opentelemetry.version>1.41.0</dep.opentelemetry.version>
+        <dep.opentelemetry.version>1.42.0-alpha</dep.opentelemetry.version>
         <dep.opentelemetry-instrumentation.version>2.7.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.3.0-jre</dep.guava.version>
@@ -111,7 +111,7 @@
             <dependency>
                 <groupId>io.opentelemetry</groupId>
                 <artifactId>opentelemetry-api-incubator</artifactId>
-                <version>${dep.opentelemetry.version}-alpha</version>
+                <version>${dep.opentelemetry.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.opentelemetry.semconv</groupId>
@@ -367,7 +367,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>1.0.25</version>
+                <version>1.0.26</version>
                 <extensions>true</extensions>
             </plugin>
 
