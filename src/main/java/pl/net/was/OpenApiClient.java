@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
 import com.google.inject.Inject;
+import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.HttpUriBuilder;
@@ -71,10 +72,6 @@ import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static com.google.common.net.MediaType.JSON_UTF_8;
-import static io.airlift.http.client.Request.Builder.prepareDelete;
-import static io.airlift.http.client.Request.Builder.prepareGet;
-import static io.airlift.http.client.Request.Builder.preparePost;
-import static io.airlift.http.client.Request.Builder.preparePut;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
@@ -128,27 +125,12 @@ public class OpenApiClient
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
         PathItem.HttpMethod method = table.getSelectMethod();
-        Request.Builder builder;
-        if (method == PathItem.HttpMethod.GET) {
-            builder = prepareGet();
-        }
-        else if (method == PathItem.HttpMethod.POST) {
-            Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
-            try {
-                builder = preparePost().setBodyGenerator(createStaticBodyGenerator(toBytes(serializeMap(table, bodyParams))));
-            }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-        else {
-            throw new IllegalArgumentException("Unsupported SELECT method: " + method);
-        }
+        BodyGenerator bodyGenerator = getBodyGenerator(table);
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
                 .findFirst();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint(), null) != null) {
-            return makeRequest(table, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
+            return makeRequest(table, method, table.getSelectPath(), bodyGenerator, new JsonResponseHandler(table));
         }
         return pageIterator(
                 page -> {
@@ -156,11 +138,25 @@ public class OpenApiClient
                             pageColumn.get().getHandle(),
                             NullableValue.of(pageColumn.get().getType(), pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
                     OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
-                    return makeRequest(pageTable, method, table.getSelectPath(), builder, new JsonResponseHandler(table));
+                    return makeRequest(pageTable, method, table.getSelectPath(), bodyGenerator, new JsonResponseHandler(table));
                 },
                 0,
                 Integer.MAX_VALUE,
                 1);
+    }
+
+    private BodyGenerator getBodyGenerator(OpenApiTableHandle table)
+    {
+        if (table.getSelectMethod() != PathItem.HttpMethod.POST) {
+            return null;
+        }
+        Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
+        try {
+            return createStaticBodyGenerator(toBytes(serializeMap(table, bodyParams)));
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public void postRows(OpenApiOutputTableHandle table, Page page, int position)
@@ -171,8 +167,7 @@ public class OpenApiClient
     public void postRows(OpenApiOutputTableHandle table, JsonNode data)
     {
         try {
-            Request.Builder builder = preparePost().setBodyGenerator(createStaticBodyGenerator(toBytes(data)));
-            makeRequest(table.getTableHandle(), PathItem.HttpMethod.POST, table.getTableHandle().getInsertPath(), builder, new AnyResponseHandler());
+            makeRequest(table.getTableHandle(), PathItem.HttpMethod.POST, table.getTableHandle().getInsertPath(), createStaticBodyGenerator(toBytes(data)), new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -187,8 +182,7 @@ public class OpenApiClient
     public void putRows(OpenApiOutputTableHandle table, JsonNode data)
     {
         try {
-            Request.Builder builder = preparePut().setBodyGenerator(createStaticBodyGenerator(toBytes(data)));
-            makeRequest(table.getTableHandle(), PathItem.HttpMethod.PUT, table.getTableHandle().getUpdatePath(), builder, new AnyResponseHandler());
+            makeRequest(table.getTableHandle(), PathItem.HttpMethod.PUT, table.getTableHandle().getUpdatePath(), createStaticBodyGenerator(toBytes(data)), new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -198,10 +192,10 @@ public class OpenApiClient
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
         // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
-        makeRequest(table.getTableHandle(), PathItem.HttpMethod.DELETE, table.getTableHandle().getDeletePath(), prepareDelete(), new AnyResponseHandler());
+        makeRequest(table.getTableHandle(), PathItem.HttpMethod.DELETE, table.getTableHandle().getDeletePath(), null, new AnyResponseHandler());
     }
 
-    public <T> T makeRequest(OpenApiTableHandle table, PathItem.HttpMethod method, String path, Request.Builder builder, ResponseHandler<T, RuntimeException> responseHandler)
+    public <T> T makeRequest(OpenApiTableHandle table, PathItem.HttpMethod method, String path, BodyGenerator bodyGenerator, ResponseHandler<T, RuntimeException> responseHandler)
     {
         URI uri;
         try {
@@ -210,7 +204,9 @@ public class OpenApiClient
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
         }
-        builder
+        Request.Builder builder = new Request.Builder()
+                .setMethod(method.name())
+                .setBodyGenerator(bodyGenerator)
                 .setUri(uri)
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
