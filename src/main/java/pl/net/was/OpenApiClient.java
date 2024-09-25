@@ -212,10 +212,10 @@ public class OpenApiClient
         }
         builder
                 .setUri(uri)
-                .addHeader(USER_AGENT, USER_AGENT_VALUE)
-                .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
-                .addHeader(ACCEPT, JSON_UTF_8.toString())
-                .addHeader("X-Trino-OpenAPI-Path", path);
+                .setHeader(USER_AGENT, USER_AGENT_VALUE)
+                .setHeader(CONTENT_TYPE, JSON_UTF_8.toString())
+                .setHeader(ACCEPT, JSON_UTF_8.toString())
+                .setHeader("X-Trino-OpenAPI-Path", path);
         getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
 
         Request request = builder.build();
