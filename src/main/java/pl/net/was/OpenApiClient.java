@@ -137,7 +137,8 @@ public class OpenApiClient
                     TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
                             pageColumn.get().getHandle(),
                             NullableValue.of(pageColumn.get().getType(), pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
-                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
+                    TupleDomain<ColumnHandle> constraint = table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint);
+                    OpenApiTableHandle pageTable = table.cloneWithConstraint(constraint);
                     return makeRequest(pageTable, method, table.getSelectPath(), bodyGenerator, new JsonResponseHandler(table));
                 },
                 0,
