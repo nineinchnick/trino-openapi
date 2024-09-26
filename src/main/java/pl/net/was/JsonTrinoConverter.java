@@ -45,7 +45,6 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RealType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.SmallintType;
-import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Timestamps;
 import io.trino.spi.type.TinyintType;
@@ -70,6 +69,7 @@ import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 
 public class JsonTrinoConverter
@@ -120,7 +120,7 @@ public class JsonTrinoConverter
                 format = "yyyy-MM-dd";
             }
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
-            return getSqlDate(dateFormatter.parse(jsonNode.asText(), LocalDate::from));
+            return toIntExact(dateFormatter.parse(jsonNode.asText(), LocalDate::from).toEpochDay());
         }
         if (type instanceof TimestampType timestampType) {
             String format = schemaType.getFormat();
@@ -255,6 +255,9 @@ public class JsonTrinoConverter
                 timestampType.writeLong(rowBuilder, packTimestamp((ZonedDateTime) value));
             }
             return;
+        }
+        if (type instanceof DateType dateType) {
+            dateType.writeInt(rowBuilder, (Integer) value);
         }
         if (type instanceof MapType mapType) {
             mapType.writeObject(rowBuilder, value);
@@ -429,10 +432,5 @@ public class JsonTrinoConverter
                 throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
             }
         }
-    }
-
-    public static SqlDate getSqlDate(LocalDate localDate)
-    {
-        return new SqlDate((int) localDate.toEpochDay());
     }
 }
