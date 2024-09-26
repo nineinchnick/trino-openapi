@@ -23,7 +23,7 @@ import java.io.Closeable;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-public class TestingOpenApiServer
+public class PetStoreServer
         implements Closeable
 {
     private static final int API_PORT = 8080;
@@ -31,7 +31,7 @@ public class TestingOpenApiServer
     private static final String SPEC_PATH = "/openapi.yaml";
     private final GenericContainer<?> dockerContainer;
 
-    public TestingOpenApiServer()
+    public PetStoreServer()
     {
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("openapitools/openapi-petstore:latest")

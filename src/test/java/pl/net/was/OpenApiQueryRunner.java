@@ -67,7 +67,7 @@ public class OpenApiQueryRunner
     {
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
-            TestingOpenApiServer server = new TestingOpenApiServer();
+            PetStoreServer server = new PetStoreServer();
             properties.put("spec-location", server.getSpecUrl());
             properties.put("base-uri", server.getApiUrl());
         }
