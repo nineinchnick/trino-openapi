@@ -28,11 +28,11 @@ public class TestOpenApiQueries
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        TestingOpenApiServer server = new TestingOpenApiServer();
+        PetStoreServer petStoreServer = new PetStoreServer();
         ImmutableMap.Builder<String, String> petStoreProperties = ImmutableMap.builder();
         petStoreProperties.putAll(Map.of(
-                "spec-location", server.getSpecUrl(),
-                "base-uri", server.getApiUrl(),
+                "spec-location", petStoreServer.getSpecUrl(),
+                "base-uri", petStoreServer.getApiUrl(),
                 "authentication.type", "oauth",
                 "authentication.scheme", "basic",
                 "authentication.username", "user",
@@ -44,10 +44,18 @@ public class TestOpenApiQueries
                 "authentication.client-id", "sample-client-id",
                 "authentication.client-secret", "secret",
                 "authentication.grant-type", "password"));
+
+        FastApiServer fastApiServer = new FastApiServer();
+        ImmutableMap.Builder<String, String> fastApiProperties = ImmutableMap.builder();
+        fastApiProperties.putAll(Map.of(
+                "spec-location", fastApiServer.getSpecUrl(),
+                "base-uri", fastApiServer.getApiUrl()));
+
         return OpenApiQueryRunner.createQueryRunner(Map.of(
                 "openmeteo", Map.of("spec-location", "https://raw.githubusercontent.com/open-meteo/open-meteo/main/openapi.yml",
                         "base-uri", "https://api.open-meteo.com"),
-                "petstore", petStoreProperties.buildOrThrow()));
+                "petstore", petStoreProperties.buildOrThrow(),
+                "fastapi", fastApiProperties.buildOrThrow()));
     }
 
     @Test
@@ -91,5 +99,12 @@ public class TestOpenApiQueries
         assertQuery("SELECT elevation, timezone, current_weather.temperature BETWEEN -50 AND 100 AS is_livable " +
                         "FROM openmeteo.default.v1_forecast WHERE latitude_req = 53.1325 AND longitude_req = 23.1688 AND current_weather_req = true",
                 "VALUES (135.0, 'GMT', true)");
+    }
+
+    @Test
+    public void selectItems()
+    {
+        assertQuery("SELECT name FROM fastapi.default.items WHERE item_id = 1",
+                "VALUES ('Portal Gun')");
     }
 }
