@@ -586,18 +586,51 @@ public class OpenApiSpec
                             LinkedHashMap::new));
             return Optional.of(new TypeTuple(RowType.from(fields), object.properties(newProperties)));
         }
-        if (property.getType() == null) {
+        String type = property.getType();
+        if (type == null && property.getTypes() != null && property.getTypes().size() == 1) {
+            type = property.getTypes().iterator().next();
+        }
+        if (type == null) {
             return Optional.of(FALLBACK_TYPE);
         }
-        if (property.getType().equals("float")) {
+        if (type.equals("string")) {
+            if (format.filter("date"::equals).isPresent()) {
+                return Optional.of(new TypeTuple(DATE, property));
+            }
+            if (format.filter("date-time"::equals).isPresent()) {
+                return Optional.of(new TypeTuple(TIMESTAMP_MILLIS, property));
+            }
+            return Optional.of(new TypeTuple(VARCHAR, property));
+        }
+        if (type.equals("object") && property.getAdditionalProperties() instanceof Schema<?> valueSchema) {
+            Optional<TypeTuple> mapType = convertType(valueSchema);
+            if (mapType.isEmpty()) {
+                // fallback for invalid types - the value will be serialized json,
+                // which can be later processed using SQL json functions
+                return Optional.of(FALLBACK_TYPE);
+            }
+            return mapType.map(convertedType -> new TypeTuple(
+                    new MapType(VARCHAR, convertedType.type(), new TypeOperators()),
+                    new MapSchema().type("string").additionalProperties(convertedType.schema())));
+        }
+        if (type.equals("array")) {
+            return convertType(property.getItems()).map(elementType -> new TypeTuple(
+                    new ArrayType(elementType.type()),
+                    new ArraySchema().items(elementType.schema())));
+        }
+        if (type.equals("number")) {
+            // arbitrary scale and precision but should fit most numbers
+            return Optional.of(new TypeTuple(createDecimalType(18, 8), property));
+        }
+        if (type.equals("float")) {
             return Optional.of(new TypeTuple(REAL, property));
         }
-        if (property.getType().equals("int")) {
+        if (type.equals("int") || type.equals("integer")) {
             return Optional.of(new TypeTuple(INTEGER, property));
         }
-        Schema<?> referenced = openApi.getComponents().getSchemas().get(property.getType());
+        Schema<?> referenced = openApi.getComponents().getSchemas().get(type);
         if (referenced != null) {
-            return convertType(referenced).map(type -> new TypeTuple(type.type(), referenced));
+            return convertType(referenced).map(convertedType -> new TypeTuple(convertedType.type(), referenced));
         }
         // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
         return Optional.of(FALLBACK_TYPE);
