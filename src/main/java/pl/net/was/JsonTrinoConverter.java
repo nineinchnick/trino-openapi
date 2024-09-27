@@ -258,6 +258,7 @@ public class JsonTrinoConverter
         }
         if (type instanceof DateType dateType) {
             dateType.writeInt(rowBuilder, (Integer) value);
+            return;
         }
         if (type instanceof MapType mapType) {
             mapType.writeObject(rowBuilder, value);

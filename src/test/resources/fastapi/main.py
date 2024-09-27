@@ -16,10 +16,11 @@ class Item(BaseModel):
     properties: dict[str, str] = {}
     createdAt: datetime = None
     validUntil: date = None
+    revisedAt: list[date] = []
 
 
 items = {
-    1: Item(name="Portal Gun", price=42.0, tags=["sci-fi"]),
+    1: Item(name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=["2007-10-10", "2022-12-08"]),
     2: Item(name="Plumbus", price=32.0, validUntil="2999-01-01", properties={"feeble": "schleem"}),
 }
 

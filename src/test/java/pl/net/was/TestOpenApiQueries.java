@@ -16,10 +16,16 @@ package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
 import io.trino.testing.AbstractTestQueryFramework;
+import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestOpenApiQueries
         extends AbstractTestQueryFramework
@@ -104,7 +110,18 @@ public class TestOpenApiQueries
     @Test
     public void selectItems()
     {
-        assertQuery("SELECT name FROM fastapi.default.items WHERE item_id = 1",
-                "VALUES ('Portal Gun')");
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT name, description, price, tax, tags, map_entries(properties), created_at, valid_until, revised_at FROM fastapi.default.items WHERE item_id = 1").getMaterializedRows();
+        // can't use assertQuery, because array of dates read from H2 as not using LocalDate
+        assertThat(rows).size().isEqualTo(1);
+        assertThat(rows.getFirst().getFields()).containsExactly(
+                "Portal Gun",
+                null,
+                BigDecimal.valueOf(4200000000L, 8),
+                null,
+                List.of("sci-fi"),
+                List.of(),
+                null,
+                null,
+                List.of(LocalDate.of(2007, 10, 10), LocalDate.of(2022, 12, 8)));
     }
 }
