@@ -124,10 +124,14 @@ public class JsonTrinoConverter
         }
         if (type instanceof TimestampType timestampType) {
             String format = schemaType.getFormat();
+            DateTimeFormatter dateFormatter;
             if (format.equals("date-time")) {
-                format = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX";
+                dateFormatter = DateTimeFormatter.ISO_DATE_TIME;
             }
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
+            else {
+                dateFormatter = DateTimeFormatter.ofPattern(format);
+            }
+
             Instant instant = dateFormatter.parse(jsonNode.asText(), Instant::from);
             long epochMicros = instant.toEpochMilli() * MICROSECONDS_PER_MILLISECOND;
             return Timestamps.round(epochMicros, 6 - timestampType.getPrecision());
