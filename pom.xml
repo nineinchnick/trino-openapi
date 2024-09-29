@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>170</version>
+        <version>176</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -49,26 +49,26 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>455</dep.trino.version>
-        <dep.airlift.version>261</dep.airlift.version>
+        <dep.trino.version>459</dep.trino.version>
+        <dep.airlift.version>268</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
-        <dep.opentelemetry.version>1.41.0</dep.opentelemetry.version>
-        <dep.opentelemetry-instrumentation.version>2.7.0</dep.opentelemetry-instrumentation.version>
+        <dep.opentelemetry.version>1.42.1</dep.opentelemetry.version>
+        <dep.opentelemetry-instrumentation.version>2.8.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
-        <dep.guava.version>33.3.0-jre</dep.guava.version>
+        <dep.guava.version>33.3.1-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
-        <dep.errorprone.version>2.31.0</dep.errorprone.version>
-        <dep.jackson.version>2.17.2</dep.jackson.version>
-        <dep.joda.version>2.12.7</dep.joda.version>
-        <dep.junit.version>5.11.0</dep.junit.version>
+        <dep.errorprone.version>2.32.0</dep.errorprone.version>
+        <dep.jackson.version>2.18.0</dep.jackson.version>
+        <dep.joda.version>2.13.0</dep.joda.version>
+        <dep.junit.version>5.11.1</dep.junit.version>
         <dep.slf4j.version>2.0.16</dep.slf4j.version>
         <dep.assertj-core.version>3.26.3</dep.assertj-core.version>
-        <dep.logback.version>1.5.7</dep.logback.version>
+        <dep.logback.version>1.5.8</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.22</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.21</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.23</dep.swagger-models.version>
+        <dep.swagger-models.version>2.2.24</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->

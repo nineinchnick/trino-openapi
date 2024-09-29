@@ -217,6 +217,7 @@ public class OpenApiMetadata
         return Optional.of(new ConstraintApplicationResult<>(
                 openApiTable.cloneWithConstraint(currentConstraint),
                 summary,
+                constraint.getExpression(),
                 true));
     }
 
@@ -272,6 +273,7 @@ public class OpenApiMetadata
     public Optional<ConnectorOutputMetadata> finishInsert(
             ConnectorSession session,
             ConnectorInsertTableHandle insertHandle,
+            List<ConnectorTableHandle> sourceTableHandles,
             Collection<Slice> fragments,
             Collection<ComputedStatistics> computedStatistics)
     {

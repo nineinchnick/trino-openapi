@@ -49,12 +49,6 @@ public class OpenApiSplit
         return List.of();
     }
 
-    @Override
-    public Object getInfo()
-    {
-        return "OpenApi split";
-    }
-
     @JsonProperty("tableHandle")
     public OpenApiTableHandle getTableHandle()
     {
