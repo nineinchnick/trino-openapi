@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.airlift.slice.SizeOf;
 import io.trino.spi.HostAddress;
 import io.trino.spi.connector.ConnectorSplit;
 
@@ -24,6 +25,8 @@ import java.util.List;
 public class OpenApiSplit
         implements ConnectorSplit
 {
+    private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiSplit.class);
+
     private final OpenApiTableHandle tableHandle;
 
     @JsonCreator
@@ -50,5 +53,11 @@ public class OpenApiSplit
     public OpenApiTableHandle getTableHandle()
     {
         return tableHandle;
+    }
+
+    @Override
+    public long getRetainedSizeInBytes()
+    {
+        return (long) INSTANCE_SIZE + tableHandle.getRetainedSizeInBytes();
     }
 }
