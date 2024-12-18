@@ -71,7 +71,7 @@ public class OpenApiRecordSetProvider
                 })
                 .toList();
 
-        Iterable<List<?>> rows = client.getRows((OpenApiTableHandle) table);
+        Iterable<List<?>> rows = client.getRows(((OpenApiSplit) connectorSplit).getTableHandle());
         Iterable<List<?>> mappedRows = Iterables.transform(rows, row -> columnIndexes
                 .stream()
                 .map(row::get)
