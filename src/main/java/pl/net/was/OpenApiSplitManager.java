@@ -177,9 +177,6 @@ public class OpenApiSplitManager
             OpenApiColumnHandle column = (OpenApiColumnHandle) entry.getKey();
             Domain domain = entry.getValue();
 
-            if (domain.isSingleValue()) {
-                continue;
-            }
             List<Object> values;
             if (domain.getValues().isDiscreteSet()) {
                 values = domain.getValues().getDiscreteSet();
