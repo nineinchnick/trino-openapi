@@ -52,7 +52,7 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>464</dep.trino.version>
+        <dep.trino.version>465</dep.trino.version>
         <dep.airlift.version>279</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
