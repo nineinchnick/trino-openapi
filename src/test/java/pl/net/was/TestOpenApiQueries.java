@@ -18,6 +18,8 @@ import com.google.common.collect.ImmutableMap;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
+import io.trino.testing.sql.TestTable;
+import io.trino.testing.sql.TrinoSqlExecutor;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -123,5 +125,43 @@ public class TestOpenApiQueries
                 null,
                 null,
                 List.of(LocalDate.of(2007, 10, 10), LocalDate.of(2022, 12, 8)));
+    }
+
+    @Test
+    public void searchItemsWithInPhrase()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (ARRAY['2'])").getMaterializedRows();
+        assertThat(rows).size().isEqualTo(1);
+        assertThat(rows.getFirst().getFields()).first().isEqualTo("Plumbus");
+
+        rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (ARRAY['1', '2'])").getMaterializedRows();
+        assertThat(rows).size().isEqualTo(2);
+    }
+
+    @Test
+    public void searchItemsWithSubQuery10k()
+    {
+        try (TestTable table = generateDataset("memory.default.test_items_10k", 10000)) {
+            List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (select array_agg(item_id) from %s)".formatted(table.getName())).getMaterializedRows();
+            assertThat(rows)
+                    .extracting(row -> row.getFields().getFirst())
+                    .containsExactly("Portal Gun", "Plumbus");
+        }
+    }
+
+    @Test
+    public void searchItemsWithSubQuery100k()
+    {
+        try (TestTable table = generateDataset("memory.default.test_items_100k", 100000)) {
+            List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (select array_agg(item_id) from %s)".formatted(table.getName())).getMaterializedRows();
+            assertThat(rows)
+                    .extracting(row -> row.getFields().getFirst())
+                    .containsExactly("Portal Gun", "Plumbus");
+        }
+    }
+
+    private TestTable generateDataset(String namePrefix, int elements)
+    {
+        return new TestTable(new TrinoSqlExecutor(getQueryRunner()), namePrefix, "AS SELECT CAST(sequential_number AS VARCHAR) AS item_id FROM TABLE(sequence(start=>0, stop=>%d))".formatted(elements - 1));
     }
 }

@@ -19,6 +19,7 @@ import io.airlift.log.Level;
 import io.airlift.log.Logger;
 import io.airlift.log.Logging;
 import io.trino.Session;
+import io.trino.plugin.memory.MemoryPlugin;
 import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
 
@@ -52,11 +53,15 @@ public class OpenApiQueryRunner
         if (System.getenv("TRINO_PORT") != null) {
             extraProperties.put("http-server.http.port", System.getenv("TRINO_PORT"));
         }
+
         QueryRunner queryRunner = DistributedQueryRunner.builder(defaultSession)
                 .setExtraProperties(extraProperties.buildOrThrow())
                 .setWorkerCount(0)
                 .build();
         queryRunner.installPlugin(new OpenApiPlugin());
+        queryRunner.installPlugin(new MemoryPlugin());
+
+        queryRunner.createCatalog("memory", "memory");
         catalogProperties.forEach((name, properties) -> queryRunner.createCatalog(name, "openapi", properties));
 
         return queryRunner;
