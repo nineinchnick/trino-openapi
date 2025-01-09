@@ -66,8 +66,8 @@
         <dep.joda.version>2.13.0</dep.joda.version>
         <dep.junit.version>5.11.4</dep.junit.version>
         <dep.slf4j.version>2.0.16</dep.slf4j.version>
-        <dep.assertj-core.version>3.27.0</dep.assertj-core.version>
-        <dep.logback.version>1.5.15</dep.logback.version>
+        <dep.assertj-core.version>3.27.2</dep.assertj-core.version>
+        <dep.logback.version>1.5.16</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.24</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.24</dep.swagger-core.version>
