@@ -216,6 +216,7 @@ public class OpenApiMetadata
     public ConnectorMergeTableHandle beginMerge(
             ConnectorSession session,
             ConnectorTableHandle tableHandle,
+            Map<Integer, Collection<ColumnHandle>> updateCaseColumns,
             RetryMode retryMode)
     {
         if (retryMode != RetryMode.NO_RETRIES) {

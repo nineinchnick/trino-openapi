@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>206</version>
+        <version>212</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -52,12 +52,12 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>468</dep.trino.version>
-        <dep.airlift.version>293</dep.airlift.version>
+        <dep.trino.version>469</dep.trino.version>
+        <dep.airlift.version>297</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
-        <dep.opentelemetry.version>1.45.0</dep.opentelemetry.version>
-        <dep.opentelemetry-instrumentation.version>2.11.0</dep.opentelemetry-instrumentation.version>
+        <dep.opentelemetry.version>1.46.0</dep.opentelemetry.version>
+        <dep.opentelemetry-instrumentation.version>2.12.0</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.4.0-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
@@ -66,12 +66,12 @@
         <dep.joda.version>2.13.0</dep.joda.version>
         <dep.junit.version>5.11.4</dep.junit.version>
         <dep.slf4j.version>2.0.16</dep.slf4j.version>
-        <dep.assertj-core.version>3.27.2</dep.assertj-core.version>
+        <dep.assertj-core.version>3.27.3</dep.assertj-core.version>
         <dep.logback.version>1.5.16</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.24</dep.swagger-parser.version>
-        <dep.swagger-core.version>2.1.24</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.27</dep.swagger-models.version>
+        <dep.swagger-parser.version>2.1.25</dep.swagger-parser.version>
+        <dep.swagger-core.version>2.1.25</dep.swagger-core.version>
+        <dep.swagger-models.version>2.2.28</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
