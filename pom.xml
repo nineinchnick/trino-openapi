@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>212</version>
+        <version>215</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -52,7 +52,7 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>469</dep.trino.version>
+        <dep.trino.version>470</dep.trino.version>
         <dep.airlift.version>297</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
