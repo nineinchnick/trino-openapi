@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>215</version>
+        <version>219</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -52,12 +52,12 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>470</dep.trino.version>
-        <dep.airlift.version>302</dep.airlift.version>
+        <dep.trino.version>471</dep.trino.version>
+        <dep.airlift.version>306</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <!-- temporary: required to be in sync with version pulled by libraries-bom -->
-        <dep.opentelemetry.version>1.46.0</dep.opentelemetry.version>
-        <dep.opentelemetry-instrumentation.version>2.12.0</dep.opentelemetry-instrumentation.version>
+        <dep.opentelemetry.version>1.47.0</dep.opentelemetry.version>
+        <dep.opentelemetry-instrumentation.version>2.13.1</dep.opentelemetry-instrumentation.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.4.0-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
@@ -321,7 +321,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>1.20.4</version>
+            <version>1.20.5</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
