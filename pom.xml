@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>229</version>
+        <version>230</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -254,7 +254,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-api</artifactId>
-            <version>3.4.1</version>
+            <version>3.4.2</version>
             <scope>test</scope>
         </dependency>
 
