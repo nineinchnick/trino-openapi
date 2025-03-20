@@ -1,5 +1,5 @@
 ARG TRINO_VERSION
-FROM nineinchnick/trino-core:$TRINO_VERSION
+FROM trinodb/trino-core:$TRINO_VERSION
 
 ARG VERSION
 

@@ -79,7 +79,6 @@ import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
 import static io.trino.spi.type.DecimalConversions.shortDecimalToDouble;
 import static io.trino.spi.type.VarcharType.VARCHAR;
-import static java.lang.Double.longBitsToDouble;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -309,7 +308,7 @@ public class OpenApiClient
         return switch (column.getType().getBaseName()) {
             case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> domain.getSingleValue();
             case StandardTypes.REAL -> intBitsToFloat(((Long) domain.getSingleValue()).intValue());
-            case StandardTypes.DOUBLE -> longBitsToDouble((Long) domain.getSingleValue());
+            case StandardTypes.DOUBLE -> (Double) domain.getSingleValue();
             case StandardTypes.DECIMAL -> toDecimal(domain.getSingleValue(), (DecimalType) column.getType());
             case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
             case StandardTypes.DATE -> toDate((Long) domain.getSingleValue(), column.getSourceType());
