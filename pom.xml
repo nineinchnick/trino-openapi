@@ -52,7 +52,7 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>473</dep.trino.version>
+        <dep.trino.version>474</dep.trino.version>
         <dep.airlift.version>319</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <dep.opentelemetry.version>1.48.0</dep.opentelemetry.version>
@@ -70,7 +70,7 @@
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
         <dep.swagger-parser.version>2.1.25</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.25</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.28</dep.swagger-models.version>
+        <dep.swagger-models.version>2.2.29</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
@@ -253,7 +253,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-api</artifactId>
-            <version>3.4.1</version>
+            <version>3.4.2</version>
             <scope>test</scope>
         </dependency>
 
