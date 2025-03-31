@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>234</version>
+        <version>243</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -68,7 +68,7 @@
         <dep.assertj-core.version>3.27.3</dep.assertj-core.version>
         <dep.logback.version>1.5.18</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.25</dep.swagger-parser.version>
+        <dep.swagger-parser.version>2.1.26</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.25</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.29</dep.swagger-models.version>
 
