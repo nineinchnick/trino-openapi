@@ -27,18 +27,18 @@ public class PetStoreServer
         implements Closeable
 {
     private static final int API_PORT = 8080;
-    private static final String BASE_PATH = "/v3";
-    private static final String SPEC_PATH = "/openapi.yaml";
+    private static final String BASE_PATH = "/api/v3";
+    private static final String SPEC_PATH = "/api/v3/openapi.json";
     private final GenericContainer<?> dockerContainer;
 
     public PetStoreServer()
     {
         // Use the oldest supported OpenAPI version
-        dockerContainer = new GenericContainer<>("openapitools/openapi-petstore:latest")
+        dockerContainer = new GenericContainer<>("swaggerapi/petstore3:unstable")
                 .withExposedPorts(8080)
                 .withStartupAttempts(3)
                 .withEnv("OPENAPI_BASE_PATH", BASE_PATH)
-                .waitingFor(new HttpWaitStrategy().forPort(8080).forPath("/openapi.yaml").forStatusCode(200));
+                .waitingFor(new HttpWaitStrategy().forPort(8080).forPath("/api/v3/openapi.json").forStatusCode(200));
         dockerContainer.withCreateContainerCmdModifier(cmd -> cmd
                 .withHostConfig(requireNonNull(cmd.getHostConfig(), "hostConfig is null")
                         .withPublishAllPorts(true)));

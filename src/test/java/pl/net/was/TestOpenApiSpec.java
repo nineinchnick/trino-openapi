@@ -405,10 +405,12 @@ class TestOpenApiSpec
         Set<String> expected = Set.of(
                 "pet_upload_image",
                 "pet_find_by_status",
+                "pet_find_by_tags",
                 "user_login",
                 "store_order",
                 "store_inventory",
                 "user",
+                "user_create_with_list",
                 "pet");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "pet"));
@@ -442,6 +444,11 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "query"))
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("__trino_row_id")
@@ -451,26 +458,40 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
                                 .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("category").setSourceName("category")
                                 .setType(categoryType).setSourceType(objectSchema)
+                                .setOptionalPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
                                 .setIsNullable(true)
-                                .setComment("A category for a pet")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("photo_urls").setSourceName("photoUrls")
                                 .setType(photosType).setSourceType(arraySchema)
+                                .setRequiresPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("tags").setSourceName("tags")
                                 .setType(tagsType).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
                                 .setIsNullable(true)
                                 .setComment("pet status in the store")
                                 .build(),
