@@ -72,13 +72,13 @@ public class TestOpenApiQueries
         assertQuery("SHOW SCHEMAS FROM petstore",
                 "VALUES 'default', 'information_schema'");
         assertQuery("SHOW TABLES FROM petstore.default",
-                "VALUES 'pet_find_by_status', 'store_inventory', 'store_order', 'pet', 'user', 'user_login', 'pet_upload_image'");
+                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_inventory', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
     }
 
     @Test
     public void selectFromPetTable()
     {
-        assertQuery("SELECT name FROM petstore.default.pet_find_by_status WHERE status_req = array['available'] AND id != 100",
+        assertQuery("SELECT name FROM petstore.default.pet_find_by_status WHERE status = 'available' AND id != 100",
                 "VALUES ('Cat 1'), ('Cat 2'), ('Dog 1'), ('Lion 1'), ('Lion 2'), ('Lion 3'), ('Rabbit 1')");
         assertQuery("SELECT name FROM petstore.default.pet WHERE pet_id = 1",
                 "VALUES ('Cat 1')");
