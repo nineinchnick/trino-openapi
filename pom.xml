@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>234</version>
+        <version>254</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -52,7 +52,7 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
 
-        <dep.trino.version>474</dep.trino.version>
+        <dep.trino.version>475</dep.trino.version>
         <dep.airlift.version>319</dep.airlift.version>
         <dep.slice.version>2.3</dep.slice.version>
         <dep.opentelemetry.version>1.48.0</dep.opentelemetry.version>
@@ -60,17 +60,17 @@
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.guava.version>33.4.5-jre</dep.guava.version>
         <dep.guice.version>7.0.0</dep.guice.version>
-        <dep.errorprone.version>2.37.0</dep.errorprone.version>
-        <dep.jackson.version>2.18.3</dep.jackson.version>
+        <dep.errorprone.version>2.38.0</dep.errorprone.version>
+        <dep.jackson.version>2.19.0</dep.jackson.version>
         <dep.joda.version>2.13.1</dep.joda.version>
         <dep.junit.version>5.12.1</dep.junit.version>
         <dep.slf4j.version>2.0.17</dep.slf4j.version>
         <dep.assertj-core.version>3.27.3</dep.assertj-core.version>
         <dep.logback.version>1.5.18</dep.logback.version>
         <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
-        <dep.swagger-parser.version>2.1.25</dep.swagger-parser.version>
+        <dep.swagger-parser.version>2.1.26</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.25</dep.swagger-core.version>
-        <dep.swagger-models.version>2.2.29</dep.swagger-models.version>
+        <dep.swagger-models.version>2.2.30</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
@@ -253,7 +253,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-api</artifactId>
-            <version>3.4.2</version>
+            <version>3.5.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -320,7 +320,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>1.20.6</version>
+            <version>1.21.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
