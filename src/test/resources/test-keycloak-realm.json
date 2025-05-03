@@ -1,0 +1,19 @@
+{
+  "id": "trino-realm",
+  "realm": "trino-realm",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "sample-client-id",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true
+    }
+  ]
+}

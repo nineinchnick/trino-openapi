@@ -45,10 +45,8 @@ public class OpenApiConfig
     private String apiKeyName;
     private String apiKeyValue;
 
-    private String tokenEndpoint = "/oauth/v2/token";
     private String clientId;
     private String clientSecret;
-    private String grantType;
 
     private double maxRequestsPerSecond = Double.MAX_VALUE;
     private double maxSplitsPerSecond = Double.MAX_VALUE;
@@ -214,19 +212,6 @@ public class OpenApiConfig
         return this;
     }
 
-    public String getTokenEndpoint()
-    {
-        return tokenEndpoint;
-    }
-
-    @Config("authentication.token-endpoint")
-    @ConfigDescription("OAuth token endpoint")
-    public OpenApiConfig setTokenEndpoint(String tokenEndpoint)
-    {
-        this.tokenEndpoint = tokenEndpoint;
-        return this;
-    }
-
     public String getClientId()
     {
         return clientId;
@@ -251,19 +236,6 @@ public class OpenApiConfig
     public OpenApiConfig setClientSecret(String clientSecret)
     {
         this.clientSecret = clientSecret;
-        return this;
-    }
-
-    public String getGrantType()
-    {
-        return grantType;
-    }
-
-    @Config("authentication.grant-type")
-    @ConfigDescription("OAuth grant type")
-    public OpenApiConfig setGrantType(String grantType)
-    {
-        this.grantType = grantType;
         return this;
     }
 

@@ -8,10 +8,8 @@ ADD catalog/ /etc/trino/catalog/disabled/
 ADD docker-entrypoint.sh /usr/local/bin/
 
 ENV OPENAPI_AUTH_TYPE=none \
-    OPENAPI_TOKEN_ENDPOINT=/oauth/token \
     OPENAPI_CLIENT_ID="" \
     OPENAPI_CLIENT_SECRET="" \
-    OPENAPI_GRANT_TYPE=password \
     OPENAPI_USERNAME="" \
     OPENAPI_PASSWORD="" \
     OPENAPI_BEARER_TOKEN="" \

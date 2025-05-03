@@ -48,10 +48,8 @@ After reloading Trino, you should be able to connect to the `openapi` catalog.
 | base-uri                      | `OPENAPI_BASE_URI`               | Base URL for the API, often includes API version                                                         |
 | authentication.type           | `OPENAPI_AUTH_TYPE`              | Default authentication type if not set in the specification. One of: `none`, `http`, `api_key`, `oauth`. |
 | authentication.scheme         | `OPENAPI_AUTH_SCHEME`            | Authentication scheme for the `http` authentication type. One of: `basic`, `bearer`.                     |
-| authentication.token-endpoint | `OPENAPI_TOKEN_ENDPOINT`         | OAuth token endpoint URL                                                                                 |
 | authentication.client-id      | `OPENAPI_CLIENT_ID`              | OAuth Client ID                                                                                          |
 | authentication.client-secret  | `OPENAPI_CLIENT_SECRET`          | OAuth Client secret                                                                                      |
-| authentication.grant-type     | `OPENAPI_GRANT_TYPE`             | OAuth grant type                                                                                         |
 | authentication.username       | `OPENAPI_USERNAME`               | Username used for the `http` and `oauth` authentication types                                            |
 | authentication.password       | `OPENAPI_PASSWORD`               | Password used for the `http` and `oauth` authentication types                                            |
 | authentication.bearer-token   | `OPENAPI_BEARER_TOKEN`           | Bearer token for `http` authentication                                                                   |

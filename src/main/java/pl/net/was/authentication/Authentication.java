@@ -14,14 +14,17 @@
 package pl.net.was.authentication;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Suppliers;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
-import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpRequestFilter;
 import io.airlift.http.client.Request;
 import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.security.OAuthFlow;
+import io.swagger.v3.oas.models.security.OAuthFlows;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import pl.net.was.OpenApiConfig;
@@ -33,10 +36,9 @@ import java.net.URLEncoder;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.io.BaseEncoding.base64Url;
-import static io.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.preparePost;
@@ -66,11 +68,10 @@ public class Authentication
 
     private final URI baseUri;
     private final HttpClient httpClient;
-    private final BodyGenerator bodyGenerator;
-    private final String tokenEndpoint;
     private final String clientId;
     private final String clientSecret;
-    private final Supplier<String> token = Suppliers.memoize(this::getToken);
+    private final LoadingCache<String, String> tokens = CacheBuilder.newBuilder()
+            .build(CacheLoader.from(this::getToken));
 
     @Inject
     public Authentication(OpenApiConfig config,
@@ -93,13 +94,6 @@ public class Authentication
 
         this.baseUri = requireNonNull(config.getBaseUri(), "baseUri is null");
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
-        if (config.getGrantType() != null && !config.getGrantType().isEmpty()) {
-            this.bodyGenerator = createStaticBodyGenerator(getBody(config.getGrantType(), config.getUsername(), config.getPassword()), UTF_8);
-        }
-        else {
-            this.bodyGenerator = null;
-        }
-        this.tokenEndpoint = config.getTokenEndpoint();
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
     }
@@ -120,7 +114,7 @@ public class Authentication
                     applyApiKeyAuth(builder, uri, scheme);
                 }
                 case HTTP -> applyHttpAuth(builder, null);
-                case OAUTH -> applyOAuth(builder);
+                case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
             }
         }
         return builder.build();
@@ -150,7 +144,17 @@ public class Authentication
                     switch (securitySchema.getType()) {
                         case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
                         case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
-                        case OAUTH2 -> applyOAuth(builder);
+                        case OAUTH2 -> {
+                            OAuthFlows flows = requireNonNull(securitySchema.getFlows(), "flows are null");
+                            OAuthFlow flow = firstNonNull(
+                                    flows.getPassword(),
+                                    firstNonNull(
+                                            flows.getAuthorizationCode(),
+                                            firstNonNull(
+                                                    flows.getClientCredentials(),
+                                                    flows.getImplicit())));
+                            applyOAuth(builder, flow.getAuthorizationUrl());
+                        }
                         default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
                     }
                 });
@@ -208,7 +212,7 @@ public class Authentication
         return builder.addHeader("Authorization", value);
     }
 
-    private Request.Builder applyOAuth(Request.Builder builder)
+    private Request.Builder applyOAuth(Request.Builder builder, String authorizationUrl)
     {
         // TODO pick one of supported securitySchema.getFlows(), instead of hardcoding clientCredentials
         // TODO use options as scopes
@@ -227,7 +231,7 @@ public class Authentication
                       write:pets: modify pets in your account
                       read:pets: read your pets
                  */
-        return builder.addHeader("Authorization", "Bearer " + token.get());
+        return builder.addHeader("Authorization", "Bearer " + tokens.getUnchecked(authorizationUrl));
     }
 
     private static String getAuthHeader(String scheme, String username, String password)
@@ -240,32 +244,30 @@ public class Authentication
         return input.substring(0, 1).toUpperCase(Locale.ENGLISH) + input.substring(1).toLowerCase(Locale.ENGLISH);
     }
 
-    private String getToken()
+    private String getToken(String authorizationUrl)
     {
-        requireNonNull(bodyGenerator, "bodyGenerator is null");
         return httpClient.execute(
                         preparePost()
-                                .setUri(uriBuilderFrom(baseUri)
-                                        .replacePath(tokenEndpoint)
-                                        .build())
+                                .setUri(URI.create(authorizationUrl))
                                 .setHeader("Content-Type", "application/x-www-form-urlencoded")
-                                .setHeader("Authorization", "Basic " + base64Url().encode("%s:%s".formatted(clientId, clientSecret).getBytes(UTF_8)))
-                                .setBodyGenerator(bodyGenerator)
+                                .setBodyGenerator(createStaticBodyGenerator(
+                                        getBody("client_credentials", clientId, clientSecret),
+                                        UTF_8))
                                 .build(),
                         createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)))
                 .accessToken();
     }
 
-    private static String getBody(String grantType, String username, String password)
+    private static String getBody(String grantType, String clientId, String clientSecret)
     {
         requireNonNull(grantType, "grantType is null");
         ImmutableMap.Builder<String, String> params = ImmutableMap.<String, String>builder()
                 .put("grant_type", grantType);
-        if (username != null && !username.isEmpty()) {
-            params.put("username", username);
+        if (clientId != null && !clientId.isEmpty()) {
+            params.put("client_id", clientId);
         }
-        if (password != null && !password.isEmpty()) {
-            params.put("password", password);
+        if (clientSecret != null && !clientSecret.isEmpty()) {
+            params.put("client_secret", clientSecret);
         }
 
         return params.build().entrySet().stream()
