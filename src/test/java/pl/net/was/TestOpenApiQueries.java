@@ -20,6 +20,7 @@ import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.sql.TestTable;
 import io.trino.testing.sql.TrinoSqlExecutor;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -32,11 +33,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class TestOpenApiQueries
         extends AbstractTestQueryFramework
 {
+    KeycloakServer keycloakServer;
+    PetStoreServer petStoreServer;
+    FastApiServer fastApiServer;
+
+    @AfterAll
+    void tearDown()
+    {
+        fastApiServer.close();
+        petStoreServer.close();
+        keycloakServer.close();
+    }
+
     @Override
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        PetStoreServer petStoreServer = new PetStoreServer();
+        // this method is called from a @BeforeAll method in the super class
+        keycloakServer = new KeycloakServer();
+        petStoreServer = new PetStoreServer(keycloakServer);
+        fastApiServer = new FastApiServer();
+
         ImmutableMap.Builder<String, String> petStoreProperties = ImmutableMap.builder();
         petStoreProperties.putAll(Map.of(
                 "spec-location", petStoreServer.getSpecUrl(),
@@ -48,12 +65,9 @@ public class TestOpenApiQueries
                 "authentication.api-key-name", "api_key",
                 "authentication.api-key-value", "special-key"));
         petStoreProperties.putAll(Map.of(
-                "authentication.token-endpoint", "/oauth/token",
                 "authentication.client-id", "sample-client-id",
-                "authentication.client-secret", "secret",
-                "authentication.grant-type", "password"));
+                "authentication.client-secret", "secret"));
 
-        FastApiServer fastApiServer = new FastApiServer();
         ImmutableMap.Builder<String, String> fastApiProperties = ImmutableMap.builder();
         fastApiProperties.putAll(Map.of(
                 "spec-location", fastApiServer.getSpecUrl(),

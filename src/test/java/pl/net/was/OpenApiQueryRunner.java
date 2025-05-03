@@ -72,7 +72,7 @@ public class OpenApiQueryRunner
     {
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
-            PetStoreServer server = new PetStoreServer();
+            PetStoreServer server = new PetStoreServer(new KeycloakServer());
             properties.put("spec-location", server.getSpecUrl());
             properties.put("base-uri", server.getApiUrl());
         }
@@ -83,17 +83,15 @@ public class OpenApiQueryRunner
         properties.putAll(Map.of(
                 "openApi.http-client.log.enabled", "true",
                 "openApi.http-client.log.path", "logs",
-                "authentication.type", requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "oauth"),
+                "authentication.type", requireNonNullElse(System.getenv("OPENAPI_AUTH_TYPE"), "api_key"),
                 "authentication.scheme", requireNonNullElse(System.getenv("OPENAPI_AUTH_SCHEME"), "basic"),
-                "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "user"),
-                "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "user"),
+                "authentication.username", requireNonNullElse(System.getenv("OPENAPI_USERNAME"), "test"),
+                "authentication.password", requireNonNullElse(System.getenv("OPENAPI_PASSWORD"), "abc123"),
                 "authentication.bearer-token", requireNonNullElse(System.getenv("OPENAPI_BEARER_TOKEN"), "")));
-        if (System.getenv("OPENAPI_GRANT_TYPE") != null) {
+        if (System.getenv("OPENAPI_CLIENT_ID") != null) {
             properties.putAll(Map.of(
-                    "authentication.token-endpoint", requireNonNullElse(System.getenv("OPENAPI_TOKEN_ENDPOINT"), "/oauth/token"),
                     "authentication.client-id", requireNonNullElse(System.getenv("OPENAPI_CLIENT_ID"), "sample-client-id"),
-                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret"),
-                    "authentication.grant-type", System.getenv("OPENAPI_GRANT_TYPE")));
+                    "authentication.client-secret", requireNonNullElse(System.getenv("OPENAPI_CLIENT_SECRET"), "secret")));
         }
         if (System.getenv("OPENAPI_API_KEYS") != null) {
             properties.put("authentication.api-keys", System.getenv("OPENAPI_API_KEYS"));
