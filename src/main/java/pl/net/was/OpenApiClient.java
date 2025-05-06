@@ -60,6 +60,7 @@ import java.net.URISyntaxException;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -350,7 +351,7 @@ public class OpenApiClient
             format = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX";
         }
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
-        return dateFormatter.format(Instant.ofEpochMilli(millis));
+        return dateFormatter.format(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC));
     }
 
     public ObjectNode serializePage(OpenApiTableHandle table, Page page, int position)
