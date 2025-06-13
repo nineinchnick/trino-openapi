@@ -61,24 +61,17 @@ public class TestGithub
                 .add("applications_token")
                 .add("applications_token_scoped")
                 .add("apps")
-                .add("assignments")
-                .add("assignments_accepted_assignments")
-                .add("assignments_grades")
-                .add("classrooms")
-                .add("classrooms_assignments")
                 .add("codes_of_conduct")
                 .add("emojis")
-                .add("enterprises_code_security_configurations")
-                .add("enterprises_code_security_configurations_defaults")
-                .add("enterprises_code_security_configurations_repositories")
                 .add("enterprises_dependabot_alerts")
                 .add("enterprises_secret_scanning_alerts")
                 .add("events")
                 .add("feeds")
-                .add("gists")
                 .add("gists_comments")
                 .add("gists_commits")
                 .add("gists_forks")
+                .add("gists_gist_id")
+                .add("gists_gist_id_sha")
                 .add("gists_public")
                 .add("gists_starred")
                 .add("gitignore_templates")
@@ -96,25 +89,13 @@ public class TestGithub
                 .add("notifications_threads")
                 .add("notifications_threads_subscription")
                 .add("organizations")
-                .add("organizations_dependabot_repository_access")
-                .add("organizations_settings_billing_usage")
                 .add("orgs_actions_cache_usage")
                 .add("orgs_actions_cache_usage_by_repository")
-                .add("orgs_actions_hosted_runners")
-                .add("orgs_actions_hosted_runners_images_github_owned")
-                .add("orgs_actions_hosted_runners_images_partner")
-                .add("orgs_actions_hosted_runners_limits")
-                .add("orgs_actions_hosted_runners_machine_sizes")
-                .add("orgs_actions_hosted_runners_platforms")
                 .add("orgs_actions_oidc_customization_sub")
                 .add("orgs_actions_permissions")
                 .add("orgs_actions_permissions_repositories")
                 .add("orgs_actions_permissions_selected_actions")
                 .add("orgs_actions_permissions_workflow")
-                .add("orgs_actions_runner_groups")
-                .add("orgs_actions_runner_groups_hosted_runners")
-                .add("orgs_actions_runner_groups_repositories")
-                .add("orgs_actions_runner_groups_runners")
                 .add("orgs_actions_runners")
                 .add("orgs_actions_runners_downloads")
                 .add("orgs_actions_runners_labels")
@@ -123,14 +104,8 @@ public class TestGithub
                 .add("orgs_actions_secrets_repositories")
                 .add("orgs_actions_variables")
                 .add("orgs_actions_variables_repositories")
-                .add("orgs_attestations")
-                .add("orgs_attestations_bulk_list")
                 .add("orgs_blocks")
-                .add("orgs_campaigns")
                 .add("orgs_code_scanning_alerts")
-                .add("orgs_code_security_configurations")
-                .add("orgs_code_security_configurations_defaults")
-                .add("orgs_code_security_configurations_repositories")
                 .add("orgs_codespaces")
                 .add("orgs_codespaces_secrets")
                 .add("orgs_codespaces_secrets_public_key")
@@ -139,7 +114,6 @@ public class TestGithub
                 .add("orgs_copilot_billing_seats")
                 .add("orgs_copilot_billing_selected_teams")
                 .add("orgs_copilot_billing_selected_users")
-                .add("orgs_copilot_metrics")
                 .add("orgs_dependabot_alerts")
                 .add("orgs_dependabot_secrets")
                 .add("orgs_dependabot_secrets_public_key")
@@ -150,21 +124,13 @@ public class TestGithub
                 .add("orgs_hooks")
                 .add("orgs_hooks_config")
                 .add("orgs_hooks_deliveries")
-                .add("orgs_insights_api_route_stats")
-                .add("orgs_insights_api_subject_stats")
                 .add("issues")
                 .add("orgs")
-                .add("orgs_insights_api_summary_stats")
-                .add("orgs_insights_api_summary_stats_users")
-                .add("orgs_insights_api_time_stats")
-                .add("orgs_insights_api_time_stats_users")
-                .add("orgs_insights_api_user_stats")
                 .add("orgs_installation")
                 .add("orgs_installations")
                 .add("orgs_interaction_limits")
                 .add("orgs_invitations")
                 .add("orgs_invitations_teams")
-                .add("orgs_issue_types")
                 .add("orgs_issues")
                 .add("orgs_members")
                 .add("orgs_members_codespaces")
@@ -173,9 +139,6 @@ public class TestGithub
                 .add("orgs_memberships")
                 .add("orgs_migrations")
                 .add("orgs_migrations_repositories")
-                .add("orgs_organization_roles")
-                .add("orgs_organization_roles_teams")
-                .add("orgs_organization_roles_users")
                 .add("orgs_outside_collaborators")
                 .add("orgs_packages")
                 .add("orgs_packages_versions")
@@ -183,23 +146,16 @@ public class TestGithub
                 .add("orgs_personal_access_token_requests_repositories")
                 .add("orgs_personal_access_tokens")
                 .add("orgs_personal_access_tokens_repositories")
-                .add("orgs_private_registries")
-                .add("orgs_private_registries_public_key")
-                .add("orgs_properties_schema")
-                .add("orgs_properties_values")
+                .add("orgs_projects")
                 .add("orgs_public_members")
                 .add("orgs_repos")
                 .add("orgs_rulesets")
-                .add("orgs_rulesets_history")
-                .add("orgs_rulesets_rule_suites")
                 .add("orgs_secret_scanning_alerts")
                 .add("orgs_security_advisories")
+                .add("orgs_security_managers")
                 .add("orgs_settings_billing_actions")
                 .add("orgs_settings_billing_packages")
                 .add("orgs_settings_billing_shared_storage")
-                .add("orgs_settings_network_configurations")
-                .add("orgs_settings_network_settings")
-                .add("orgs_team_copilot_metrics")
                 .add("orgs_teams")
                 .add("orgs_teams_discussions")
                 .add("orgs_teams_discussions_comments")
@@ -208,8 +164,14 @@ public class TestGithub
                 .add("orgs_teams_invitations")
                 .add("orgs_teams_members")
                 .add("orgs_teams_memberships")
+                .add("orgs_teams_projects")
                 .add("orgs_teams_repos")
                 .add("orgs_teams_teams")
+                .add("projects")
+                .add("projects_collaborators")
+                .add("projects_collaborators_permission")
+                .add("projects_columns")
+                .add("projects_columns_cards")
                 .add("rate_limit")
                 .add("repos")
                 .add("repos_actions_artifacts")
@@ -242,7 +204,6 @@ public class TestGithub
                 .add("repos_actions_workflows_timing")
                 .add("repos_activity")
                 .add("repos_assignees")
-                .add("repos_attestations")
                 .add("repos_autolinks")
                 .add("repos_automated_security_fixes")
                 .add("repos_branches")
@@ -262,21 +223,16 @@ public class TestGithub
                 .add("repos_check_suites_check_runs")
                 .add("repos_check_suites_preferences")
                 .add("repos_code_scanning_alerts")
-                .add("repos_code_scanning_alerts_autofix")
                 .add("repos_code_scanning_alerts_instances")
                 .add("repos_code_scanning_analyses")
                 .add("repos_code_scanning_codeql_databases")
-                .add("repos_code_scanning_codeql_variant_analyses")
-                .add("repos_code_scanning_codeql_variant_analyses_repos")
                 .add("repos_code_scanning_default_setup")
                 .add("repos_code_scanning_sarifs")
-                .add("repos_code_security_configuration")
                 .add("repos_codeowners_errors")
                 .add("repos_codespaces")
                 .add("repos_codespaces_devcontainers")
                 .add("repos_codespaces_machines")
                 .add("repos_codespaces_new")
-                .add("repos_codespaces_permissions_check")
                 .add("repos_codespaces_secrets")
                 .add("repos_codespaces_secrets_public_key")
                 .add("repos_collaborators")
@@ -306,9 +262,6 @@ public class TestGithub
                 .add("repos_environments_deployment_branch_policies")
                 .add("repos_environments_deployment_protection_rules")
                 .add("repos_environments_deployment_protection_rules_apps")
-                .add("repos_environments_secrets")
-                .add("repos_environments_secrets_public_key")
-                .add("repos_environments_variables")
                 .add("repos_events")
                 .add("repos_forks")
                 .add("repos_git_blobs")
@@ -321,19 +274,18 @@ public class TestGithub
                 .add("repos_hooks")
                 .add("repos_hooks_config")
                 .add("repos_hooks_deliveries")
+                .add("repos_import")
+                .add("repos_import_authors")
+                .add("repos_import_large_files")
+                .add("repos_import_lfs")
                 .add("repos_installation")
                 .add("repos_interaction_limits")
                 .add("repos_invitations")
                 .add("repos_issues")
                 .add("repos_issues_assignees")
-                .add("repos_issues_comments")
                 .add("repos_issues_comments_reactions")
-                .add("repos_issues_events")
                 .add("repos_issues_labels")
                 .add("repos_issues_reactions")
-                .add("repos_issues_sub_issue")
-                .add("repos_issues_sub_issues")
-                .add("repos_issues_sub_issues_priority")
                 .add("repos_issues_timeline")
                 .add("repos_keys")
                 .add("repos_labels")
@@ -343,15 +295,19 @@ public class TestGithub
                 .add("repos_milestones")
                 .add("repos_milestones_labels")
                 .add("repos_notifications")
+                .add("repos_owner_repo_issues_comments_comment_id")
+                .add("repos_owner_repo_issues_events_event_id")
+                .add("repos_owner_repo_issues_issue_number_comments")
+                .add("repos_owner_repo_issues_issue_number_events")
+                .add("repos_owner_repo_pulls_comments_comment_id")
+                .add("repos_owner_repo_pulls_pull_number_comments")
                 .add("repos_pages")
                 .add("repos_pages_builds")
                 .add("repos_pages_builds_latest")
-                .add("repos_pages_deployments")
+                .add("repos_pages_deployment")
                 .add("repos_pages_health")
-                .add("repos_private_vulnerability_reporting")
-                .add("repos_properties_values")
+                .add("repos_projects")
                 .add("repos_pulls")
-                .add("repos_pulls_comments")
                 .add("repos_pulls_comments_reactions")
                 .add("repos_pulls_commits")
                 .add("repos_pulls_files")
@@ -370,12 +326,8 @@ public class TestGithub
                 .add("repos_releases_tags")
                 .add("repos_rules_branches")
                 .add("repos_rulesets")
-                .add("repos_rulesets_history")
-                .add("repos_rulesets_rule_suites")
                 .add("repos_secret_scanning_alerts")
                 .add("repos_secret_scanning_alerts_locations")
-                .add("repos_secret_scanning_push_protection_bypasses")
-                .add("repos_secret_scanning_scan_history")
                 .add("repos_security_advisories")
                 .add("repos_stargazers")
                 .add("repos_stats_code_frequency")
@@ -386,6 +338,7 @@ public class TestGithub
                 .add("repos_subscribers")
                 .add("repos_subscription")
                 .add("repos_tags")
+                .add("repos_tags_protection")
                 .add("repos_teams")
                 .add("repos_topics")
                 .add("repos_traffic_clones")
@@ -393,9 +346,13 @@ public class TestGithub
                 .add("repos_traffic_popular_referrers")
                 .add("repos_traffic_views")
                 .add("repositories")
+                .add("repositories_environments_secrets")
+                .add("repositories_environments_secrets_public_key")
+                .add("repositories_environments_variables")
                 .add("search_code")
                 .add("search_commits")
                 .add("search_labels")
+                .add("search_issues")
                 .add("search_repositories")
                 .add("search_topics")
                 .add("search_users")
@@ -437,7 +394,6 @@ public class TestGithub
                 .add("user_subscriptions")
                 .add("user_teams")
                 .add("users")
-                .add("users_attestations")
                 .add("users_docker_conflicts")
                 .add("users_events")
                 .add("users_events_orgs")
@@ -452,18 +408,19 @@ public class TestGithub
                 .add("users_orgs")
                 .add("users_packages")
                 .add("users_packages_versions")
+                .add("users_projects")
                 .add("users_received_events")
                 .add("users_received_events_public")
                 .add("users_repos")
                 .add("users_settings_billing_actions")
                 .add("users_settings_billing_packages")
                 .add("users_settings_billing_shared_storage")
-                .add("users_settings_billing_usage")
                 .add("users_social_accounts")
                 .add("users_ssh_signing_keys")
                 .add("users_starred")
                 .add("users_subscriptions")
-                .add("versions");
+                .add("versions")
+                .add("zen");
         assertQuery("SHOW TABLES FROM github.default", "VALUES '" + String.join("', '", expectedTables.build()) + "'");
     }
 
@@ -483,11 +440,11 @@ public class TestGithub
                 "VALUES ('martint')");
         assertQuery("SELECT login FROM repos_collaborators WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND login = 'nineinchnick'",
                 "VALUES ('nineinchnick')");
-        assertQuery("SELECT message FROM repos_git_commits WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND commit_sha = 'e43f63027cae851f3a02c2816b2f234991b2d139'",
-                "VALUES ('Add Github Action runs')");
-        assertQuery("SELECT title FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 292 AND number = 292",
-                "VALUES ('Dynamic Filters in Trino Rest')");
-        assertQuery("SELECT user.login FROM repos_issue_comments WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 292 AND comment_id = 873167897 AND id = 830088548",
+        assertQuery("SELECT message FROM repos_git_commits WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND commit_sha = '293cca50a6e7b508f61b7270988d8444d3b736c3'",
+                "VALUES ('Initial commit')");
+        assertQuery("SELECT title FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND number = 5",
+                "VALUES ('Improve predicate pushdown operator support')");
+        assertQuery("SELECT user.login FROM repos_owner_repo_issues_issue_number_comments WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND id = 2970234636",
                 "VALUES ('nineinchnick')");
         /*
         assertQuery("SELECT title FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND pull_number = 1",
@@ -521,9 +478,6 @@ public class TestGithub
         assertThat(jobId).isGreaterThan(0);
         // can't check results, since currently no jobs produce artifacts
         assertQuerySucceeds(format("SELECT owner FROM repos_actions_runs_artifacts WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND run_id = %d", runId));
-        assertQuerySucceeds("SELECT * FROM repos_check_suites WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND ref = '5e53296c8f8124168d1a9e37fc310e9c517d3ec5'");
-        assertQuerySucceeds("SELECT * FROM repos_check_suites_check_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND ref = '5e53296c8f8124168d1a9e37fc310e9c517d3ec5'");
-        assertQuerySucceeds("SELECT * FROM repos_check_runs_annotations WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND check_run_id = 1");
     }
 
     @Test
@@ -543,34 +497,5 @@ public class TestGithub
                         "WHERE w.owner = 'nineinchnick' AND w.repo = 'trino-openapi' AND w.workflow_id = 'a' " +
                         "AND r.owner = 'nineinchnick' AND r.repo = 'trino-openapi' AND r.run_id = 1",
                 "VALUES (true)");
-    }
-
-    @Test
-    public void selectMissingRequired()
-    {
-        assertQueryFails("SELECT * FROM orgs", "Missing required constraint for orgs.org");
-        assertQueryFails("SELECT * FROM users", "Missing required constraint for users.login");
-        assertQueryFails("SELECT * FROM repos", "Missing required constraint for repos.owner_login");
-        assertQueryFails("SELECT * FROM members", "Missing required constraint for members.org");
-        assertQueryFails("SELECT * FROM teams", "Missing required constraint for teams.org");
-        assertQueryFails("SELECT * FROM collaborators", "Missing required constraint for collaborators.owner");
-        assertQueryFails("SELECT * FROM commits", "Missing required constraint for commits.owner");
-        assertQueryFails("SELECT * FROM issues", "Missing required constraint for issues.owner");
-        assertQueryFails("SELECT * FROM issue_comments", "Missing required constraint for issue_comments.owner");
-        assertQueryFails("SELECT * FROM pulls", "Missing required constraint for pulls.owner");
-        assertQueryFails("SELECT * FROM pull_commits", "Missing required constraint for pull_commits.owner");
-        assertQueryFails("SELECT * FROM pull_stats", "Missing required constraint for pull_stats.owner");
-        assertQueryFails("SELECT * FROM reviews", "Missing required constraint for reviews.owner");
-        assertQueryFails("SELECT * FROM review_comments", "Missing required constraint for review_comments.owner");
-        assertQueryFails("SELECT * FROM workflows", "Missing required constraint for workflows.owner");
-        assertQueryFails("SELECT * FROM runs", "Missing required constraint for runs.owner");
-        assertQueryFails("SELECT * FROM jobs", "Missing required constraint for jobs.owner");
-        assertQueryFails("SELECT * FROM job_logs", "Missing required constraint for job_logs.owner");
-        assertQueryFails("SELECT * FROM steps", "Missing required constraint for steps.owner");
-        assertQueryFails("SELECT * FROM artifacts", "Missing required constraint for artifacts.owner");
-        assertQueryFails("SELECT * FROM runners", "Missing required constraint for runners.org");
-        assertQueryFails("SELECT * FROM check_suites", "Missing required constraint for check_suites.owner");
-        assertQueryFails("SELECT * FROM check_runs", "Missing required constraint for check_runs.owner");
-        assertQueryFails("SELECT * FROM check_run_annotations", "Missing required constraint for check_run_annotations.owner");
     }
 }

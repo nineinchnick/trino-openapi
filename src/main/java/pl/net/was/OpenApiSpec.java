@@ -49,7 +49,6 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +72,7 @@ import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 public class OpenApiSpec
@@ -124,6 +124,7 @@ public class OpenApiSpec
         this.tables = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
+                // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
                 .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))))
                 .entrySet().stream()
                 .flatMap(groupEntry -> {
@@ -143,7 +144,7 @@ public class OpenApiSpec
                     return groupEntry.getValue().stream()
                             .filter(entry -> !entry.equals(baseEntry))
                             .map(entry -> Map.entry(
-                                    getIdentifier(pathItems.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey()),
+                                    getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey()),
                                     mergeColumns(Stream.concat(
                                                     baseColumns.stream(),
                                                     getColumns(entry.getValue(), entry.getKey()).stream())
@@ -173,12 +174,13 @@ public class OpenApiSpec
                     Map<PathItem.HttpMethod, String> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
                     // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
                     // but combine it with methods from the base path
+                    // TODO choosing the shortest path is wrong, it should be chosen based on available predicates
                     return groupEntry.getValue().stream()
                             .filter(entry -> !entry.equals(baseEntry))
                             .map(entry -> Map.entry(
-                                    getIdentifier(pathItems.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey()),
+                                    getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey()),
                                     Stream.concat(baseMethods.entrySet().stream(), methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
-                                                    .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> x.length() < y.length() ? x : y))));
+                                            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> x.length() < y.length() ? x : y))));
                 })
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
@@ -543,8 +545,8 @@ public class OpenApiSpec
     private Map<PathItem.HttpMethod, String> methodsToPaths(PathItem pathItem, String path)
     {
         return pathItem.readOperationsMap().keySet().stream()
-            .filter(method -> filterPath(path, method))
-            .collect(toMap(identity(), method -> path));
+                .filter(method -> filterPath(path, method))
+                .collect(toMap(identity(), method -> path));
     }
 
     private boolean filterPath(String path, PathItem.HttpMethod method)
@@ -560,6 +562,7 @@ public class OpenApiSpec
                 CaseFormat.LOWER_UNDERSCORE,
                 string
                         .replaceAll("^/", "")
+                        .replaceAll("[{}]", "")
                         .replace('/', '_')
                         .replace('-', '_'));
     }
@@ -703,7 +706,7 @@ public class OpenApiSpec
     {
         return columns.stream()
                 // merge all columns with same name and data type
-                .collect(groupingBy(OpenApiColumn::getPrimaryKey))
+                .collect(groupingBy(OpenApiColumn::getPrimaryKey, LinkedHashMap::new, toList()))
                 .values().stream()
                 .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
                         .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))
@@ -716,7 +719,7 @@ public class OpenApiSpec
                                 .flatMap(map -> map.entrySet().stream())
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .build())
-                .collect(groupingBy(OpenApiColumn::getName))
+                .collect(groupingBy(OpenApiColumn::getName, LinkedHashMap::new, toList()))
                 .values().stream()
                 // make sure column names are also unique, append incrementing suffixes for columns of different types
                 .flatMap(sameColumns -> IntStream

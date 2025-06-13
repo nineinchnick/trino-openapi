@@ -104,31 +104,71 @@ class TestOpenApiSpec
         Assertions.assertThat(orgColumns)
                 .containsExactly(
                         OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("login").setSourceName("login")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("node_id").setSourceName("node_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("url").setSourceName("url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("repos_url").setSourceName("repos_url")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("secret_scanning_push_protection_custom_link").setSourceName("secret_scanning_push_protection_custom_link")
+                                .setName("events_url").setSourceName("events_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hooks_url").setSourceName("hooks_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("issues_url").setSourceName("issues_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_url").setSourceName("members_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_members_url").setSourceName("public_members_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("avatar_url").setSourceName("avatar_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("description").setSourceName("description")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
-                                .setComment("An optional URL string to display to contributors who are blocked from pushing a secret.")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("members_can_create_internal_repositories").setSourceName("members_can_create_internal_repositories")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_can_create_public_pages").setSourceName("members_can_create_public_pages")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("type").setSourceName("type")
+                                .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("company").setSourceName("company")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("blog").setSourceName("blog")
@@ -137,28 +177,76 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("public_members_url").setSourceName("public_members_url")
+                                .setName("location").setSourceName("location")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("email").setSourceName("email")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("twitter_username").setSourceName("twitter_username")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("is_verified").setSourceName("is_verified")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("has_organization_projects").setSourceName("has_organization_projects")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("has_repository_projects").setSourceName("has_repository_projects")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_repos").setSourceName("public_repos")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_gists").setSourceName("public_gists")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("followers").setSourceName("followers")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("following").setSourceName("following")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("html_url").setSourceName("html_url")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("private_gists").setSourceName("private_gists")
+                                .setName("type").setSourceName("type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("total_private_repos").setSourceName("total_private_repos")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("default_repository_permission").setSourceName("default_repository_permission")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setName("owned_private_repos").setSourceName("owned_private_repos")
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("billing_email").setSourceName("billing_email")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("collaborators").setSourceName("collaborators")
+                                .setName("private_gists").setSourceName("private_gists")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .build(),
@@ -168,19 +256,15 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setName("collaborators").setSourceName("collaborators")
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
-                                .setComment("""
-Whether secret scanning push protection is automatically enabled for new repositories and repositories
-transferred to this organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("id").setSourceName("id")
-                                .setType(BIGINT).setSourceType(intSchema)
+                                .setName("billing_email").setSourceName("billing_email")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
@@ -193,13 +277,30 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("members_can_create_private_pages").setSourceName("members_can_create_private_pages")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setName("default_repository_permission").setSourceName("default_repository_permission")
+                                .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_repositories").setSourceName("members_can_create_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("two_factor_requirement_enabled").setSourceName("two_factor_requirement_enabled")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_allowed_repository_creation_type").setSourceName("members_allowed_repository_creation_type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_public_repositories").setSourceName("members_can_create_public_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
@@ -211,45 +312,48 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("public_gists").setSourceName("public_gists")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("followers").setSourceName("followers")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("has_organization_projects").setSourceName("has_organization_projects")
+                                .setName("members_can_create_internal_repositories").setSourceName("members_can_create_internal_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("html_url").setSourceName("html_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("following").setSourceName("following")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("name").setSourceName("name")
-                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setName("members_can_create_pages").setSourceName("members_can_create_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("hooks_url").setSourceName("hooks_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setName("members_can_create_public_pages").setSourceName("members_can_create_public_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
+                                .setName("members_can_create_private_pages").setSourceName("members_can_create_private_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_fork_private_repositories").setSourceName("members_can_fork_private_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("web_commit_signoff_required").setSourceName("web_commit_signoff_required")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("advanced_security_enabled_for_new_repositories").setSourceName("advanced_security_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
-to this organization.
+Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
 
 This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -265,49 +369,15 @@ this organization.
 This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("has_repository_projects").setSourceName("has_repository_projects")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_url").setSourceName("members_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("twitter_username").setSourceName("twitter_username")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("created_at").setSourceName("created_at")
-                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("advanced_security_enabled_for_new_repositories").setSourceName("advanced_security_enabled_for_new_repositories")
+                                .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
+Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
+to this organization.
 
 This field is only visible to organization owners or members of a team with the security manager role.""")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("description").setSourceName("description")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("login").setSourceName("login")
-                                .setType(VARCHAR).setSourceType(stringSchema)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependency_graph_enabled_for_new_repositories").setSourceName("dependency_graph_enabled_for_new_repositories")
@@ -321,11 +391,6 @@ organization.
 This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("total_private_repos").setSourceName("total_private_repos")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("secret_scanning_enabled_for_new_repositories").setSourceName("secret_scanning_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
@@ -337,41 +402,37 @@ organization.
 This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("updated_at").setSourceName("updated_at")
-                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_allowed_repository_creation_type").setSourceName("members_allowed_repository_creation_type")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_can_fork_private_repositories").setSourceName("members_can_fork_private_repositories")
+                                .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
+                                .setComment("""
+Whether secret scanning push protection is automatically enabled for new repositories and repositories
+transferred to this organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("company").setSourceName("company")
+                                .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("Whether a custom link is shown to contributors who are blocked from pushing a secret by push protection.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("secret_scanning_push_protection_custom_link").setSourceName("secret_scanning_push_protection_custom_link")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
+                                .setComment("An optional URL string to display to contributors who are blocked from pushing a secret.")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("owned_private_repos").setSourceName("owned_private_repos")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setIsNullable(true)
+                                .setName("created_at").setSourceName("created_at")
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("public_repos").setSourceName("public_repos")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("email").setSourceName("email")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
+                                .setName("updated_at").setSourceName("updated_at")
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("archived_at").setSourceName("archived_at")
@@ -386,67 +447,6 @@ This field is only visible to organization owners or members of a team with the 
                                         PathItem.HttpMethod.PATCH, "path",
                                         PathItem.HttpMethod.DELETE, "path"))
                                 .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("two_factor_requirement_enabled").setSourceName("two_factor_requirement_enabled")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("web_commit_signoff_required").setSourceName("web_commit_signoff_required")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("is_verified").setSourceName("is_verified")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("url").setSourceName("url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_can_create_public_repositories").setSourceName("members_can_create_public_repositories")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("issues_url").setSourceName("issues_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("avatar_url").setSourceName("avatar_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("events_url").setSourceName("events_url")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("members_can_create_pages").setSourceName("members_can_create_pages")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("location").setSourceName("location")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("Whether a custom link is shown to contributors who are blocked from pushing a secret by push protection.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("node_id").setSourceName("node_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
                                 .build());
 
         OpenApiTableHandle workflowTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
@@ -467,95 +467,8 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(workflowColumns)
                 .containsExactly(
                         OpenApiColumn.builder()
-                                .setName("owner").setSourceName("owner")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("badge_url").setSourceName("badge_url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("per_page").setSourceName("per_page")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("workflow_id").setSourceName("workflow_id")
-                                .setType(VARCHAR).setSourceType(nullSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("total_count").setSourceName("total_count")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("repo").setSourceName("repo")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("created_at").setSourceName("created_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("deleted_at").setSourceName("deleted_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("url").setSourceName("url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("path").setSourceName("path")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("updated_at").setSourceName("updated_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("html_url").setSourceName("html_url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("name").setSourceName("name")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("page").setSourceName("page")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setIsHidden(true)
-                                .setIsPageNumber(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("state").setSourceName("state")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
@@ -567,6 +480,93 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("node_id").setSourceName("node_id")
                                 .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("name").setSourceName("name")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("path").setSourceName("path")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("state").setSourceName("state")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("created_at").setSourceName("created_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("updated_at").setSourceName("updated_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("url").setSourceName("url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("html_url").setSourceName("html_url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("badge_url").setSourceName("badge_url")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("deleted_at").setSourceName("deleted_at")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("owner").setSourceName("owner")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("repo").setSourceName("repo")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("per_page").setSourceName("per_page")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("page").setSourceName("page")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setIsHidden(true)
+                                .setIsPageNumber(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("workflow_id").setSourceName("workflow_id")
+                                .setType(VARCHAR).setSourceType(nullSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -628,16 +628,60 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("expand").setSourceName("expand")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Expand options that include additional search result details in the response.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("issues").setSourceName("issues")
+                                .setType(issuesType).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .setComment("The list of issues found by the search.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("max_results").setSourceName("maxResults")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("The maximum number of results that could be on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("names").setSourceName("names")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("The ID and name of each field in the search results.")
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("schema").setSourceName("schema")
                                 .setType(schemaType).setSourceType(objectSchema)
                                 .setIsNullable(true)
                                 .setComment("The schema describing the field types in the search results.")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("fields_by_keys").setSourceName("fieldsByKeys")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setName("start_at").setSourceName("startAt")
+                                .setType(INTEGER).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
+                                .setComment("The index of the first item returned on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("total").setSourceName("total")
+                                .setType(INTEGER).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .setComment("The number of results on the page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("warning_messages").setSourceName("warningMessages")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .setComment("Any warnings related to the JQL query.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("jql").setSourceName("jql")
@@ -646,10 +690,28 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("warning_messages").setSourceName("warningMessages")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setName("validate_query").setSourceName("validateQuery")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
-                                .setComment("Any warnings related to the JQL query.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("fields").setSourceName("fields")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("properties").setSourceName("properties")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("fields_by_keys").setSourceName("fieldsByKeys")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("expand_req").setSourceName("expand")
@@ -666,68 +728,6 @@ This field is only visible to organization owners or members of a team with the 
                                         " *  `editmeta` Returns information about how each field can be edited.\n" +
                                         " *  `changelog` Returns a list of recent updates to an issue, sorted by date, starting from the most recent.\n" +
                                         " *  `versionedRepresentations` Instead of `fields`, returns `versionedRepresentations` a JSON array containing each version of a field's value, with the highest numbered item representing the most recent version.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("start_at").setSourceName("startAt")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("The index of the first item returned on the page.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("issues").setSourceName("issues")
-                                .setType(issuesType).setSourceType(arraySchema)
-                                .setIsNullable(true)
-                                .setComment("The list of issues found by the search.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("expand").setSourceName("expand")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("Expand options that include additional search result details in the response.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("total").setSourceName("total")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setIsNullable(true)
-                                .setComment("The number of results on the page.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("names").setSourceName("names")
-                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("The ID and name of each field in the search results.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("validate_query").setSourceName("validateQuery")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("max_results").setSourceName("maxResults")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("The maximum number of results that could be on the page.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("fields").setSourceName("fields")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("properties").setSourceName("properties")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
                                 .build());
     }
 
@@ -800,21 +800,6 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(petColumns)
                 .containsExactly(
                         OpenApiColumn.builder()
-                                .setName("api_key").setSourceName("api_key")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.DELETE, "header"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("name").setSourceName("name")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("__trino_row_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsHidden(true)
@@ -825,6 +810,15 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(
                                         PathItem.HttpMethod.POST, "body",
                                         PathItem.HttpMethod.PUT, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("name").setSourceName("name")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(
+                                        PathItem.HttpMethod.POST, "body",
+                                        PathItem.HttpMethod.PUT, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "query"))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -866,6 +860,12 @@ This field is only visible to organization owners or members of a team with the 
                                         PathItem.HttpMethod.POST, "path",
                                         PathItem.HttpMethod.GET, "path",
                                         PathItem.HttpMethod.DELETE, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("api_key").setSourceName("api_key")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.DELETE, "header"))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -926,27 +926,27 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("data").setSourceName("data")
                                 .setType(dataType).setSourceType(objectSchema)
                                 .setIsNullable(true)
                                 .setComment("A message containing the response to a timeseries query.")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("__trino_row_id")
+                                .setName("errors").setSourceName("errors")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
+                                .setIsNullable(true)
+                                .setComment("The error generated by the request.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("data_req").setSourceName("data")
                                 .setType(dataReqType).setSourceType(objectSchema)
                                 .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
                                 .setComment("A single timeseries query to be executed.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("errors").setSourceName("errors")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
-                                .setComment("The error generated by the request.")
                                 .build());
     }
 
@@ -1003,7 +1003,7 @@ This field is only visible to organization owners or members of a team with the 
                         RowType.field("name", VARCHAR),
                         RowType.field("type", VARCHAR)))),
                 RowType.field("vanity_name_servers", new ArrayType(VARCHAR))));
-        RowType result2Type = RowType.from(List.of(RowType.field("id", VARCHAR)));
+        RowType result3Type = RowType.from(List.of(RowType.field("id", VARCHAR)));
         RowType resultInfoType = RowType.from(List.of(
                 RowType.field("count", createDecimalType(18, 8)),
                 RowType.field("page", createDecimalType(18, 8)),
@@ -1012,43 +1012,26 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
-                                .setName("identifier").setSourceName("identifier")
+                                .setName("__trino_row_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path", PathItem.HttpMethod.PATCH, "path"))
-                                .setIsNullable(true)
-                                .setComment("Identifier")
+                                .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("per_page").setSourceName("per_page")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("Number of zones per page.")
+                                .setName("errors").setSourceName("errors")
+                                .setType(new ArrayType(RowType.from(List.of(
+                                        RowType.field("code", BIGINT),
+                                        RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("account.id").setSourceName("account.id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("An account ID")
+                                .setName("messages").setSourceName("messages")
+                                .setType(new ArrayType(RowType.from(List.of(
+                                        RowType.field("code", BIGINT),
+                                        RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("paused").setSourceName("paused")
+                                .setName("success").setSourceName("success")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
-                                        "true value means the zone will not receive security or performance\n" +
-                                        "benefits.\n")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("vanity_name_servers").setSourceName("vanity_name_servers")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("An array of domains used for custom name servers. This is only\n" +
-                                        "available for Business and Enterprise plans.")
+                                .setComment("Whether the API call was successful")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("result_info").setSourceName("result_info")
@@ -1056,59 +1039,19 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("match").setSourceName("match")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("Whether to match all search requirements or at least one (any).")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("type").setSourceName("type")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
-                                .setIsNullable(true)
-                                .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
-                                        "typically a partner-hosted zone or a CNAME setup.\n")
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("result").setSourceName("result")
-                                .setType(resultType).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("result_2").setSourceName("result")
-                                .setType(result2Type).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("result_3").setSourceName("result")
                                 .setType(new ArrayType(resultType)).setSourceType(arraySchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("account.name").setSourceName("account.name")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setName("result_2").setSourceName("result")
+                                .setType(resultType).setSourceType(objectSchema)
                                 .setIsNullable(true)
-                                .setComment("An account Name. Optional filter operators can be provided to extend refine the search:\n" +
-                                        "  * `equal` (default)\n" +
-                                        "  * `not_equal`\n" +
-                                        "  * `starts_with`\n" +
-                                        "  * `ends_with`\n" +
-                                        "  * `contains`\n" +
-                                        "  * `starts_with_case_sensitive`\n" +
-                                        "  * `ends_with_case_sensitive`\n" +
-                                        "  * `contains_case_sensitive`\n")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("success").setSourceName("success")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setComment("Whether the API call was successful")
+                                .setName("result_3").setSourceName("result")
+                                .setType(result3Type).setSourceType(objectSchema)
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
@@ -1127,10 +1070,33 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("messages").setSourceName("messages")
-                                .setType(new ArrayType(RowType.from(List.of(
-                                        RowType.field("code", BIGINT),
-                                        RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
+                                .setName("status").setSourceName("status")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("A zone status")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("account.id").setSourceName("account.id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("An account ID")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("account.name").setSourceName("account.name")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("An account Name. Optional filter operators can be provided to extend refine the search:\n" +
+                                        "  * `equal` (default)\n" +
+                                        "  * `not_equal`\n" +
+                                        "  * `starts_with`\n" +
+                                        "  * `ends_with`\n" +
+                                        "  * `contains`\n" +
+                                        "  * `starts_with_case_sensitive`\n" +
+                                        "  * `ends_with_case_sensitive`\n" +
+                                        "  * `contains_case_sensitive`\n")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
@@ -1138,6 +1104,64 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .setComment("Page number of paginated results.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("per_page").setSourceName("per_page")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Number of zones per page.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("order").setSourceName("order")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Field to order zones by.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("direction").setSourceName("direction")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Direction to order zones.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("match").setSourceName("match")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .setComment("Whether to match all search requirements or at least one (any).")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("account").setSourceName("account")
+                                .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("type").setSourceName("type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
+                                        "typically a partner-hosted zone or a CNAME setup.\n")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("identifier").setSourceName("identifier")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path", PathItem.HttpMethod.PATCH, "path"))
+                                .setIsNullable(true)
+                                .setComment("Identifier")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("paused").setSourceName("paused")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
+                                        "true value means the zone will not receive security or performance\n" +
+                                        "benefits.\n")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
@@ -1150,36 +1174,12 @@ This field is only visible to organization owners or members of a team with the 
                                         "see Zone Plans.\n")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("account").setSourceName("account")
-                                .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("errors").setSourceName("errors")
-                                .setType(new ArrayType(RowType.from(List.of(
-                                        RowType.field("code", BIGINT),
-                                        RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("order").setSourceName("order")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setName("vanity_name_servers").setSourceName("vanity_name_servers")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
                                 .setIsNullable(true)
-                                .setComment("Field to order zones by.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("status").setSourceName("status")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("A zone status")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("direction").setSourceName("direction")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .setComment("Direction to order zones.")
+                                .setComment("An array of domains used for custom name servers. This is only\n" +
+                                        "available for Business and Enterprise plans.")
                                 .build());
     }
 
@@ -1273,14 +1273,92 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
+                                .setName("latitude").setSourceName("latitude")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("longitude").setSourceName("longitude")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("elevation").setSourceName("elevation")
                                 .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
                                 .setIsNullable(true)
                                 .setComment("The elevation in meters of the selected weather grid-cell. In mountain terrain it might differ from the location you would expect.")
                                 .build(),
                         OpenApiColumn.builder()
+                                .setName("generationtime_ms").setSourceName("generationtime_ms")
+                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setIsNullable(true)
+                                .setComment("Generation time of the weather forecast in milli seconds. This is mainly used for performance monitoring and improvements.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("utc_offset_seconds").setSourceName("utc_offset_seconds")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .setComment("Applied timezone offset from the &timezone= parameter.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hourly").setSourceName("hourly")
+                                .setType(hourlyType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hourly_units").setSourceName("hourly_units")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected weather variable, the unit will be listed here.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily").setSourceName("daily")
+                                .setType(dailyType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected daily weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily_units").setSourceName("daily_units")
+                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("For each selected daily weather variable, the unit will be listed here.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("current_weather").setSourceName("current_weather")
+                                .setType(currentWeatherType).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .setComment("Current weather conditions with the attributes: time, temperature, wind_speed, wind_direction and weather_code")
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("hourly_req").setSourceName("hourly")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("daily_req").setSourceName("daily")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("latitude_req").setSourceName("latitude")
+                                .setType(REAL).setSourceType(numberSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("longitude_req").setSourceName("longitude")
+                                .setType(REAL).setSourceType(numberSchema)
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("current_weather_req").setSourceName("current_weather")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .build(),
@@ -1297,14 +1375,8 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("daily_units").setSourceName("daily_units")
-                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("For each selected daily weather variable, the unit will be listed here.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("daily_req").setSourceName("daily")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setName("timeformat").setSourceName("timeformat")
+                                .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .build(),
@@ -1315,81 +1387,9 @@ This field is only visible to organization owners or members of a team with the 
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("latitude").setSourceName("latitude")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setIsNullable(true)
-                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("timeformat").setSourceName("timeformat")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("current_weather_req").setSourceName("current_weather")
-                                .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("past_days").setSourceName("past_days")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("hourly_units").setSourceName("hourly_units")
-                                .setType(new MapType(VARCHAR, VARCHAR, new TypeOperators())).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("For each selected weather variable, the unit will be listed here.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("generationtime_ms").setSourceName("generationtime_ms")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setIsNullable(true)
-                                .setComment("Generation time of the weather forecast in milli seconds. This is mainly used for performance monitoring and improvements.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("daily").setSourceName("daily")
-                                .setType(dailyType).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("For each selected daily weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("utc_offset_seconds").setSourceName("utc_offset_seconds")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setIsNullable(true)
-                                .setComment("Applied timezone offset from the &timezone= parameter.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("hourly").setSourceName("hourly")
-                                .setType(hourlyType).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("For each selected weather variable, data will be returned as a floating point array. Additionally a `time` array will be returned with ISO8601 timestamps.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("longitude_req").setSourceName("longitude")
-                                .setType(REAL).setSourceType(numberSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("current_weather").setSourceName("current_weather")
-                                .setType(currentWeatherType).setSourceType(objectSchema)
-                                .setIsNullable(true)
-                                .setComment("Current weather conditions with the attributes: time, temperature, wind_speed, wind_direction and weather_code")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("longitude").setSourceName("longitude")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setIsNullable(true)
-                                .setComment("WGS84 of the center of the weather grid-cell which was used to generate this forecast. This coordinate might be up to 5 km away.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("latitude_req").setSourceName("latitude")
-                                .setType(REAL).setSourceType(numberSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -1471,6 +1471,17 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("namespace").setSourceName("namespace")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
@@ -1480,17 +1491,6 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("index").setSourceName("index")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("id").setSourceName("id")
-                                .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
                                 .setIsNullable(true)
                                 .build());
     }
