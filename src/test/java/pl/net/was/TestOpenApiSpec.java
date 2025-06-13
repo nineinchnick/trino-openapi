@@ -81,16 +81,17 @@ class TestOpenApiSpec
         Map<String, List<OpenApiColumn>> tables = spec.getTables();
 
         Set<String> expected = Set.of(
+                "orgs",
                 "repos",
                 "repos_actions_workflows");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
-        // select a.* from repos_actions_workflows cross join unnest(workflows) a where owner = 'nineinchnick' and repo = 'trino-openapi' and workflow_id = 'a' and per_page=1
-        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/repos/{owner}/{repo}/actions/workflows");
-        Assertions.assertThat(tableHandle.getInsertPath()).isNull();
-        Assertions.assertThat(tableHandle.getUpdatePath()).isNull();
-        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
-        List<OpenApiColumn> columns = tables.get("repos_actions_workflows").stream()
+
+        OpenApiTableHandle orgsTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "orgs"));
+        Assertions.assertThat(orgsTableHandle.getSelectPath()).isEqualTo("/orgs/{org}");
+        Assertions.assertThat(orgsTableHandle.getInsertPath()).isNull();
+        Assertions.assertThat(orgsTableHandle.getUpdatePath()).isNull();
+        Assertions.assertThat(orgsTableHandle.getDeletePath()).isEqualTo("/orgs/{org}");
+        List<OpenApiColumn> orgColumns = tables.get("orgs").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
                     Schema<?> sourceType = new Schema<>();
@@ -100,7 +101,370 @@ class TestOpenApiSpec
                             .build();
                 })
                 .toList();
-        Assertions.assertThat(columns)
+        Assertions.assertThat(orgColumns)
+                .containsExactly(
+                        OpenApiColumn.builder()
+                                .setName("repos_url").setSourceName("repos_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("secret_scanning_push_protection_custom_link").setSourceName("secret_scanning_push_protection_custom_link")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("An optional URL string to display to contributors who are blocked from pushing a secret.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_internal_repositories").setSourceName("members_can_create_internal_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_public_pages").setSourceName("members_can_create_public_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("type").setSourceName("type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("blog").setSourceName("blog")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_members_url").setSourceName("public_members_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("private_gists").setSourceName("private_gists")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("default_repository_permission").setSourceName("default_repository_permission")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("billing_email").setSourceName("billing_email")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("collaborators").setSourceName("collaborators")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("disk_usage").setSourceName("disk_usage")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether secret scanning push protection is automatically enabled for new repositories and repositories
+transferred to this organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("id").setSourceName("id")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("plan").setSourceName("plan")
+                                .setType(RowType.from(List.of(
+                                        RowType.field("name", VARCHAR),
+                                        RowType.field("space", BIGINT),
+                                        RowType.field("private_repos", BIGINT),
+                                        RowType.field("filled_seats", BIGINT),
+                                        RowType.field("seats", BIGINT)))).setSourceType(objectSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_private_pages").setSourceName("members_can_create_private_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_repositories").setSourceName("members_can_create_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_private_repositories").setSourceName("members_can_create_private_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_gists").setSourceName("public_gists")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("followers").setSourceName("followers")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("has_organization_projects").setSourceName("has_organization_projects")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("html_url").setSourceName("html_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("following").setSourceName("following")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("name").setSourceName("name")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("hooks_url").setSourceName("hooks_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
+to this organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("dependabot_alerts_enabled_for_new_repositories").setSourceName("dependabot_alerts_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether GitHub Advanced Security is automatically enabled for new repositories and repositories transferred to
+this organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("has_repository_projects").setSourceName("has_repository_projects")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_url").setSourceName("members_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("twitter_username").setSourceName("twitter_username")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("created_at").setSourceName("created_at")
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("advanced_security_enabled_for_new_repositories").setSourceName("advanced_security_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("description").setSourceName("description")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("__trino_row_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsHidden(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("login").setSourceName("login")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("dependency_graph_enabled_for_new_repositories").setSourceName("dependency_graph_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether dependency graph is automatically enabled for new repositories and repositories transferred to this
+organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("total_private_repos").setSourceName("total_private_repos")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("secret_scanning_enabled_for_new_repositories").setSourceName("secret_scanning_enabled_for_new_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("""
+Whether secret scanning is automatically enabled for new repositories and repositories transferred to this
+organization.
+
+This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("updated_at").setSourceName("updated_at")
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_allowed_repository_creation_type").setSourceName("members_allowed_repository_creation_type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_fork_private_repositories").setSourceName("members_can_fork_private_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("company").setSourceName("company")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("owned_private_repos").setSourceName("owned_private_repos")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("public_repos").setSourceName("public_repos")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("email").setSourceName("email")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("archived_at").setSourceName("archived_at")
+                                .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("org").setSourceName("org")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setRequiresPredicate(Map.of(
+                                        PathItem.HttpMethod.GET, "path",
+                                        PathItem.HttpMethod.PATCH, "path",
+                                        PathItem.HttpMethod.DELETE, "path"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("two_factor_requirement_enabled").setSourceName("two_factor_requirement_enabled")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("web_commit_signoff_required").setSourceName("web_commit_signoff_required")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("is_verified").setSourceName("is_verified")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("url").setSourceName("url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_public_repositories").setSourceName("members_can_create_public_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("issues_url").setSourceName("issues_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("avatar_url").setSourceName("avatar_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("events_url").setSourceName("events_url")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_pages").setSourceName("members_can_create_pages")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("location").setSourceName("location")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setIsNullable(true)
+                                .setComment("Whether a custom link is shown to contributors who are blocked from pushing a secret by push protection.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("node_id").setSourceName("node_id")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .build());
+
+        OpenApiTableHandle workflowTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
+        Assertions.assertThat(workflowTableHandle.getSelectPath()).isEqualTo("/repos/{owner}/{repo}/actions/workflows");
+        Assertions.assertThat(workflowTableHandle.getInsertPath()).isNull();
+        Assertions.assertThat(workflowTableHandle.getUpdatePath()).isNull();
+        Assertions.assertThat(workflowTableHandle.getDeletePath()).isNull();
+        List<OpenApiColumn> workflowColumns = tables.get("repos_actions_workflows").stream()
+                .map(column -> {
+                    // compare only source types, so rebuild it without any other attribute
+                    Schema<?> sourceType = new Schema<>();
+                    sourceType.setType(column.getSourceType().getType());
+                    return OpenApiColumn.builderFrom(column)
+                            .setSourceType(sourceType)
+                            .build();
+                })
+                .toList();
+        Assertions.assertThat(workflowColumns)
                 .containsExactly(
                         OpenApiColumn.builder()
                                 .setName("owner").setSourceName("owner")
@@ -116,7 +480,7 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .setIsHidden(true)
@@ -129,7 +493,7 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("total_count").setSourceName("total_count")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("repo").setSourceName("repo")
@@ -180,10 +544,12 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("id").setSourceName("id")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setName("page").setSourceName("page")
+                                .setType(BIGINT).setSourceType(intSchema)
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
+                                .setIsHidden(true)
+                                .setIsPageNumber(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("state").setSourceName("state")
@@ -192,12 +558,10 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("page").setSourceName("page")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setName("id").setSourceName("id")
+                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
-                                .setIsHidden(true)
-                                .setIsPageNumber(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("node_id").setSourceName("node_id")
