@@ -987,12 +987,12 @@ This field is only visible to organization owners or members of a team with the 
                 RowType.field("id", VARCHAR),
                 RowType.field("meta", RowType.from(List.of(
                         RowType.field("cdn_only", BOOLEAN),
-                        RowType.field("custom_certificate_quota", INTEGER),
+                        RowType.field("custom_certificate_quota", BIGINT),
                         RowType.field("dns_only", BOOLEAN),
                         RowType.field("foundation_dns", BOOLEAN),
-                        RowType.field("page_rule_quota", INTEGER),
+                        RowType.field("page_rule_quota", BIGINT),
                         RowType.field("phishing_detected", BOOLEAN),
-                        RowType.field("step", INTEGER)))),
+                        RowType.field("step", BIGINT)))),
                 RowType.field("modified_on", TIMESTAMP_MILLIS),
                 RowType.field("name", VARCHAR),
                 RowType.field("original_dnshost", VARCHAR),
@@ -1077,7 +1077,7 @@ This field is only visible to organization owners or members of a team with the 
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("result").setSourceName("result")
-                                .setType(new ArrayType(resultType)).setSourceType(arraySchema)
+                                .setType(resultType).setSourceType(objectSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -1087,7 +1087,7 @@ This field is only visible to organization owners or members of a team with the 
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("result_3").setSourceName("result")
-                                .setType(resultType).setSourceType(objectSchema)
+                                .setType(new ArrayType(resultType)).setSourceType(arraySchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -1129,7 +1129,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("messages").setSourceName("messages")
                                 .setType(new ArrayType(RowType.from(List.of(
-                                        RowType.field("code", INTEGER),
+                                        RowType.field("code", BIGINT),
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
@@ -1157,7 +1157,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("errors").setSourceName("errors")
                                 .setType(new ArrayType(RowType.from(List.of(
-                                        RowType.field("code", INTEGER),
+                                        RowType.field("code", BIGINT),
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
                                 .build(),
                         OpenApiColumn.builder()
@@ -1334,7 +1334,7 @@ This field is only visible to organization owners or members of a team with the 
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("past_days").setSourceName("past_days")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
                                 .setIsNullable(true)
                                 .build(),
@@ -1358,7 +1358,7 @@ This field is only visible to organization owners or members of a team with the 
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("utc_offset_seconds").setSourceName("utc_offset_seconds")
-                                .setType(INTEGER).setSourceType(intSchema)
+                                .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .setComment("Applied timezone offset from the &timezone= parameter.")
                                 .build(),

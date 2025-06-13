@@ -49,6 +49,7 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,7 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
@@ -106,27 +108,79 @@ public class OpenApiSpec
     {
         this.openApi = requireNonNull(openApi, "openApi is null");
 
+        /*
+        Path params are assumed to be primary keys, so paths without any params are merged with same path with params.
+        For example, /orgs and /orgs/{org} will be represented by a single table named orgs.
+        If there are more paths with different params, they'll only be merged with the base path.
+        For example, the following paths:
+        * /orgs
+        * /orgs/{org}
+        * /orgs/{security_product}/{enablement}
+        Will be merged into two tables:
+        * orgs_org
+        * orgs_security_product_enablement
+        Where both tables will include columns created from the /orgs path response.
+         */
         this.tables = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
-                .collect(toMap(
-                        entry -> getIdentifier(stripPathParams(entry.getKey())),
-                        entry -> getColumns(entry.getValue(), entry.getKey()),
-                        (a, b) -> Stream.concat(a.stream(), b.stream()).distinct().toList()))
+                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))))
                 .entrySet().stream()
-                .collect(toMap(Map.Entry::getKey, entry -> mergeColumns(entry.getValue())));
+                .flatMap(groupEntry -> {
+                    List<PathItem> pathItems = groupEntry.getValue().stream()
+                            .map(Map.Entry::getValue)
+                            .toList();
+                    if (pathItems.size() == 1) {
+                        // create a new entry with the value unwrapped out of a list
+                        return Stream.of(Map.entry(groupEntry.getKey(), mergeColumns(getColumns(pathItems.getFirst(), groupEntry.getKey()))));
+                    }
+                    Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
+                            .min(comparingInt(entry -> entry.getKey().length()))
+                            .orElseThrow();
+                    List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
+                    // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
+                    // but combine it with columns from the base path
+                    return groupEntry.getValue().stream()
+                            .filter(entry -> !entry.equals(baseEntry))
+                            .map(entry -> Map.entry(
+                                    getIdentifier(pathItems.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey()),
+                                    mergeColumns(Stream.concat(
+                                                    baseColumns.stream(),
+                                                    getColumns(entry.getValue(), entry.getKey()).stream())
+                                            .distinct()
+                                            .toList())));
+                })
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         this.paths = openApi.getPaths().entrySet().stream()
-                .map(pathEntry -> Map.entry(
-                        getIdentifier(stripPathParams(pathEntry.getKey())),
-                        pathEntry.getValue().readOperationsMap().keySet().stream()
-                                .filter(method -> filterPath(pathEntry.getKey(), method))
-                                .collect(toMap(identity(), method -> pathEntry.getKey()))))
-                .collect(toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        // merge both maps
-                        (a, b) -> Stream.concat(a.entrySet().stream(), b.entrySet().stream())
-                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> x.length() < y.length() ? x : y))));
+                .filter(entry -> hasOpsWithJson(entry.getValue()))
+                .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
+                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))))
+                .entrySet().stream()
+                .flatMap(groupEntry -> {
+                    List<PathItem> pathItems = groupEntry.getValue().stream()
+                            .map(Map.Entry::getValue)
+                            .toList();
+                    if (groupEntry.getValue().size() == 1) {
+                        // create a new entry with the value unwrapped out of a list
+                        Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
+                        return Stream.of(Map.entry(groupEntry.getKey(), firstEntry.getValue().readOperationsMap().keySet().stream()
+                                .filter(method -> filterPath(groupEntry.getKey(), method))
+                                .collect(toMap(identity(), method -> firstEntry.getKey()))));
+                    }
+                    Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
+                            .min(comparingInt(entry -> entry.getKey().length()))
+                            .orElseThrow();
+                    Map<PathItem.HttpMethod, String> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
+                    // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
+                    // but combine it with methods from the base path
+                    return groupEntry.getValue().stream()
+                            .filter(entry -> !entry.equals(baseEntry))
+                            .map(entry -> Map.entry(
+                                    getIdentifier(pathItems.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey()),
+                                    Stream.concat(baseMethods.entrySet().stream(), methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
+                                                    .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> x.length() < y.length() ? x : y))));
+                })
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
         this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
                 .map(pathEntry -> Map.entry(
                         pathEntry.getKey(),
@@ -486,6 +540,13 @@ public class OpenApiSpec
                 .build());
     }
 
+    private Map<PathItem.HttpMethod, String> methodsToPaths(PathItem pathItem, String path)
+    {
+        return pathItem.readOperationsMap().keySet().stream()
+            .filter(method -> filterPath(path, method))
+            .collect(toMap(identity(), method -> path));
+    }
+
     private boolean filterPath(String path, PathItem.HttpMethod method)
     {
         // ignore PUT operations on paths without parameters, because UPDATE always require a predicate and the required parameter will be the primary key
@@ -530,10 +591,10 @@ public class OpenApiSpec
         }
         Optional<String> format = Optional.ofNullable(property.getFormat());
         if (property instanceof IntegerSchema) {
-            if (format.filter("int64"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(BIGINT, property));
+            if (format.filter("int32"::equals).isPresent()) {
+                return Optional.of(new TypeTuple(INTEGER, property));
             }
-            return Optional.of(new TypeTuple(INTEGER, property));
+            return Optional.of(new TypeTuple(BIGINT, property));
         }
         if (property instanceof NumberSchema) {
             if (format.filter("float"::equals).isPresent()) {
