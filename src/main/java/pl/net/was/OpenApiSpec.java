@@ -92,7 +92,7 @@ public class OpenApiSpec
     // should only be used to manually resolving references
     private final OpenAPI openApi;
     private final Map<String, List<OpenApiColumn>> tables;
-    private final Map<String, Map<PathItem.HttpMethod, String>> paths;
+    private final Map<String, OpenApiTableHandle> handles;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -121,68 +121,62 @@ public class OpenApiSpec
         * orgs_security_product_enablement
         Where both tables will include columns created from the /orgs path response.
          */
-        this.tables = openApi.getPaths().entrySet().stream()
+        Map<String, List<Map.Entry<String, PathItem>>> pathGroups = openApi.getPaths().entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
-                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))))
-                .entrySet().stream()
-                .flatMap(groupEntry -> {
-                    List<PathItem> pathItems = groupEntry.getValue().stream()
-                            .map(Map.Entry::getValue)
-                            .toList();
-                    if (pathItems.size() == 1) {
-                        // create a new entry with the value unwrapped out of a list
-                        return Stream.of(Map.entry(groupEntry.getKey(), mergeColumns(getColumns(pathItems.getFirst(), groupEntry.getKey()))));
-                    }
-                    Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
-                            .min(comparingInt(entry -> entry.getKey().length()))
-                            .orElseThrow();
-                    List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
-                    // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
-                    // but combine it with columns from the base path
-                    return groupEntry.getValue().stream()
-                            .filter(entry -> !entry.equals(baseEntry))
-                            .map(entry -> Map.entry(
-                                    getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey()),
-                                    mergeColumns(Stream.concat(
-                                                    baseColumns.stream(),
-                                                    getColumns(entry.getValue(), entry.getKey()).stream())
-                                            .distinct()
-                                            .toList())));
-                })
-                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
-        this.paths = openApi.getPaths().entrySet().stream()
-                .filter(entry -> hasOpsWithJson(entry.getValue()))
-                .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
-                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))))
-                .entrySet().stream()
-                .flatMap(groupEntry -> {
-                    List<PathItem> pathItems = groupEntry.getValue().stream()
-                            .map(Map.Entry::getValue)
-                            .toList();
-                    if (groupEntry.getValue().size() == 1) {
-                        // create a new entry with the value unwrapped out of a list
-                        Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
-                        return Stream.of(Map.entry(groupEntry.getKey(), firstEntry.getValue().readOperationsMap().keySet().stream()
-                                .filter(method -> filterPath(groupEntry.getKey(), method))
-                                .collect(toMap(identity(), method -> firstEntry.getKey()))));
-                    }
-                    Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
-                            .min(comparingInt(entry -> entry.getKey().length()))
-                            .orElseThrow();
-                    Map<PathItem.HttpMethod, String> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
-                    // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
-                    // but combine it with methods from the base path
-                    // TODO choosing the shortest path is wrong, it should be chosen based on available predicates
-                    return groupEntry.getValue().stream()
-                            .filter(entry -> !entry.equals(baseEntry))
-                            .map(entry -> Map.entry(
-                                    getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey()),
-                                    Stream.concat(baseMethods.entrySet().stream(), methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
-                                            .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (x, y) -> x.length() < y.length() ? x : y))));
-                })
-                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))));
+        ImmutableMap.Builder<String, List<OpenApiColumn>> tables = ImmutableMap.builder();
+        ImmutableMap.Builder<String, OpenApiTableHandle> handles = ImmutableMap.builder();
+        for (Map.Entry<String, List<Map.Entry<String, PathItem>>> groupEntry : pathGroups.entrySet()) {
+            List<PathItem> pathItems = groupEntry.getValue().stream()
+                    .map(Map.Entry::getValue)
+                    .toList();
+            if (pathItems.size() == 1) {
+                // create a new entry with the value unwrapped out of a list
+                tables.put(Map.entry(
+                        groupEntry.getKey(),
+                        mergeColumns(getColumns(pathItems.getFirst(), groupEntry.getKey()))));
+                Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
+                Map<PathItem.HttpMethod, String> tablePaths = firstEntry.getValue().readOperationsMap().keySet().stream()
+                        .filter(method -> filterPath(groupEntry.getKey(), method))
+                        .collect(toMap(identity(), method -> firstEntry.getKey()));
+                handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
+                continue;
+            }
+            Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
+                    .min(comparingInt(entry -> entry.getKey().length()))
+                    .orElseThrow();
+            List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
+            Map<PathItem.HttpMethod, String> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
+            // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
+            // but combine it with columns from the base path
+            groupEntry.getValue().stream()
+                    .filter(entry -> !entry.equals(baseEntry))
+                    .forEach(entry -> {
+                        String tableName = getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey());
+                        tables.put(
+                                tableName,
+                                mergeColumns(Stream.concat(
+                                                baseColumns.stream(),
+                                                getColumns(entry.getValue(), entry.getKey()).stream())
+                                        .distinct()
+                                        .toList()));
+                        // TODO choosing the shortest path is wrong, it should be chosen based on available predicates
+                        Map<PathItem.HttpMethod, String> tablePaths = Stream.concat(
+                                        baseMethods.entrySet().stream(),
+                                        methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
+                                .collect(toMap(
+                                        Map.Entry::getKey,
+                                        Map.Entry::getValue,
+                                        (x, y) -> x.length() < y.length() ? x : y));
+
+                        handles.put(tableName, tableHandle(tableName, tablePaths));
+                    });
+        }
+        this.tables = tables.buildOrThrow();
+        this.handles = handles.buildOrThrow();
+
         this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
                 .map(pathEntry -> Map.entry(
                         pathEntry.getKey(),
@@ -239,23 +233,11 @@ public class OpenApiSpec
         if (!name.getSchemaName().equals(SCHEMA_NAME)) {
             throw new SchemaNotFoundException(name.getSchemaName());
         }
-        Map<PathItem.HttpMethod, String> paths = this.paths.get(name.getTableName());
-        if (paths == null) {
+        OpenApiTableHandle handle = this.handles.get(name.getTableName());
+        if (handle == null) {
             throw new TableNotFoundException(name);
         }
-        return new OpenApiTableHandle(
-                name,
-                // some APIs use POST to query resources
-                paths.containsKey(PathItem.HttpMethod.GET) ? paths.get(PathItem.HttpMethod.GET) : paths.get(PathItem.HttpMethod.POST),
-                paths.containsKey(PathItem.HttpMethod.GET) ? PathItem.HttpMethod.GET : PathItem.HttpMethod.POST,
-                paths.get(PathItem.HttpMethod.POST),
-                PathItem.HttpMethod.POST,
-                // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
-                paths.containsKey(PathItem.HttpMethod.PUT) ? paths.get(PathItem.HttpMethod.PUT) : paths.get(PathItem.HttpMethod.POST),
-                paths.containsKey(PathItem.HttpMethod.PUT) ? PathItem.HttpMethod.PUT : PathItem.HttpMethod.POST,
-                paths.get(PathItem.HttpMethod.DELETE),
-                PathItem.HttpMethod.DELETE,
-                TupleDomain.none());
+        return handle;
     }
 
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
@@ -728,6 +710,23 @@ public class OpenApiSpec
                                 .setName(sameColumns.get(i).getName() + (i > 0 ? "_" + (i + 1) : ""))
                                 .build()))
                 .toList();
+    }
+
+    private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, String> tablePaths)
+    {
+        return new OpenApiTableHandle(
+                SchemaTableName.schemaTableName(SCHEMA_NAME, tableName),
+                // some APIs use POST to query resources
+                tablePaths.containsKey(PathItem.HttpMethod.GET) ? tablePaths.get(PathItem.HttpMethod.GET) : tablePaths.get(PathItem.HttpMethod.POST),
+                tablePaths.containsKey(PathItem.HttpMethod.GET) ? PathItem.HttpMethod.GET : PathItem.HttpMethod.POST,
+                tablePaths.get(PathItem.HttpMethod.POST),
+                PathItem.HttpMethod.POST,
+                // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
+                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? tablePaths.get(PathItem.HttpMethod.PUT) : tablePaths.get(PathItem.HttpMethod.POST),
+                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? PathItem.HttpMethod.PUT : PathItem.HttpMethod.POST,
+                tablePaths.get(PathItem.HttpMethod.DELETE),
+                PathItem.HttpMethod.DELETE,
+                TupleDomain.none());
     }
 
     public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()
