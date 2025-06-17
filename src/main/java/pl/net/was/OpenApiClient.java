@@ -133,20 +133,24 @@ public class OpenApiClient
     {
         PathItem.HttpMethod method = table.getSelectMethod();
         BodyGenerator bodyGenerator = getBodyGenerator(table);
+        JsonResponseHandler responseHandler = new JsonResponseHandler(table);
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
                 .findFirst();
+        // TODO if there are multiple paths, choose one based on predicates
+        String selectPath = table.getSelectPath();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint(), null) != null) {
-            return makeRequest(table, method, table.getSelectPath(), bodyGenerator, new JsonResponseHandler(table));
+            return makeRequest(table, method, selectPath, bodyGenerator, responseHandler);
         }
         return pageIterator(
                 page -> {
                     TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
                             pageColumn.get().getHandle(),
-                            NullableValue.of(pageColumn.get().getType(), pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
-                    TupleDomain<ColumnHandle> constraint = table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint);
-                    OpenApiTableHandle pageTable = table.cloneWithConstraint(constraint);
-                    return makeRequest(pageTable, method, table.getSelectPath(), bodyGenerator, new JsonResponseHandler(table));
+                            NullableValue.of(
+                                    pageColumn.get().getType(),
+                                    pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
+                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
+                    return makeRequest(pageTable, method, selectPath, bodyGenerator, responseHandler);
                 },
                 0,
                 Integer.MAX_VALUE,
@@ -268,6 +272,7 @@ public class OpenApiClient
                 .filter(column -> isPredicate(column, method, in))
                 .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
+                    // TODO revisit this - we should always choose the correct path based on query predicates
                     // don't require params in paths, since paths without params can be merged with others
                     if (!"path".equals(in) && value == null && isRequiredPredicate(column, method, in)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
