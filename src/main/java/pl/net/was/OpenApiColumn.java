@@ -36,8 +36,8 @@ public class OpenApiColumn
     private final JsonPointer resultsPointer;
     private final Type type;
     private final Schema<?> sourceType;
-    private final Map<HttpMethod, String> requiresPredicate;
-    private final Map<HttpMethod, String> optionalPredicate;
+    private final Map<HttpMethod, ParameterLocation> requiresPredicate;
+    private final Map<HttpMethod, ParameterLocation> optionalPredicate;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
     private final OpenApiColumnHandle handle;
@@ -48,8 +48,8 @@ public class OpenApiColumn
             JsonPointer resultsPointer,
             Type type,
             Schema<?> sourceType,
-            Map<HttpMethod, String> requiresPredicate,
-            Map<HttpMethod, String> optionalPredicate,
+            Map<HttpMethod, ParameterLocation> requiresPredicate,
+            Map<HttpMethod, ParameterLocation> optionalPredicate,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
@@ -98,12 +98,12 @@ public class OpenApiColumn
         return sourceType;
     }
 
-    public Map<HttpMethod, String> getRequiresPredicate()
+    public Map<HttpMethod, ParameterLocation> getRequiresPredicate()
     {
         return requiresPredicate;
     }
 
-    public Map<HttpMethod, String> getOptionalPredicate()
+    public Map<HttpMethod, ParameterLocation> getOptionalPredicate()
     {
         return optionalPredicate;
     }
@@ -188,8 +188,8 @@ public class OpenApiColumn
         private JsonPointer resultsPointer;
         private Type type;
         private Schema<?> sourceType;
-        private final SortedMap<HttpMethod, String> requiresPredicate = new TreeMap<>();
-        private final SortedMap<HttpMethod, String> optionalPredicate = new TreeMap<>();
+        private final SortedMap<HttpMethod, ParameterLocation> requiresPredicate = new TreeMap<>();
+        private final SortedMap<HttpMethod, ParameterLocation> optionalPredicate = new TreeMap<>();
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
@@ -242,13 +242,13 @@ public class OpenApiColumn
             return this;
         }
 
-        public OpenApiColumn.Builder setRequiresPredicate(Map<HttpMethod, String> requiresPredicate)
+        public OpenApiColumn.Builder setRequiresPredicate(Map<HttpMethod, ParameterLocation> requiresPredicate)
         {
             this.requiresPredicate.putAll(requireNonNull(requiresPredicate, "requiresPredicate is null"));
             return this;
         }
 
-        public OpenApiColumn.Builder setOptionalPredicate(Map<HttpMethod, String> optionalPredicate)
+        public OpenApiColumn.Builder setOptionalPredicate(Map<HttpMethod, ParameterLocation> optionalPredicate)
         {
             this.optionalPredicate.putAll(requireNonNull(optionalPredicate, "optionalPredicate is null"));
             return this;

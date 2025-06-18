@@ -52,6 +52,7 @@ import io.trino.spi.type.TypeOperators;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -305,8 +306,8 @@ public class OpenApiSpec
                     .map(propEntry -> getPredicateColumn(
                             propEntry.getKey(),
                             propEntry.getValue(),
-                            requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
-                            !requiredProperties.contains(propEntry.getKey()) ? Map.of(method, "body") : Map.of(),
+                            requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(method, ParameterLocation.BODY) : ImmutableMap.of(),
+                            !requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(method, ParameterLocation.BODY) : ImmutableMap.of(),
                             !requiredProperties.contains(propEntry.getKey()),
                             false,
                             propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
@@ -333,17 +334,20 @@ public class OpenApiSpec
             // add required parameters as columns, so they can be set as predicates;
             // predicate values will be saved in the table handle and copied to result rows
             op.getParameters().stream()
-                    .map(parameter -> getPredicateColumn(
-                            parameter.getName(),
-                            parameter.getSchema(),
-                            parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
-                            !parameter.getRequired() ? Map.of(method, parameter.getIn()) : Map.of(),
-                            // always nullable, because they're only required as predicates, not in INSERT statements
-                            true,
-                            // keep pagination parameters as hidden columns, so it's possible to
-                            // see the page number (how many requests were made) and change the default per-page limit
-                            pagination.containsValue(parameter.getName()),
-                            parameter.getName().equals(pagination.get(PAGINATION_PAGE_PARAM))))
+                    .map(parameter -> {
+                        ParameterLocation parameterLocation = parameter.getIn() == null ? ParameterLocation.NONE : ParameterLocation.valueOf(parameter.getIn().toUpperCase(Locale.ENGLISH));
+                        return getPredicateColumn(
+                                parameter.getName(),
+                                parameter.getSchema(),
+                                parameter.getRequired() ? ImmutableMap.of(method, parameterLocation) : ImmutableMap.of(),
+                                !parameter.getRequired() ? ImmutableMap.of(method, parameterLocation) : ImmutableMap.of(),
+                                // always nullable, because they're only required as predicates, not in INSERT statements
+                                true,
+                                // keep pagination parameters as hidden columns, so it's possible to
+                                // see the page number (how many requests were made) and change the default per-page limit
+                                pagination.containsValue(parameter.getName()),
+                                parameter.getName().equals(pagination.get(PAGINATION_PAGE_PARAM)));
+                    })
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .map(column -> {
@@ -503,8 +507,8 @@ public class OpenApiSpec
     private Optional<OpenApiColumn> getPredicateColumn(
             String sourceName,
             Schema<?> schema,
-            Map<PathItem.HttpMethod, String> requiredPredicate,
-            Map<PathItem.HttpMethod, String> optionalPredicate,
+            Map<PathItem.HttpMethod, ParameterLocation> requiredPredicate,
+            Map<PathItem.HttpMethod, ParameterLocation> optionalPredicate,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber)

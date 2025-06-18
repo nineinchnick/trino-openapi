@@ -163,7 +163,7 @@ public class OpenApiClient
         if (table.getSelectMethod() != PathItem.HttpMethod.POST) {
             return null;
         }
-        Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, "body");
+        Map<String, Object> bodyParams = getFilterValues(table, PathItem.HttpMethod.POST, ParameterLocation.BODY);
         try {
             return createStaticBodyGenerator(toBytes(serializeMap(table, bodyParams)));
         }
@@ -238,7 +238,7 @@ public class OpenApiClient
         }
         URI uri;
         try {
-            uri = buildUri(baseUri, uriPath, getFilterValues(table, method, "query"));
+            uri = buildUri(baseUri, uriPath, getFilterValues(table, method, ParameterLocation.QUERY));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -251,7 +251,7 @@ public class OpenApiClient
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader("X-Trino-OpenAPI-Path", path.getKey());
-        getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
+        getFilterValues(table, method, ParameterLocation.HEADER).forEach((key, value) -> builder.addHeader(key, value.toString()));
 
         Request request = builder.build();
         log.debug(request.toString());
@@ -267,10 +267,10 @@ public class OpenApiClient
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         // TODO get params only from matching paths
         Map<String, Object> pathParams = columns.stream()
-                .filter(column -> isPredicate(column, method, "path"))
+                .filter(column -> isPredicate(column, method, ParameterLocation.PATH))
                 .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
-                    if (value == null && isRequiredPredicate(column, method, "path")) {
+                    if (value == null && isRequiredPredicate(column, method, ParameterLocation.PATH)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
                     return new SimpleEntry<>(column.getSourceName(), value);
@@ -301,9 +301,9 @@ public class OpenApiClient
         return List.of(value.toString());
     }
 
-    private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, String in)
+    private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, ParameterLocation in)
     {
-        checkState(!"path".equals(in), "getFilterValues cannot be used for path parameters");
+        checkState(!ParameterLocation.PATH.equals(in), "getFilterValues cannot be used for path parameters");
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         return columns.stream()
@@ -319,20 +319,20 @@ public class OpenApiClient
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    private static boolean isPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    private static boolean isPredicate(OpenApiColumn column, PathItem.HttpMethod method, ParameterLocation in)
     {
         return isRequiredPredicate(column, method, in) || isOptionalPredicate(column, method, in);
     }
 
-    private static boolean isRequiredPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    private static boolean isRequiredPredicate(OpenApiColumn column, PathItem.HttpMethod method, ParameterLocation in)
     {
-        String requiredIn = column.getRequiresPredicate().get(method);
+        ParameterLocation requiredIn = column.getRequiresPredicate().get(method);
         return requiredIn != null && (in == null || requiredIn.equals(in));
     }
 
-    private static boolean isOptionalPredicate(OpenApiColumn column, PathItem.HttpMethod method, String in)
+    private static boolean isOptionalPredicate(OpenApiColumn column, PathItem.HttpMethod method, ParameterLocation in)
     {
-        String optionalIn = column.getOptionalPredicate().get(method);
+        ParameterLocation optionalIn = column.getOptionalPredicate().get(method);
         return optionalIn != null && (in == null || optionalIn.equals(in));
     }
 
@@ -423,8 +423,8 @@ public class OpenApiClient
         Map<String, OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
                 .filter(column -> !column.getName().equals(ROW_ID))
                 // only get columns for body params to avoid name conflicts
-                .filter(column -> column.getRequiresPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body")
-                        || column.getOptionalPredicate().getOrDefault(PathItem.HttpMethod.POST, "").equals("body"))
+                .filter(column -> column.getRequiresPredicate().getOrDefault(PathItem.HttpMethod.POST, ParameterLocation.NONE).equals(ParameterLocation.BODY)
+                        || column.getOptionalPredicate().getOrDefault(PathItem.HttpMethod.POST, ParameterLocation.NONE).equals(ParameterLocation.BODY))
                 .collect(toMap(OpenApiColumn::getSourceName, identity()));
         for (Map.Entry<String, Object> entry : params.entrySet()) {
             String name = entry.getKey();
