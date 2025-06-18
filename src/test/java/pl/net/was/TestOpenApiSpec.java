@@ -155,43 +155,43 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("description").setSourceName("description")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("company").setSourceName("company")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("blog").setSourceName("blog")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("location").setSourceName("location")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("email").setSourceName("email")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("twitter_username").setSourceName("twitter_username")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -202,13 +202,13 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("has_organization_projects").setSourceName("has_organization_projects")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("has_repository_projects").setSourceName("has_repository_projects")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -263,7 +263,7 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("billing_email").setSourceName("billing_email")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -279,13 +279,13 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("default_repository_permission").setSourceName("default_repository_permission")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_repositories").setSourceName("members_can_create_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -296,61 +296,61 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("members_allowed_repository_creation_type").setSourceName("members_allowed_repository_creation_type")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_public_repositories").setSourceName("members_can_create_public_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_private_repositories").setSourceName("members_can_create_private_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_internal_repositories").setSourceName("members_can_create_internal_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_pages").setSourceName("members_can_create_pages")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_public_pages").setSourceName("members_can_create_public_pages")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_private_pages").setSourceName("members_can_create_private_pages")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_fork_private_repositories").setSourceName("members_can_fork_private_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("web_commit_signoff_required").setSourceName("web_commit_signoff_required")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("advanced_security_enabled_for_new_repositories").setSourceName("advanced_security_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
@@ -360,7 +360,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("dependabot_alerts_enabled_for_new_repositories").setSourceName("dependabot_alerts_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether GitHub Advanced Security is automatically enabled for new repositories and repositories transferred to
@@ -371,7 +371,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
@@ -382,7 +382,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("dependency_graph_enabled_for_new_repositories").setSourceName("dependency_graph_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether dependency graph is automatically enabled for new repositories and repositories transferred to this
@@ -393,7 +393,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_enabled_for_new_repositories").setSourceName("secret_scanning_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether secret scanning is automatically enabled for new repositories and repositories transferred to this
@@ -404,7 +404,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
 Whether secret scanning push protection is automatically enabled for new repositories and repositories
@@ -415,14 +415,14 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("Whether a custom link is shown to contributors who are blocked from pushing a secret by push protection.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_custom_link").setSourceName("secret_scanning_push_protection_custom_link")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("An optional URL string to display to contributors who are blocked from pushing a secret.")
                                 .build(),
@@ -443,9 +443,9 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("org").setSourceName("org")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(
-                                        PathItem.HttpMethod.GET, "path",
-                                        PathItem.HttpMethod.PATCH, "path",
-                                        PathItem.HttpMethod.DELETE, "path"))
+                                        PathItem.HttpMethod.GET, ParameterLocation.PATH,
+                                        PathItem.HttpMethod.PATCH, ParameterLocation.PATH,
+                                        PathItem.HttpMethod.DELETE, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build());
 
@@ -539,26 +539,26 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("owner").setSourceName("owner")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("repo").setSourceName("repo")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setIsHidden(true)
                                 .setIsPageNumber(true)
@@ -566,7 +566,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("workflow_id").setSourceName("workflow_id")
                                 .setType(VARCHAR).setSourceType(nullSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -635,7 +635,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("expand").setSourceName("expand")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Expand options that include additional search result details in the response.")
                                 .build(),
@@ -648,7 +648,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("max_results").setSourceName("maxResults")
                                 .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("The maximum number of results that could be on the page.")
                                 .build(),
@@ -667,7 +667,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("start_at").setSourceName("startAt")
                                 .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("The index of the first item returned on the page.")
                                 .build(),
@@ -686,37 +686,37 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("jql").setSourceName("jql")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("validate_query").setSourceName("validateQuery")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields").setSourceName("fields")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("properties").setSourceName("properties")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields_by_keys").setSourceName("fieldsByKeys")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("expand_req").setSourceName("expand")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("Use [expand](em>#expansion) to include additional information about issues in the response. Note that, unlike the majority of instances where `expand` is specified, `expand` is defined as a list of values. The expand options are:\n" +
                                         "\n" +
@@ -808,48 +808,48 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("id").setSourceName("id")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "query"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("category").setSourceName("category")
                                 .setType(categoryType).setSourceType(objectSchema)
                                 .setOptionalPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("photo_urls").setSourceName("photoUrls")
                                 .setType(photosType).setSourceType(arraySchema)
                                 .setRequiresPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("tags").setSourceName("tags")
                                 .setType(tagsType).setSourceType(arraySchema)
                                 .setOptionalPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "body",
-                                        PathItem.HttpMethod.PUT, "body"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.BODY,
+                                        PathItem.HttpMethod.PUT, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("pet status in the store")
                                 .build(),
@@ -857,15 +857,15 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("pet_id").setSourceName("petId")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setRequiresPredicate(Map.of(
-                                        PathItem.HttpMethod.POST, "path",
-                                        PathItem.HttpMethod.GET, "path",
-                                        PathItem.HttpMethod.DELETE, "path"))
+                                        PathItem.HttpMethod.POST, ParameterLocation.PATH,
+                                        PathItem.HttpMethod.GET, ParameterLocation.PATH,
+                                        PathItem.HttpMethod.DELETE, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("api_key").setSourceName("api_key")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.DELETE, "header"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.DELETE, ParameterLocation.HEADER))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -945,7 +945,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("data_req").setSourceName("data")
                                 .setType(dataReqType).setSourceType(objectSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY))
                                 .setComment("A single timeseries query to be executed.")
                                 .build());
     }
@@ -1056,8 +1056,8 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setComment("A domain name. Optional filter operators can be provided to extend refine the search:\n" +
                                         "  * `equal` (default)\n" +
                                         "  * `not_equal`\n" +
@@ -1072,21 +1072,21 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("A zone status")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.id").setSourceName("account.id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("An account ID")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.name").setSourceName("account.name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("An account Name. Optional filter operators can be provided to extend refine the search:\n" +
                                         "  * `equal` (default)\n" +
@@ -1101,47 +1101,47 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
                                 .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Page number of paginated results.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
                                 .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Number of zones per page.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("order").setSourceName("order")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Field to order zones by.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("direction").setSourceName("direction")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Direction to order zones.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("match").setSourceName("match")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Whether to match all search requirements or at least one (any).")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account").setSourceName("account")
                                 .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY))
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("type").setSourceName("type")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body", PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY, PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
                                         "typically a partner-hosted zone or a CNAME setup.\n")
@@ -1150,14 +1150,14 @@ This field is only visible to organization owners or members of a team with the 
                                 .setName("identifier").setSourceName("identifier")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "path", PathItem.HttpMethod.DELETE, "path", PathItem.HttpMethod.PATCH, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.PATH, PathItem.HttpMethod.DELETE, ParameterLocation.PATH, PathItem.HttpMethod.PATCH, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .setComment("Identifier")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("paused").setSourceName("paused")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
                                         "true value means the zone will not receive security or performance\n" +
@@ -1166,7 +1166,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
                                 .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("(Deprecated) Please use the `/zones/{identifier}/subscription` API\n" +
                                         "to update a zone's plan. Changing this value will create/cancel\n" +
@@ -1176,7 +1176,7 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("vanity_name_servers").setSourceName("vanity_name_servers")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.PATCH, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("An array of domains used for custom name servers. This is only\n" +
                                         "available for Business and Enterprise plans.")
@@ -1335,61 +1335,61 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("hourly_req").setSourceName("hourly")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("daily_req").setSourceName("daily")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("latitude_req").setSourceName("latitude")
                                 .setType(REAL).setSourceType(numberSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("longitude_req").setSourceName("longitude")
                                 .setType(REAL).setSourceType(numberSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("current_weather_req").setSourceName("current_weather")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("temperature_unit").setSourceName("temperature_unit")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("wind_speed_unit").setSourceName("wind_speed_unit")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("timeformat").setSourceName("timeformat")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("timezone").setSourceName("timezone")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("past_days").setSourceName("past_days")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, "query"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.GET, ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build());
     }
@@ -1478,19 +1478,19 @@ This field is only visible to organization owners or members of a team with the 
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, "body"))
+                                .setOptionalPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("namespace").setSourceName("namespace")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("index").setSourceName("index")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, "path"))
+                                .setRequiresPredicate(Map.of(PathItem.HttpMethod.POST, ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .build());
     }
