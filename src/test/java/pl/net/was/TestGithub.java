@@ -464,15 +464,13 @@ public class TestGithub
     @Test
     public void selectFromGithubActionsTable()
     {
-        // TODO remove the unused `workflow_id = 'a'` predicate
-        assertQuery("SELECT name FROM repos_actions_workflows WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' AND workflow_id = 'a'",
+        assertQuery("SELECT name FROM repos_actions_workflows WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven'",
                 "VALUES ('Release with Maven')");
-        // TODO remove the unused `run_id = 1` predicate
-        assertQuery("SELECT name FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' AND run_id = 1 LIMIT 1",
+        assertQuery("SELECT name FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' LIMIT 1",
                 "VALUES ('Release with Maven')");
 
         QueryRunner runner = getQueryRunner();
-        long runId = (long) runner.execute("SELECT id FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' AND run_id = 1 ORDER BY created_at DESC LIMIT 1").getOnlyValue();
+        long runId = (long) runner.execute("SELECT id FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' ORDER BY created_at DESC LIMIT 1").getOnlyValue();
         assertThat(runId).isGreaterThan(0);
         long jobId = (long) runner.execute(format("SELECT id FROM repos_actions_runs_jobs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND run_id = %d LIMIT 1", runId)).getOnlyValue();
         assertThat(jobId).isGreaterThan(0);
@@ -494,8 +492,8 @@ public class TestGithub
         assertQuery("SELECT count(*) > 0 " +
                         "FROM repos_actions_workflows w " +
                         "JOIN repos_actions_runs r ON r.workflow_id = w.id " +
-                        "WHERE w.owner = 'nineinchnick' AND w.repo = 'trino-openapi' AND w.workflow_id = 'a' " +
-                        "AND r.owner = 'nineinchnick' AND r.repo = 'trino-openapi' AND r.run_id = 1",
+                        "WHERE w.owner = 'nineinchnick' AND w.repo = 'trino-openapi' " +
+                        "AND r.owner = 'nineinchnick' AND r.repo = 'trino-openapi'",
                 "VALUES (true)");
     }
 }

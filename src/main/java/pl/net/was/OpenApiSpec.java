@@ -138,10 +138,10 @@ public class OpenApiSpec
                     .toList();
             if (pathItems.size() == 1) {
                 // create a new entry with the value unwrapped out of a list
+                Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
                 tables.put(Map.entry(
                         groupEntry.getKey(),
-                        mergeColumns(getColumns(pathItems.getFirst(), groupEntry.getKey()))));
-                Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
+                        mergeColumns(getColumns(pathItems.getFirst(), firstEntry.getKey()))));
                 Map<PathItem.HttpMethod, List<String>> tablePaths = methodsToPaths(firstEntry.getValue(), firstEntry.getKey());
                 handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
                 continue;
@@ -306,8 +306,8 @@ public class OpenApiSpec
                     .map(propEntry -> getPredicateColumn(
                             propEntry.getKey(),
                             propEntry.getValue(),
-                            requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(method, ParameterLocation.BODY) : ImmutableMap.of(),
-                            !requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(method, ParameterLocation.BODY) : ImmutableMap.of(),
+                            requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(new HttpPath(method, path), ParameterLocation.BODY) : ImmutableMap.of(),
+                            !requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(new HttpPath(method, path), ParameterLocation.BODY) : ImmutableMap.of(),
                             !requiredProperties.contains(propEntry.getKey()),
                             false,
                             propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
@@ -339,8 +339,8 @@ public class OpenApiSpec
                         return getPredicateColumn(
                                 parameter.getName(),
                                 parameter.getSchema(),
-                                parameter.getRequired() ? ImmutableMap.of(method, parameterLocation) : ImmutableMap.of(),
-                                !parameter.getRequired() ? ImmutableMap.of(method, parameterLocation) : ImmutableMap.of(),
+                                parameter.getRequired() ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
+                                !parameter.getRequired() ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
                                 // always nullable, because they're only required as predicates, not in INSERT statements
                                 true,
                                 // keep pagination parameters as hidden columns, so it's possible to
@@ -507,8 +507,8 @@ public class OpenApiSpec
     private Optional<OpenApiColumn> getPredicateColumn(
             String sourceName,
             Schema<?> schema,
-            Map<PathItem.HttpMethod, ParameterLocation> requiredPredicate,
-            Map<PathItem.HttpMethod, ParameterLocation> optionalPredicate,
+            Map<HttpPath, ParameterLocation> requiredPredicate,
+            Map<HttpPath, ParameterLocation> optionalPredicate,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber)
