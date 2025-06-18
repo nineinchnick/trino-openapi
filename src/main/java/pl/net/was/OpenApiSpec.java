@@ -17,6 +17,7 @@ package pl.net.was;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.google.common.base.CaseFormat;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.inject.Inject;
@@ -58,6 +59,8 @@ import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -138,9 +141,7 @@ public class OpenApiSpec
                         groupEntry.getKey(),
                         mergeColumns(getColumns(pathItems.getFirst(), groupEntry.getKey()))));
                 Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
-                Map<PathItem.HttpMethod, String> tablePaths = firstEntry.getValue().readOperationsMap().keySet().stream()
-                        .filter(method -> filterPath(groupEntry.getKey(), method))
-                        .collect(toMap(identity(), method -> firstEntry.getKey()));
+                Map<PathItem.HttpMethod, List<String>> tablePaths = methodsToPaths(firstEntry.getValue(), firstEntry.getKey());
                 handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
                 continue;
             }
@@ -148,7 +149,7 @@ public class OpenApiSpec
                     .min(comparingInt(entry -> entry.getKey().length()))
                     .orElseThrow();
             List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
-            Map<PathItem.HttpMethod, String> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
+            Map<PathItem.HttpMethod, List<String>> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
             // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
             // but combine it with columns from the base path
             groupEntry.getValue().stream()
@@ -162,14 +163,13 @@ public class OpenApiSpec
                                                 getColumns(entry.getValue(), entry.getKey()).stream())
                                         .distinct()
                                         .toList()));
-                        // TODO choosing the shortest path is wrong, it should be chosen based on available predicates
-                        Map<PathItem.HttpMethod, String> tablePaths = Stream.concat(
+                        Map<PathItem.HttpMethod, List<String>> tablePaths = Stream.concat(
                                         baseMethods.entrySet().stream(),
                                         methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
-                                .collect(toMap(
+                                .collect(toImmutableMap(
                                         Map.Entry::getKey,
                                         Map.Entry::getValue,
-                                        (x, y) -> x.length() < y.length() ? x : y));
+                                        (x, y) -> Stream.concat(x.stream(), y.stream()).distinct().collect(toImmutableList())));
 
                         handles.put(tableName, tableHandle(tableName, tablePaths));
                     });
@@ -524,11 +524,11 @@ public class OpenApiSpec
                 .build());
     }
 
-    private Map<PathItem.HttpMethod, String> methodsToPaths(PathItem pathItem, String path)
+    private Map<PathItem.HttpMethod, List<String>> methodsToPaths(PathItem pathItem, String path)
     {
         return pathItem.readOperationsMap().keySet().stream()
                 .filter(method -> filterPath(path, method))
-                .collect(toMap(identity(), method -> path));
+                .collect(toMap(identity(), method -> ImmutableList.of(path)));
     }
 
     private boolean filterPath(String path, PathItem.HttpMethod method)
@@ -712,19 +712,19 @@ public class OpenApiSpec
                 .toList();
     }
 
-    private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, String> tablePaths)
+    private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, List<String>> tablePaths)
     {
         return new OpenApiTableHandle(
                 SchemaTableName.schemaTableName(SCHEMA_NAME, tableName),
                 // some APIs use POST to query resources
-                tablePaths.containsKey(PathItem.HttpMethod.GET) ? tablePaths.get(PathItem.HttpMethod.GET) : tablePaths.get(PathItem.HttpMethod.POST),
+                tablePaths.containsKey(PathItem.HttpMethod.GET) ? tablePaths.get(PathItem.HttpMethod.GET) : firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
                 tablePaths.containsKey(PathItem.HttpMethod.GET) ? PathItem.HttpMethod.GET : PathItem.HttpMethod.POST,
-                tablePaths.get(PathItem.HttpMethod.POST),
+                firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
                 PathItem.HttpMethod.POST,
                 // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
-                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? tablePaths.get(PathItem.HttpMethod.PUT) : tablePaths.get(PathItem.HttpMethod.POST),
+                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? tablePaths.get(PathItem.HttpMethod.PUT) : firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
                 tablePaths.containsKey(PathItem.HttpMethod.PUT) ? PathItem.HttpMethod.PUT : PathItem.HttpMethod.POST,
-                tablePaths.get(PathItem.HttpMethod.DELETE),
+                firstNonNull(tablePaths.get(PathItem.HttpMethod.DELETE), ImmutableList.of()),
                 PathItem.HttpMethod.DELETE,
                 TupleDomain.none());
     }
