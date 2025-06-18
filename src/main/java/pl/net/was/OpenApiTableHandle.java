@@ -28,11 +28,13 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static java.util.Objects.requireNonNull;
 
 public class OpenApiTableHandle
         implements ConnectorTableHandle, Cloneable
@@ -40,37 +42,37 @@ public class OpenApiTableHandle
     private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiTableHandle.class);
 
     private final SchemaTableName schemaTableName;
-    private final String selectPath;
+    private final List<String> selectPaths;
     private final PathItem.HttpMethod selectMethod;
-    private final String insertPath;
+    private final List<String> insertPaths;
     private final PathItem.HttpMethod insertMethod;
-    private final String updatePath;
+    private final List<String> updatePaths;
     private final PathItem.HttpMethod updateMethod;
-    private final String deletePath;
+    private final List<String> deletePaths;
     private final PathItem.HttpMethod deleteMethod;
     private TupleDomain<ColumnHandle> constraint;
 
     @JsonCreator
     public OpenApiTableHandle(
             SchemaTableName schemaTableName,
-            String selectPath,
+            List<String> selectPaths,
             PathItem.HttpMethod selectMethod,
-            String insertPath,
+            List<String> insertPaths,
             PathItem.HttpMethod insertMethod,
-            String updatePath,
+            List<String> updatePaths,
             PathItem.HttpMethod updateMethod,
-            String deletePath,
+            List<String> deletePaths,
             PathItem.HttpMethod deleteMethod,
             TupleDomain<ColumnHandle> constraint)
     {
         this.schemaTableName = schemaTableName;
-        this.selectPath = selectPath;
+        this.selectPaths = requireNonNull(selectPaths, "selectPaths is null");
         this.selectMethod = selectMethod;
-        this.insertPath = insertPath;
+        this.insertPaths = requireNonNull(insertPaths, "insertPaths is null");
         this.insertMethod = insertMethod;
-        this.updatePath = updatePath;
+        this.updatePaths = requireNonNull(updatePaths, "updatePaths is null");
         this.updateMethod = updateMethod;
-        this.deletePath = deletePath;
+        this.deletePaths = requireNonNull(deletePaths, "deletePaths is null");
         this.deleteMethod = deleteMethod;
         this.constraint = constraint;
     }
@@ -82,9 +84,9 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public String getSelectPath()
+    public List<String> getSelectPaths()
     {
-        return selectPath;
+        return selectPaths;
     }
 
     @JsonProperty
@@ -94,9 +96,9 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public String getInsertPath()
+    public List<String> getInsertPaths()
     {
-        return insertPath;
+        return insertPaths;
     }
 
     @JsonProperty
@@ -106,9 +108,9 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public String getUpdatePath()
+    public List<String> getUpdatePaths()
     {
-        return updatePath;
+        return updatePaths;
     }
 
     @JsonProperty
@@ -118,9 +120,9 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public String getDeletePath()
+    public List<String> getDeletePaths()
     {
-        return deletePath;
+        return deletePaths;
     }
 
     @JsonProperty
@@ -145,10 +147,10 @@ public class OpenApiTableHandle
     {
         return (long) INSTANCE_SIZE
                 + schemaTableName.getRetainedSizeInBytes()
-                + SizeOf.estimatedSizeOf(selectPath)
-                + SizeOf.estimatedSizeOf(insertPath)
-                + SizeOf.estimatedSizeOf(updatePath)
-                + SizeOf.estimatedSizeOf(deletePath)
+                + SizeOf.estimatedSizeOf(selectPaths, String::length)
+                + SizeOf.estimatedSizeOf(insertPaths, String::length)
+                + SizeOf.estimatedSizeOf(updatePaths, String::length)
+                + SizeOf.estimatedSizeOf(deletePaths, String::length)
                 + SizeOf.estimatedSizeOf(selectMethod.toString())
                 + SizeOf.estimatedSizeOf(insertMethod.toString())
                 + SizeOf.estimatedSizeOf(updateMethod.toString())

@@ -69,6 +69,7 @@ import java.util.Optional;
 import java.util.function.IntFunction;
 import java.util.stream.IntStream;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
@@ -138,9 +139,9 @@ public class OpenApiClient
                 .filter(OpenApiColumn::isPageNumber)
                 .findFirst();
         // TODO if there are multiple paths, choose one based on predicates
-        String selectPath = table.getSelectPath();
+        List<String> selectPaths = table.getSelectPaths();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint(), null) != null) {
-            return makeRequest(table, method, selectPath, bodyGenerator, responseHandler);
+            return makeRequest(table, method, selectPaths, bodyGenerator, responseHandler);
         }
         return pageIterator(
                 page -> {
@@ -150,7 +151,7 @@ public class OpenApiClient
                                     pageColumn.get().getType(),
                                     pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
                     OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
-                    return makeRequest(pageTable, method, selectPath, bodyGenerator, responseHandler);
+                    return makeRequest(pageTable, method, selectPaths, bodyGenerator, responseHandler);
                 },
                 0,
                 Integer.MAX_VALUE,
@@ -179,7 +180,12 @@ public class OpenApiClient
     public void postRows(OpenApiOutputTableHandle table, JsonNode data)
     {
         try {
-            makeRequest(table.getTableHandle(), PathItem.HttpMethod.POST, table.getTableHandle().getInsertPath(), createStaticBodyGenerator(toBytes(data)), new AnyResponseHandler());
+            makeRequest(
+                    table.getTableHandle(),
+                    PathItem.HttpMethod.POST,
+                    table.getTableHandle().getInsertPaths(),
+                    createStaticBodyGenerator(toBytes(data)),
+                    new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -194,7 +200,12 @@ public class OpenApiClient
     public void putRows(OpenApiOutputTableHandle table, JsonNode data)
     {
         try {
-            makeRequest(table.getTableHandle(), PathItem.HttpMethod.PUT, table.getTableHandle().getUpdatePath(), createStaticBodyGenerator(toBytes(data)), new AnyResponseHandler());
+            makeRequest(
+                    table.getTableHandle(),
+                    PathItem.HttpMethod.PUT,
+                    table.getTableHandle().getUpdatePaths(),
+                    createStaticBodyGenerator(toBytes(data)),
+                    new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -204,14 +215,30 @@ public class OpenApiClient
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
         // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
-        makeRequest(table.getTableHandle(), PathItem.HttpMethod.DELETE, table.getTableHandle().getDeletePath(), null, new AnyResponseHandler());
+        makeRequest(
+                table.getTableHandle(),
+                PathItem.HttpMethod.DELETE,
+                table.getTableHandle().getDeletePaths(),
+                null,
+                new AnyResponseHandler());
     }
 
-    public <T> T makeRequest(OpenApiTableHandle table, PathItem.HttpMethod method, String path, BodyGenerator bodyGenerator, ResponseHandler<T, RuntimeException> responseHandler)
+    public <T> T makeRequest(
+            OpenApiTableHandle table,
+            PathItem.HttpMethod method,
+            List<String> paths,
+            BodyGenerator bodyGenerator,
+            ResponseHandler<T, RuntimeException> responseHandler)
     {
+        checkState(!requireNonNull(paths, "paths are null").isEmpty(), "paths are empty");
+        Map.Entry<String, Map<String, Object>> path = selectPath(table, method, paths);
+        String uriPath = path.getKey();
+        for (Map.Entry<String, Object> entry : path.getValue().entrySet()) {
+            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
+        }
         URI uri;
         try {
-            uri = buildUri(baseUri, buildPath(table, method, path), getFilterValues(table, method, "query"));
+            uri = buildUri(baseUri, uriPath, getFilterValues(table, method, "query"));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -223,7 +250,7 @@ public class OpenApiClient
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
-                .addHeader("X-Trino-OpenAPI-Path", path);
+                .addHeader("X-Trino-OpenAPI-Path", path.getKey());
         getFilterValues(table, method, "header").forEach((key, value) -> builder.addHeader(key, value.toString()));
 
         Request request = builder.build();
@@ -234,14 +261,24 @@ public class OpenApiClient
         return httpClient.execute(request, responseHandler);
     }
 
-    private String buildPath(OpenApiTableHandle table, PathItem.HttpMethod method, String path)
+    private Map.Entry<String, Map<String, Object>> selectPath(OpenApiTableHandle table, PathItem.HttpMethod method, List<String> paths)
     {
-        String uriPath = requireNonNull(path, "path is null");
-        Map<String, Object> pathParams = getFilterValues(table, method, "path");
-        for (Map.Entry<String, Object> entry : pathParams.entrySet()) {
-            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
-        }
-        return uriPath;
+        String tableName = table.getSchemaTableName().getTableName();
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
+        // TODO get params only from matching paths
+        Map<String, Object> pathParams = columns.stream()
+                .filter(column -> isPredicate(column, method, "path"))
+                .map(column -> {
+                    Object value = getFilter(column, table.getConstraint(), null);
+                    if (value == null && isRequiredPredicate(column, method, "path")) {
+                        throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
+                    }
+                    return new SimpleEntry<>(column.getSourceName(), value);
+                })
+                .filter(entry -> entry.getValue() != null)
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+        // TODO pick the path that contains the most pathParams, or the shortest one
+        return Map.entry(paths.getFirst(), pathParams);
     }
 
     private static URI buildUri(URI uri, String path, Map<String, Object> queryParams)
@@ -266,15 +303,14 @@ public class OpenApiClient
 
     private Map<String, Object> getFilterValues(OpenApiTableHandle table, PathItem.HttpMethod method, String in)
     {
+        checkState(!"path".equals(in), "getFilterValues cannot be used for path parameters");
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         return columns.stream()
                 .filter(column -> isPredicate(column, method, in))
                 .map(column -> {
                     Object value = getFilter(column, table.getConstraint(), null);
-                    // TODO revisit this - we should always choose the correct path based on query predicates
-                    // don't require params in paths, since paths without params can be merged with others
-                    if (!"path".equals(in) && value == null && isRequiredPredicate(column, method, in)) {
+                    if (value == null && isRequiredPredicate(column, method, in)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
                     return new SimpleEntry<>(column.getSourceName(), value);

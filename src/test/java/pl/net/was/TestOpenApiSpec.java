@@ -87,10 +87,10 @@ class TestOpenApiSpec
         Assertions.assertThat(tables.keySet()).containsAll(expected);
 
         OpenApiTableHandle orgsTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "orgs"));
-        Assertions.assertThat(orgsTableHandle.getSelectPath()).isEqualTo("/orgs/{org}");
-        Assertions.assertThat(orgsTableHandle.getInsertPath()).isNull();
-        Assertions.assertThat(orgsTableHandle.getUpdatePath()).isNull();
-        Assertions.assertThat(orgsTableHandle.getDeletePath()).isEqualTo("/orgs/{org}");
+        Assertions.assertThat(orgsTableHandle.getSelectPaths()).containsExactly("/orgs/{org}");
+        Assertions.assertThat(orgsTableHandle.getInsertPaths()).isEmpty();
+        Assertions.assertThat(orgsTableHandle.getUpdatePaths()).isEmpty();
+        Assertions.assertThat(orgsTableHandle.getDeletePaths()).containsExactly("/orgs/{org}");
         List<OpenApiColumn> orgColumns = tables.get("orgs").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -450,10 +450,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .build());
 
         OpenApiTableHandle workflowTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
-        Assertions.assertThat(workflowTableHandle.getSelectPath()).isEqualTo("/repos/{owner}/{repo}/actions/workflows");
-        Assertions.assertThat(workflowTableHandle.getInsertPath()).isNull();
-        Assertions.assertThat(workflowTableHandle.getUpdatePath()).isNull();
-        Assertions.assertThat(workflowTableHandle.getDeletePath()).isNull();
+        Assertions.assertThat(workflowTableHandle.getSelectPaths()).containsExactly("/repos/{owner}/{repo}/actions/workflows", "/repos/{owner}/{repo}/actions/workflows/{workflow_id}");
+        Assertions.assertThat(workflowTableHandle.getInsertPaths()).isEmpty();
+        Assertions.assertThat(workflowTableHandle.getUpdatePaths()).isEmpty();
+        Assertions.assertThat(workflowTableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> workflowColumns = tables.get("repos_actions_workflows").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -584,10 +584,10 @@ This field is only visible to organization owners or members of a team with the 
         Assertions.assertThat(tables.keySet()).containsAll(expected);
 
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "rest_api_3_search"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/rest/api/3/search");
-        Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/rest/api/3/search");
-        Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/rest/api/3/search");
-        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly("/rest/api/3/search");
+        Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> columns = tables.get("rest_api_3_search").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -778,10 +778,10 @@ This field is only visible to organization owners or members of a team with the 
                 "pet");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "pet"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/pet/{petId}");
-        Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/pet");
-        Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/pet");
-        Assertions.assertThat(tableHandle.getDeletePath()).isEqualTo("/pet/{petId}");
+        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly("/pet/{petId}");
+        Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly("/pet", "/pet/{petId}");
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly("/pet", "/pet/{petId}");
+        Assertions.assertThat(tableHandle.getDeletePaths()).containsExactly("/pet/{petId}");
         List<OpenApiColumn> petColumns = tables.get("pet").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -883,10 +883,10 @@ This field is only visible to organization owners or members of a team with the 
                 "api_v2_query_timeseries");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "api_v2_query_timeseries"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/api/v2/query/timeseries");
-        Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/api/v2/query/timeseries");
-        Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/api/v2/query/timeseries");
-        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly("/api/v2/query/timeseries");
+        Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly("/api/v2/query/timeseries");
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly("/api/v2/query/timeseries");
+        Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> columns = tables.get("api_v2_query_timeseries").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -963,10 +963,10 @@ This field is only visible to organization owners or members of a team with the 
                 "zones");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "zones"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/zones");
-        Assertions.assertThat(tableHandle.getInsertPath()).isEqualTo("/zones");
-        Assertions.assertThat(tableHandle.getUpdatePath()).isEqualTo("/zones");
-        Assertions.assertThat(tableHandle.getDeletePath()).isEqualTo("/zones/{identifier}");
+        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly("/zones", "/zones/{identifier}");
+        Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly("/zones");
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly("/zones");
+        Assertions.assertThat(tableHandle.getDeletePaths()).containsExactly("/zones/{identifier}");
         List<OpenApiColumn> columns = tables.get("zones").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
@@ -1193,10 +1193,10 @@ This field is only visible to organization owners or members of a team with the 
                 "v1_forecast");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "v1_forecast"));
-        Assertions.assertThat(tableHandle.getSelectPath()).isEqualTo("/v1/forecast");
-        Assertions.assertThat(tableHandle.getInsertPath()).isNull();
-        Assertions.assertThat(tableHandle.getUpdatePath()).isNull();
-        Assertions.assertThat(tableHandle.getDeletePath()).isNull();
+        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly("/v1/forecast");
+        Assertions.assertThat(tableHandle.getInsertPaths()).isEmpty();
+        Assertions.assertThat(tableHandle.getUpdatePaths()).isEmpty();
+        Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> columns = tables.get("v1_forecast").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
