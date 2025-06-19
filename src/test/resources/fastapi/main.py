@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Callable
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -56,6 +57,12 @@ router = APIRouter(route_class=LoggingRoute)
 logging.basicConfig(format="%(asctime)s %(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
 
+class UnicornException(Exception):
+    def __init__(self, name: str, *args: object):
+        super().__init__(*args)
+        self.name = name
+
+
 class Item(BaseModel):
     id: str
     name: str
@@ -95,5 +102,17 @@ def get_item(item_id: int) -> Item:
         raise HTTPException(status_code=404, detail="Item not found")
     return items[item_id]
 
+
+@router.get("/error")
+def error() -> Item:
+    raise UnicornException(name="Inevitable error")
+
+
+@app.exception_handler(UnicornException)
+async def unicorn_exception_handler(request: Request, exc: UnicornException):
+    return JSONResponse(
+        status_code=418,
+        content={"message": f"Oops! {exc.name} happened. There goes a rainbow..."},
+    )
 
 app.include_router(router)
