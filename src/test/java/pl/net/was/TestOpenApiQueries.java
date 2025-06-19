@@ -174,6 +174,12 @@ public class TestOpenApiQueries
         }
     }
 
+    @Test
+    public void errors()
+    {
+        assertQueryFails("SELECT * FROM fastapi.default.error", "Response code for getRows request was not 200: 418");
+    }
+
     private TestTable generateDataset(String namePrefix, int elements)
     {
         return new TestTable(new TrinoSqlExecutor(getQueryRunner()), namePrefix, "AS SELECT CAST(sequential_number AS VARCHAR) AS item_id FROM TABLE(sequence(start=>0, stop=>%d))".formatted(elements - 1));
