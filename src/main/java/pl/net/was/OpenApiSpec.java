@@ -92,7 +92,7 @@ public class OpenApiSpec
     private static final String LEGACY_SPEC_EXTENSION = "x-pagination";
     private static final String PAGINATION_RESULTS_PATH = "resultsPath";
     private static final String PAGINATION_PAGE_PARAM = "pageParam";
-    private static final Pattern RESULTS_PATH_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
+    private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
     private final OpenAPI openApi;
@@ -273,7 +273,13 @@ public class OpenApiSpec
                 getMapOfStrings(firstNonNull(
                         op.getExtensions().get(SPEC_EXTENSION),
                         firstNonNull(op.getExtensions().get(LEGACY_SPEC_EXTENSION), ImmutableMap.of())));
-        JsonPointer resultsPointer = getResultsPath(specExtension);
+        JsonPointer resultsPointer;
+        try {
+            resultsPointer = parseJsonPointer(specExtension.get(PAGINATION_RESULTS_PATH));
+        }
+        catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value of %s.%s: %s. %s".formatted(SPEC_EXTENSION, JSON_POINTER_PATTERN, specExtension.get(PAGINATION_RESULTS_PATH), e.getMessage()));
+        }
 
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
@@ -372,27 +378,26 @@ public class OpenApiSpec
         return result.stream();
     }
 
-    private static JsonPointer getResultsPath(Map<String, String> pagination)
+    private static JsonPointer parseJsonPointer(String expression)
     {
-        if (!pagination.containsKey(PAGINATION_RESULTS_PATH)) {
+        if (expression == null) {
             return JsonPointer.empty();
         }
-        String resultsPath = pagination.get(PAGINATION_RESULTS_PATH);
-        Matcher matcher = RESULTS_PATH_PATTERN.matcher(resultsPath);
+        Matcher matcher = JSON_POINTER_PATTERN.matcher(expression);
         if (matcher.matches()) {
             return JsonPointer.compile(matcher.group(1));
         }
-        if (!resultsPath.contains("/") && (resultsPath.contains(".") || resultsPath.contains("["))) {
+        if (!expression.contains("/") && (expression.contains(".") || expression.contains("["))) {
             // it might be a JSON path, which are not supported, so ignore them
             return JsonPointer.empty();
         }
-        if (resultsPath.startsWith("$")) {
-            throw new IllegalArgumentException("Invalid value of %s.%s: %s, complex JSON pointer or JSON path expressions are not supported".formatted(SPEC_EXTENSION, RESULTS_PATH_PATTERN, resultsPath));
+        if (expression.startsWith("$")) {
+            throw new IllegalArgumentException("Complex JSON pointer or JSON path expressions are not supported");
         }
-        if (!resultsPath.startsWith("/")) {
-            resultsPath = "/" + resultsPath;
+        if (!expression.startsWith("/")) {
+            expression = "/" + expression;
         }
-        return JsonPointer.compile(resultsPath);
+        return JsonPointer.compile(expression);
     }
 
     private static Schema<?> getResponseSchema(Operation op)
@@ -456,7 +461,7 @@ public class OpenApiSpec
             String name = resultsPointer.getMatchingProperty();
             schema = getSchemaProperties(schema).get(name);
             if (schema == null) {
-                throw new IllegalArgumentException("Invalid value of %s.%s: unknown field %s".formatted(SPEC_EXTENSION, RESULTS_PATH_PATTERN, resultsPointer));
+                throw new IllegalArgumentException("Invalid value of %s.%s: unknown field %s".formatted(SPEC_EXTENSION, JSON_POINTER_PATTERN, resultsPointer));
             }
             // TODO validate that the schema is an array?
             resultsPointer = resultsPointer.tail();
