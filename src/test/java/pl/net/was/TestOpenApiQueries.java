@@ -177,7 +177,7 @@ public class TestOpenApiQueries
     @Test
     public void errors()
     {
-        assertQueryFails("SELECT * FROM fastapi.default.error", "Response code for getRows request was not 200: 418");
+        assertQueryFails("SELECT * FROM fastapi.default.error", "Server responded with error 418: Oops! Inevitable error happened. There goes a rainbow...");
     }
 
     private TestTable generateDataset(String namePrefix, int elements)
