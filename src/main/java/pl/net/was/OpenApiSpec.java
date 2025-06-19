@@ -88,7 +88,8 @@ public class OpenApiSpec
 
     private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new StringSchema());
 
-    private static final String EXTENSION_PAGINATION = "x-pagination";
+    private static final String SPEC_EXTENSION = "x-trino";
+    private static final String LEGACY_SPEC_EXTENSION = "x-pagination";
     private static final String PAGINATION_RESULTS_PATH = "resultsPath";
     private static final String PAGINATION_PAGE_PARAM = "pageParam";
     private static final Pattern RESULTS_PATH_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
@@ -267,8 +268,12 @@ public class OpenApiSpec
         Operation op = entry.getValue();
         List<OpenApiColumn> result = new ArrayList<>();
 
-        Map<String, String> pagination = op.getExtensions() == null ? ImmutableMap.of() : getMapOfStrings(op.getExtensions().get(EXTENSION_PAGINATION));
-        JsonPointer resultsPointer = getResultsPath(pagination);
+        Map<String, String> specExtension = op.getExtensions() == null ?
+                ImmutableMap.of() :
+                getMapOfStrings(firstNonNull(
+                        op.getExtensions().get(SPEC_EXTENSION),
+                        firstNonNull(op.getExtensions().get(LEGACY_SPEC_EXTENSION), ImmutableMap.of())));
+        JsonPointer resultsPointer = getResultsPath(specExtension);
 
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
@@ -280,7 +285,7 @@ public class OpenApiSpec
                             propEntry.getKey(),
                             propEntry.getValue(),
                             !requiredProperties.contains(propEntry.getKey()),
-                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
+                            propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
             getResultsSchema(schema, resultsPointer)
@@ -290,7 +295,7 @@ public class OpenApiSpec
                             resultsPointer,
                             propEntry.getValue(),
                             !requiredProperties.contains(propEntry.getKey()),
-                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
+                            propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
         }
@@ -310,7 +315,7 @@ public class OpenApiSpec
                             !requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(new HttpPath(method, path), ParameterLocation.BODY) : ImmutableMap.of(),
                             !requiredProperties.contains(propEntry.getKey()),
                             false,
-                            propEntry.getKey().equals(pagination.get(PAGINATION_PAGE_PARAM))))
+                            propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .map(column -> {
@@ -345,8 +350,8 @@ public class OpenApiSpec
                                 true,
                                 // keep pagination parameters as hidden columns, so it's possible to
                                 // see the page number (how many requests were made) and change the default per-page limit
-                                pagination.containsValue(parameter.getName()),
-                                parameter.getName().equals(pagination.get(PAGINATION_PAGE_PARAM)));
+                                specExtension.containsValue(parameter.getName()),
+                                parameter.getName().equals(specExtension.get(PAGINATION_PAGE_PARAM)));
                     })
                     .filter(Optional::isPresent)
                     .map(Optional::get)
@@ -382,7 +387,7 @@ public class OpenApiSpec
             return JsonPointer.empty();
         }
         if (resultsPath.startsWith("$")) {
-            throw new IllegalArgumentException("Invalid value of %s.%s: %s, complex JSON pointer or JSON path expressions are not supported".formatted(EXTENSION_PAGINATION, RESULTS_PATH_PATTERN, resultsPath));
+            throw new IllegalArgumentException("Invalid value of %s.%s: %s, complex JSON pointer or JSON path expressions are not supported".formatted(SPEC_EXTENSION, RESULTS_PATH_PATTERN, resultsPath));
         }
         if (!resultsPath.startsWith("/")) {
             resultsPath = "/" + resultsPath;
@@ -451,7 +456,7 @@ public class OpenApiSpec
             String name = resultsPointer.getMatchingProperty();
             schema = getSchemaProperties(schema).get(name);
             if (schema == null) {
-                throw new IllegalArgumentException("Invalid value of %s.%s: unknown field %s".formatted(EXTENSION_PAGINATION, RESULTS_PATH_PATTERN, resultsPointer));
+                throw new IllegalArgumentException("Invalid value of %s.%s: unknown field %s".formatted(SPEC_EXTENSION, RESULTS_PATH_PATTERN, resultsPointer));
             }
             // TODO validate that the schema is an array?
             resultsPointer = resultsPointer.tail();

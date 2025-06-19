@@ -20587,7 +20587,7 @@ paths:
       summary: Get a list of Audit Logs events
       tags:
       - Audit
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -20628,7 +20628,7 @@ paths:
       tags:
       - Audit
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -21039,7 +21039,7 @@ paths:
       summary: Get a list of pipelines events
       tags:
       - CI Visibility Pipelines
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -21082,7 +21082,7 @@ paths:
       tags:
       - CI Visibility Pipelines
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -21199,7 +21199,7 @@ paths:
       summary: Get a list of tests events
       tags:
       - CI Visibility Tests
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -21242,7 +21242,7 @@ paths:
       tags:
       - CI Visibility Tests
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -21319,7 +21319,7 @@ paths:
       summary: Get all Container Images
       tags:
       - Container Images
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.pagination.next_cursor
         limitParam: page[size]
@@ -21396,7 +21396,7 @@ paths:
       summary: Get All Containers
       tags:
       - Containers
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.pagination.next_cursor
         limitParam: page[size]
@@ -22079,7 +22079,7 @@ paths:
       summary: Get all downtimes
       tags:
       - Downtimes
-      x-pagination:
+      x-trino:
         limitParam: page[limit]
         pageOffsetParam: page[offset]
         resultsPath: data
@@ -22343,7 +22343,7 @@ paths:
       summary: Get a list of events
       tags:
       - Events
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -22385,7 +22385,7 @@ paths:
       tags:
       - Events
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -22423,7 +22423,7 @@ paths:
       summary: Get a list of incidents
       tags:
       - Incidents
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageOffsetParam: page[offset]
         resultsPath: data
@@ -22504,7 +22504,7 @@ paths:
       summary: Search for incidents
       tags:
       - Incidents
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageOffsetParam: page[offset]
         resultsPath: data.attributes.incidents
@@ -25041,7 +25041,7 @@ paths:
       summary: Get a list of logs
       tags:
       - Logs
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -25090,7 +25090,7 @@ paths:
       tags:
       - Logs
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -26151,7 +26151,7 @@ paths:
       summary: List findings
       tags:
       - Security Monitoring
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.cursor
         limitParam: page[limit]
@@ -26286,7 +26286,7 @@ paths:
       summary: Get all powerpacks
       tags:
       - Powerpack
-      x-pagination:
+      x-trino:
         limitParam: page[limit]
         pageOffsetParam: page[offset]
         resultsPath: data
@@ -26524,7 +26524,7 @@ paths:
       summary: Get all processes
       tags:
       - Processes
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -27513,7 +27513,7 @@ paths:
       summary: Get a list of RUM events
       tags:
       - RUM
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -27557,7 +27557,7 @@ paths:
       tags:
       - RUM
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -27680,7 +27680,7 @@ paths:
       summary: List all rule outcomes
       tags:
       - Service Scorecards
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageOffsetParam: page[offset]
         resultsPath: data
@@ -27809,7 +27809,7 @@ paths:
       summary: List all rules
       tags:
       - Service Scorecards
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageOffsetParam: page[offset]
         resultsPath: data
@@ -28408,7 +28408,7 @@ paths:
       summary: Get a quick list of security signals
       tags:
       - Security Monitoring
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -28449,7 +28449,7 @@ paths:
       tags:
       - Security Monitoring
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.page.cursor
         cursorPath: meta.page.after
         limitParam: body.page.limit
@@ -29349,7 +29349,7 @@ paths:
       summary: Get all service definitions
       tags:
       - Service Definition
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageOffsetParam: page[number]
         resultsPath: data
@@ -29662,7 +29662,7 @@ paths:
       summary: Get a list of spans
       tags:
       - Spans
-      x-pagination:
+      x-trino:
         cursorParam: page[cursor]
         cursorPath: meta.page.after
         limitParam: page[limit]
@@ -29706,7 +29706,7 @@ paths:
       tags:
       - Spans
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         cursorParam: body.data.attributes.page.cursor
         cursorPath: meta.page.after
         limitParam: body.data.attributes.page.limit
@@ -29816,7 +29816,7 @@ paths:
       summary: Get all teams
       tags:
       - Teams
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageParam: page[number]
         resultsPath: data
@@ -31375,7 +31375,7 @@ paths:
       tags:
       - Users
       x-codegen-request-body-name: body
-      x-pagination:
+      x-trino:
         limitParam: page[size]
         pageParam: page[number]
         resultsPath: data

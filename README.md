@@ -125,7 +125,7 @@ APIs can use 4 different types of pagination:
 
 The connector currently supports only the `Page` pagination.
 
-To enable pagination, add a `x-pagination` section in the path's operation section:
+To enable pagination, add a `x-trino` section in the path's operation section:
 
 ```
 paths:
@@ -133,7 +133,7 @@ paths:
     get:
       responses:
         # ...
-      x-pagination:
+      x-trino:
        pageParam: "page"
        limitParam: "per-page"
        resultsPath: "$response.body#/workflows"
