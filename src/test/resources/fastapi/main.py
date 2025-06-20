@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Callable
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
@@ -115,4 +116,21 @@ async def unicorn_exception_handler(request: Request, exc: UnicornException):
         content={"message": f"Oops! {exc.name} happened. There goes a rainbow..."},
     )
 
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="FastAPI",
+        version="0.1.0",
+        routes=app.routes,
+    )
+    openapi_schema["paths"]["/error"]["get"]["x-trino"] = {
+        "errorPath": "$response.body#/message"
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
 app.include_router(router)
+app.openapi = custom_openapi
