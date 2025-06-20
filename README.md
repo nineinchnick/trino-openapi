@@ -140,6 +140,27 @@ paths:
        totalResultsPath: "$response.body#/total_count"
 ```
 
+### Error messages
+
+When the connector makes an API call, for which the server responds with an
+error, an SQL error is returned to the user. The error only contains the HTTP
+status code, and the whole error response body is not visible to the user.
+There are two reasons for this: if it's a JSON message, it might not be human
+readable, and could also contain sensitive information.
+
+To extract a human readable error message from error responses, set the
+`errorPath` property in the `x-trino` section:
+
+```
+paths:
+  /records:
+    get:
+      responses:
+        # ...
+      x-trino:
+       errorPath: "$response.body#/message"
+```
+
 ## Build
 
 Run all the unit tests:
