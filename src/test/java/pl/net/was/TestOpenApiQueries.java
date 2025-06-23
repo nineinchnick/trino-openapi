@@ -175,6 +175,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemCategories()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.item_categories").getMaterializedRows();
+        assertThat(rows).size().isEqualTo(1);
+        assertThat(rows.getFirst().getFields()).first().isEqualTo("main");
+    }
+
+    @Test
     public void errors()
     {
         assertQueryFails("SELECT * FROM fastapi.default.error", "Server responded with error 418: \"Oops! Inevitable error happened. There goes a rainbow...\"");

@@ -64,6 +64,11 @@ class UnicornException(Exception):
         self.name = name
 
 
+class Category(BaseModel):
+    id: str
+    name: str
+
+
 class Item(BaseModel):
     id: str
     name: str
@@ -71,6 +76,7 @@ class Item(BaseModel):
     price: float
     tax: float | None = None
     tags: list[str] = []
+    categories: list[Category] = []
     properties: dict[str, str] = {}
     createdAt: datetime = None
     validUntil: date = None
@@ -81,8 +87,12 @@ class ItemFilter(BaseModel):
     item_ids: list[str] = []
 
 
+class Results(BaseModel):
+    results: list[Item]
+
+
 items = {
-    1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=["2007-10-10", "2022-12-08"]),
+    1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=["2007-10-10", "2022-12-08"], categories=[Category(id="1", name="main")]),
     2: Item(id="2", name="Plumbus", price=32.0, validUntil="2999-01-01", properties={"feeble": "schleem"}),
 }
 
@@ -95,6 +105,11 @@ def root():
 @router.post("/search")
 def search_items(q: ItemFilter) -> list[Item]:
     return filter(lambda item: item.id in q.item_ids, items.values())
+
+
+@router.get("/item_categories")
+def item_categories() -> Results:
+    return Results(results=items.values())
 
 
 @router.get("/items/{item_id}")
@@ -127,6 +142,9 @@ def custom_openapi():
     )
     openapi_schema["paths"]["/error"]["get"]["x-trino"] = {
         "errorPath": "$response.body#/message"
+    }
+    openapi_schema["paths"]["/item_categories"]["get"]["x-trino"] = {
+        "resultsPath": "$response.body#/results/0/categories"
     }
     app.openapi_schema = openapi_schema
     return app.openapi_schema

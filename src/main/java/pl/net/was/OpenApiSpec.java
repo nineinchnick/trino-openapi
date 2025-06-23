@@ -506,6 +506,11 @@ public class OpenApiSpec
     private static Map<String, Schema> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
     {
         while (resultsPointer != JsonPointer.empty()) {
+            if (resultsPointer.getMatchingIndex() != -1) {
+                // skip over arrays
+                resultsPointer = resultsPointer.tail();
+                continue;
+            }
             String name = resultsPointer.getMatchingProperty();
             schema = getSchemaProperties(schema).get(name);
             if (schema == null) {
