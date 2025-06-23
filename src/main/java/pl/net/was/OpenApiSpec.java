@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.inject.Inject;
+import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -81,6 +82,8 @@ import static java.util.stream.Collectors.toMap;
 
 public class OpenApiSpec
 {
+    private static final Logger log = Logger.get(OpenApiSpec.class);
+
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID = "__trino_row_id";
     public static final String HTTP_OK = "200";
@@ -189,6 +192,20 @@ public class OpenApiSpec
         this.handles = handles.buildOrThrow();
         this.errorPointers = errorPointers.buildOrThrow();
 
+        this.handles.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .flatMap(entry -> Stream.concat(Stream.of(
+                        "SELECT FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getSelectMethod(), entry.getValue().getSelectPaths()),
+                        "INSERT INTO " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getInsertMethod(), entry.getValue().getInsertPaths()),
+                        "UPDATE " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getUpdateMethod(), entry.getValue().getUpdatePaths()),
+                        "DELETE FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getDeleteMethod(), entry.getValue().getDeletePaths())),
+                        this.tables.get(entry.getKey()).stream().filter(column -> !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty())
+                                .map(column -> entry.getKey() + "." + column.getName() + " is " +
+                                        (column.isPageNumber() ? "the page number, " : "") +
+                                        "required for: " + column.getRequiresPredicate() + ", " +
+                                        "optional for: " + column.getOptionalPredicate())))
+                .forEach(log::info);
+
         this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
                 .map(pathEntry -> Map.entry(
                         pathEntry.getKey(),
@@ -201,6 +218,15 @@ public class OpenApiSpec
                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
         this.securitySchemas = openApi.getComponents().getSecuritySchemes();
         this.securityRequirements = openApi.getSecurity();
+    }
+
+    private static String pathsToString(PathItem.HttpMethod method, List<String> paths)
+    {
+        return Optional.of(String.join(
+                        ", ",
+                        paths.stream().map(path -> method + " " + path).toList()))
+                .filter(value -> !value.isBlank())
+                .orElse("<none>");
     }
 
     private String stripPathParams(String key)

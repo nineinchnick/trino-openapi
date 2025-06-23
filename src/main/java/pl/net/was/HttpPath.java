@@ -27,4 +27,10 @@ public record HttpPath(PathItem.HttpMethod method, String path)
     {
         return COMPARATOR.compare(this, other);
     }
+
+    @Override
+    public String toString()
+    {
+        return method + " " + path;
+    }
 }
