@@ -14,7 +14,6 @@
 
 package pl.net.was;
 
-import com.fasterxml.jackson.core.JsonPointer;
 import com.google.common.collect.ImmutableMap;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.connector.ColumnMetadata;
@@ -32,7 +31,6 @@ public class OpenApiColumn
 {
     private final String name;
     private final String sourceName;
-    private final JsonPointer resultsPointer;
     private final Type type;
     private final Schema<?> sourceType;
     private final Map<HttpPath, ParameterLocation> requiresPredicate;
@@ -44,7 +42,6 @@ public class OpenApiColumn
     private OpenApiColumn(
             String name,
             String sourceName,
-            JsonPointer resultsPointer,
             Type type,
             Schema<?> sourceType,
             Map<HttpPath, ParameterLocation> requiresPredicate,
@@ -56,7 +53,6 @@ public class OpenApiColumn
     {
         this.name = name;
         this.sourceName = sourceName;
-        this.resultsPointer = resultsPointer;
         this.type = type;
         this.sourceType = sourceType;
         this.requiresPredicate = ImmutableMap.copyOf(requiresPredicate);
@@ -80,11 +76,6 @@ public class OpenApiColumn
     public String getSourceName()
     {
         return sourceName;
-    }
-
-    public JsonPointer getResultsPointer()
-    {
-        return resultsPointer;
     }
 
     public Type getType()
@@ -140,7 +131,6 @@ public class OpenApiColumn
         OpenApiColumn that = (OpenApiColumn) o;
         return Objects.equals(name, that.name)
                 && Objects.equals(sourceName, that.sourceName)
-                && Objects.equals(resultsPointer, that.resultsPointer)
                 && Objects.equals(type, that.type)
                 && Objects.equals(sourceType, that.sourceType)
                 && Objects.equals(requiresPredicate, that.requiresPredicate)
@@ -155,7 +145,6 @@ public class OpenApiColumn
         return "OpenApiColumn{" +
                 "name='" + name + '\'' +
                 ", sourceName='" + sourceName + '\'' +
-                ", resultsPointer='" + resultsPointer + '\'' +
                 ", type=" + type +
                 ", sourceType=" + sourceType.getType() +
                 ", requiresPredicate=" + requiresPredicate +
@@ -167,7 +156,7 @@ public class OpenApiColumn
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, resultsPointer, type, sourceType, requiresPredicate, optionalPredicate, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, metadata, isPageNumber);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -184,7 +173,6 @@ public class OpenApiColumn
     {
         private String name;
         private String sourceName;
-        private JsonPointer resultsPointer;
         private Type type;
         private Schema<?> sourceType;
         private final SortedMap<HttpPath, ParameterLocation> requiresPredicate = new TreeMap<>();
@@ -200,7 +188,6 @@ public class OpenApiColumn
         {
             this.name = handle.getName();
             this.sourceName = handle.getSourceName();
-            this.resultsPointer = handle.getResultsPointer();
             this.type = handle.getType();
             this.sourceType = handle.getSourceType();
             this.requiresPredicate.putAll(handle.getRequiresPredicate());
@@ -220,12 +207,6 @@ public class OpenApiColumn
         public OpenApiColumn.Builder setSourceName(String sourceName)
         {
             this.sourceName = requireNonNull(sourceName, "sourceName is null");
-            return this;
-        }
-
-        public OpenApiColumn.Builder setResultsPointer(JsonPointer resultsPointer)
-        {
-            this.resultsPointer = requireNonNull(resultsPointer, "resultsPointer is null");
             return this;
         }
 
@@ -284,7 +265,6 @@ public class OpenApiColumn
             return new OpenApiColumn(
                     name,
                     sourceName,
-                    resultsPointer,
                     type,
                     sourceType,
                     requiresPredicate,

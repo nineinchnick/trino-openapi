@@ -14,7 +14,6 @@
 
 package pl.net.was;
 
-import com.fasterxml.jackson.core.JsonPointer;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.parser.OpenAPIV3Parser;
@@ -354,9 +353,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependabot_alerts_enabled_for_new_repositories").setSourceName("dependabot_alerts_enabled_for_new_repositories")
@@ -364,10 +363,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether GitHub Advanced Security is automatically enabled for new repositories and repositories transferred to
-this organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether GitHub Advanced Security is automatically enabled for new repositories and repositories transferred to
+                                            this organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
@@ -375,10 +374,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
-to this organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
+                                            to this organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependency_graph_enabled_for_new_repositories").setSourceName("dependency_graph_enabled_for_new_repositories")
@@ -386,10 +385,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether dependency graph is automatically enabled for new repositories and repositories transferred to this
-organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether dependency graph is automatically enabled for new repositories and repositories transferred to this
+                                            organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_enabled_for_new_repositories").setSourceName("secret_scanning_enabled_for_new_repositories")
@@ -397,10 +396,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether secret scanning is automatically enabled for new repositories and repositories transferred to this
-organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether secret scanning is automatically enabled for new repositories and repositories transferred to this
+                                            organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
@@ -408,10 +407,10 @@ This field is only visible to organization owners or members of a team with the 
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-Whether secret scanning push protection is automatically enabled for new repositories and repositories
-transferred to this organization.
-
-This field is only visible to organization owners or members of a team with the security manager role.""")
+                                            Whether secret scanning push protection is automatically enabled for new repositories and repositories
+                                            transferred to this organization.
+                                            
+                                            This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
@@ -475,67 +474,56 @@ This field is only visible to organization owners or members of a team with the 
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("node_id").setSourceName("node_id")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("path").setSourceName("path")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("state").setSourceName("state")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("created_at").setSourceName("created_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("updated_at").setSourceName("updated_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("url").setSourceName("url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("html_url").setSourceName("html_url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("badge_url").setSourceName("badge_url")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("deleted_at").setSourceName("deleted_at")
-                                .setResultsPointer(JsonPointer.valueOf("/workflows"))
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .setIsNullable(true)
                                 .build(),
@@ -1421,7 +1409,8 @@ This field is only visible to organization owners or members of a team with the 
     @Test
     public void testPathParams()
     {
-        String specContents = """
+        String specContents =
+                """
                 openapi: 3.0.0
                 info:
                   title: test

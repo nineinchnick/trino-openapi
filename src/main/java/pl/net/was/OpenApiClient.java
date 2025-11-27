@@ -140,15 +140,20 @@ public class OpenApiClient
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
         PathItem.HttpMethod method = table.getSelectMethod();
-        Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
-                .filter(OpenApiColumn::isPageNumber)
-                .findFirst();
         List<String> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = new HttpPath(method, pathWithParams.getKey());
         BodyGenerator bodyGenerator = getBodyGenerator(table, httpPath);
-        JsonResponseHandler responseHandler = new JsonResponseHandler(table, httpPath, openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath));
+        JsonResponseHandler responseHandler = new JsonResponseHandler(
+                table,
+                httpPath,
+                openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
+                openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath));
+        Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(OpenApiColumn::isPageNumber)
+                .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
+                .findFirst();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
             return makeRequest(table, httpPath, pathWithParams.getValue(), bodyGenerator, responseHandler);
         }
@@ -159,7 +164,7 @@ public class OpenApiClient
                             NullableValue.of(
                                     pageColumn.get().getType(),
                                     pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
-                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().intersect(pageConstraint));
+                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
                     return makeRequest(pageTable, httpPath, pathWithParams.getValue(), bodyGenerator, responseHandler);
                 },
                 0,
@@ -553,12 +558,14 @@ public class OpenApiClient
         private final OpenApiTableHandle table;
         private final HttpPath httpPath;
         private final JsonPointer errorPointer;
+        private final JsonPointer resultsPointer;
 
-        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer)
+        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer)
         {
             this.table = requireNonNull(table, "table is null");
             this.httpPath = requireNonNull(httpPath, "httpPath is null");
             this.errorPointer = errorPointer;
+            this.resultsPointer = resultsPointer;
         }
 
         @Override
@@ -586,7 +593,7 @@ public class OpenApiClient
             }
 
             try {
-                return convertJson(table, httpPath, OBJECT_MAPPER.readTree(result));
+                return convertJson(table, httpPath, resultsPointer, OBJECT_MAPPER.readTree(result));
             }
             catch (JsonProcessingException ex) {
                 String message = format("Could not marshal JSON from API response: %s", result);
@@ -611,7 +618,7 @@ public class OpenApiClient
         throw new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
     }
 
-    private Iterable<List<?>> convertJson(OpenApiTableHandle table, HttpPath httpPath, JsonNode jsonNode)
+    private Iterable<List<?>> convertJson(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, JsonNode jsonNode)
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
@@ -619,17 +626,17 @@ public class OpenApiClient
 
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, params, jsonRecord));
+                resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, params, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, params, jsonNode));
+            resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, params, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, HttpPath httpPath, Map<String, Object> params, JsonNode jsonNode)
+    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, Map<String, Object> params, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
@@ -637,21 +644,12 @@ public class OpenApiClient
 
         Iterable<JsonNode> resultNodes = List.of(jsonNode);
         List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
-        Optional<JsonPointer> resultsPointer = columns.stream()
-                .map(OpenApiColumn::getResultsPointer)
-                .filter(pointer -> pointer != null && pointer.length() != 0)
-                .reduce((a, b) -> {
-                    if (!a.equals(b)) {
-                        throw new IllegalStateException("More than one results pointer found");
-                    }
-                    return a;
-                });
-        if (resultsPointer.isPresent()) {
-            JsonNode resultNode = jsonNode.at(resultsPointer.get());
+        if (resultsPointer != null && !JsonPointer.empty().equals(resultsPointer)) {
+            JsonNode resultNode = jsonNode.at(resultsPointer);
             if (!(resultNode instanceof ArrayNode)) {
                 throw new IllegalArgumentException("Result path points to a node that's not an array");
             }
-            resultNodes = jsonNode.at(resultsPointer.get());
+            resultNodes = jsonNode.at(resultsPointer);
         }
 
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
@@ -664,7 +662,7 @@ public class OpenApiClient
                     continue;
                 }
                 String parameterName = column.getSourceName();
-                if (column.getResultsPointer() != null && column.getResultsPointer().length() != 0) {
+                if (resultsPointer != null) {
                     recordBuilder.add(
                             JsonTrinoConverter.convert(
                                     resultNode.get(parameterName),

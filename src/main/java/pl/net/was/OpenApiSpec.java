@@ -103,6 +103,7 @@ public class OpenApiSpec
     private final Map<String, List<OpenApiColumn>> tables;
     private final Map<String, OpenApiTableHandle> handles;
     private final Map<String, Map<HttpPath, JsonPointer>> errorPointers;
+    private final Map<String, Map<HttpPath, JsonPointer>> resultsPointers;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -139,6 +140,7 @@ public class OpenApiSpec
         ImmutableMap.Builder<String, List<OpenApiColumn>> tables = ImmutableMap.builder();
         ImmutableMap.Builder<String, OpenApiTableHandle> handles = ImmutableMap.builder();
         ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> errorPointers = ImmutableMap.builder();
+        ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> resultsPointers = ImmutableMap.builder();
         for (Map.Entry<String, List<Map.Entry<String, PathItem>>> groupEntry : pathGroups.entrySet()) {
             List<PathItem> pathItems = groupEntry.getValue().stream()
                     .map(Map.Entry::getValue)
@@ -151,6 +153,7 @@ public class OpenApiSpec
                         mergeColumns(getColumns(pathItems.getFirst(), firstEntry.getKey()))));
                 Map<PathItem.HttpMethod, List<String>> tablePaths = methodsToPaths(firstEntry.getValue(), firstEntry.getKey());
                 errorPointers.put(groupEntry.getKey(), errorPointers(firstEntry.getValue(), firstEntry.getKey()));
+                resultsPointers.put(groupEntry.getKey(), resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
                 handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
                 continue;
             }
@@ -160,6 +163,7 @@ public class OpenApiSpec
             List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
             Map<PathItem.HttpMethod, List<String>> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseErrorPointers = errorPointers(baseEntry.getValue(), baseEntry.getKey());
+            Map<HttpPath, JsonPointer> baseResultsPointers = resultsPointers(baseEntry.getValue(), baseEntry.getKey());
             // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
             // but combine it with columns from the base path
             groupEntry.getValue().stream()
@@ -184,6 +188,10 @@ public class OpenApiSpec
                                         baseErrorPointers.entrySet().stream(),
                                         errorPointers(entry.getValue(), entry.getKey()).entrySet().stream())
                                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
+                        resultsPointers.put(tableName, Stream.concat(
+                                        baseResultsPointers.entrySet().stream(),
+                                        resultsPointers(entry.getValue(), entry.getKey()).entrySet().stream())
+                                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
 
                         handles.put(tableName, tableHandle(tableName, tablePaths));
                     });
@@ -191,6 +199,7 @@ public class OpenApiSpec
         this.tables = tables.buildOrThrow();
         this.handles = handles.buildOrThrow();
         this.errorPointers = errorPointers.buildOrThrow();
+        this.resultsPointers = resultsPointers.buildOrThrow();
 
         this.handles.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -290,6 +299,18 @@ public class OpenApiSpec
         return result;
     }
 
+    public Map<HttpPath, JsonPointer> getResultsPointers(SchemaTableName name)
+    {
+        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
+            throw new SchemaNotFoundException(name.getSchemaName());
+        }
+        Map<HttpPath, JsonPointer> result = this.resultsPointers.get(name.getTableName());
+        if (result == null) {
+            throw new TableNotFoundException(name);
+        }
+        return result;
+    }
+
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
@@ -346,7 +367,6 @@ public class OpenApiSpec
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
-                            resultsPointer,
                             propEntry.getValue(),
                             !requiredProperties.contains(propEntry.getKey()),
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
@@ -546,27 +566,6 @@ public class OpenApiSpec
                 .build());
     }
 
-    private Optional<OpenApiColumn> getResultColumn(
-            String sourceName,
-            JsonPointer resultsPointer,
-            Schema<?> schema,
-            boolean isNullable,
-            boolean isPageNumber)
-    {
-        String name = getIdentifier(sourceName);
-        return convertType(schema).map(type -> OpenApiColumn.builder()
-                .setName(name)
-                .setSourceName(sourceName)
-                .setResultsPointer(resultsPointer)
-                .setType(type.type())
-                .setSourceType(type.schema())
-                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
-                .setIsHidden(false)
-                .setIsPageNumber(isPageNumber)
-                .setComment(schema.getDescription())
-                .build());
-    }
-
     private Optional<OpenApiColumn> getPredicateColumn(
             String sourceName,
             Schema<?> schema,
@@ -600,6 +599,16 @@ public class OpenApiSpec
 
     private Map<HttpPath, JsonPointer> errorPointers(PathItem pathItem, String path)
     {
+        return pointers(pathItem, path, ERROR_PATH);
+    }
+
+    private Map<HttpPath, JsonPointer> resultsPointers(PathItem pathItem, String path)
+    {
+        return pointers(pathItem, path, PAGINATION_RESULTS_PATH);
+    }
+
+    private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)
+    {
         return pathItem.readOperationsMap().entrySet().stream()
                 .filter(entry -> entry.getValue().getExtensions() != null && entry.getValue().getExtensions().containsKey(SPEC_EXTENSION))
                 .collect(toImmutableMap(
@@ -607,10 +616,10 @@ public class OpenApiSpec
                         entry -> {
                             Map<String, String> specExtension = getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION));
                             try {
-                                return parseJsonPointer(specExtension.get(ERROR_PATH));
+                                return parseJsonPointer(specExtension.get(extensionName));
                             }
                             catch (IllegalArgumentException e) {
-                                throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(ERROR_PATH, specExtension.get(ERROR_PATH), e.getMessage()));
+                                throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()));
                             }
                         }));
     }
