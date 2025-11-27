@@ -77,4 +77,7 @@ public class OpenApiConnector
     {
         return pageSinkProvider;
     }
+
+    @Override
+    public void shutdown() {}
 }
