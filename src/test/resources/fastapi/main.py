@@ -72,9 +72,9 @@ class Category(BaseModel):
 class Item(BaseModel):
     id: str
     name: str
-    description: str | None = None
+    description: str = None
     price: float
-    tax: float | None = None
+    tax: float = None
     tags: list[str] = []
     categories: list[Category] = []
     properties: dict[str, str] = {}
@@ -89,11 +89,12 @@ class ItemFilter(BaseModel):
 
 class Results(BaseModel):
     results: list[Item]
+    total_results: int
 
 
 items = {
-    1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=["2007-10-10", "2022-12-08"], categories=[Category(id="1", name="main")]),
-    2: Item(id="2", name="Plumbus", price=32.0, validUntil="2999-01-01", properties={"feeble": "schleem"}),
+    1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=[date.fromisoformat("2007-10-10"), date.fromisoformat("2022-12-08")], categories=[Category(id="1", name="main")]),
+    2: Item(id="2", name="Plumbus", price=32.0, validUntil=date.fromisoformat("2999-01-01"), properties={"feeble": "schleem"}),
 }
 
 
@@ -104,12 +105,26 @@ def root():
 
 @router.post("/search")
 def search_items(q: ItemFilter) -> list[Item]:
-    return filter(lambda item: item.id in q.item_ids, items.values())
+    return list(filter(lambda item: item.id in q.item_ids, items.values()))
 
 
 @router.get("/item_categories")
 def item_categories() -> Results:
-    return Results(results=items.values())
+    return Results(
+        results=list(items.values()),
+        total_results=len(items))
+
+
+@router.get("/items")
+def list_item(page: int = None, per_page: int = None) -> Results:
+    if page is None:
+        page = 1
+    if per_page is None:
+        per_page = 1
+    offset = (page - 1) * per_page
+    return Results(
+        results=list(items.values())[offset:offset+per_page],
+        total_results=len(items))
 
 
 @router.get("/items/{item_id}")
@@ -145,6 +160,12 @@ def custom_openapi():
     }
     openapi_schema["paths"]["/item_categories"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results/0/categories"
+    }
+    openapi_schema["paths"]["/items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "per_page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
     }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
