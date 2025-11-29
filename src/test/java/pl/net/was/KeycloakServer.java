@@ -23,17 +23,20 @@ import java.io.Closeable;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 
 public class KeycloakServer
         implements Closeable
 {
+    private static final boolean REUSE = requireNonNullElse(System.getenv("TESTCONTAINERS_REUSE_ENABLE"), "false").equals("true");
     private static final int API_PORT = 8080;
     private static final String TOKEN_PATH = "/realms/trino-realm/protocol/openid-connect/token";
     private final GenericContainer<?> dockerContainer;
 
     public KeycloakServer()
     {
-        dockerContainer = new GenericContainer<>("quay.io/keycloak/keycloak:26.1.4")
+        dockerContainer = new GenericContainer("quay.io/keycloak/keycloak:26.1.4")
+                .withReuse(REUSE)
                 .withExposedPorts(8080)
                 .withStartupAttempts(3)
                 .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
@@ -56,6 +59,8 @@ public class KeycloakServer
     @Override
     public void close()
     {
-        dockerContainer.close();
+        if (!REUSE) {
+            dockerContainer.close();
+        }
     }
 }

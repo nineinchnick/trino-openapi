@@ -29,10 +29,12 @@ import java.net.URI;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 
 public class PetStoreServer
         implements Closeable
 {
+    private static final boolean REUSE = requireNonNullElse(System.getenv("TESTCONTAINERS_REUSE_ENABLE"), "false").equals("true");
     private static final int API_PORT = 8080;
     private static final String BASE_PATH = "/api/v3";
     private static final String SPEC_PATH = "/api/v3/openapi.json";
@@ -43,6 +45,7 @@ public class PetStoreServer
     {
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("swaggerapi/petstore3:unstable")
+                .withReuse(REUSE)
                 .withExposedPorts(8080)
                 .withStartupAttempts(3)
                 .withEnv("OPENAPI_BASE_PATH", BASE_PATH)
@@ -93,6 +96,8 @@ public class PetStoreServer
     @Override
     public void close()
     {
-        dockerContainer.close();
+        if (!REUSE) {
+            dockerContainer.close();
+        }
     }
 }
