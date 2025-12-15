@@ -46,6 +46,12 @@ public class OpenApiMergeSink
         }
     }
 
+    @Override
+    public long getCompletedBytes()
+    {
+        return 0L;
+    }
+
     private void updatedPage(Page page, int position)
     {
         PathItem.HttpMethod method = this.table.getTableHandle().getUpdateMethod();

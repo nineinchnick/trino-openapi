@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>322</version>
+        <version>334</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -51,24 +51,12 @@
         <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
+        <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector</air.test.jvm.additional-arguments>
 
-        <dep.trino.version>478</dep.trino.version>
-        <dep.airlift.version>369</dep.airlift.version>
-        <dep.slice.version>2.4</dep.slice.version>
-        <dep.opentelemetry.version>1.56.0</dep.opentelemetry.version>
-        <dep.opentelemetry-instrumentation.version>2.22.0</dep.opentelemetry-instrumentation.version>
-        <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
-        <dep.guava.version>33.5.0-jre</dep.guava.version>
-        <dep.guice.version>7.0.0</dep.guice.version>
-        <dep.errorprone.version>2.44.0</dep.errorprone.version>
+        <dep.trino.version>479</dep.trino.version>
+        <dep.airlift.version>386</dep.airlift.version>
         <dep.jackson-annotations.version>2.20</dep.jackson-annotations.version>
-        <dep.jackson.version>2.20.1</dep.jackson.version>
-        <dep.joda.version>2.14.0</dep.joda.version>
-        <dep.junit.version>6.0.1</dep.junit.version>
-        <dep.slf4j.version>2.0.17</dep.slf4j.version>
-        <dep.assertj-core.version>3.27.6</dep.assertj-core.version>
-        <dep.logback.version>1.5.21</dep.logback.version>
-        <dep.plugin.surefire.version>3.2.5</dep.plugin.surefire.version>
+        <dep.logback.version>1.5.22</dep.logback.version>
         <dep.swagger-parser.version>2.1.36</dep.swagger-parser.version>
         <dep.swagger-core.version>2.1.36</dep.swagger-core.version>
         <dep.swagger-models.version>2.2.41</dep.swagger-models.version>
@@ -336,7 +324,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.3.1</version>
                 <configuration>
                     <scmCommentPrefix>[ci skip]</scmCommentPrefix>
                     <tagNameFormat>v@{project.version}</tagNameFormat>
