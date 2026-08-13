@@ -33,6 +33,7 @@ import pl.net.was.OpenApiSpec;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,8 +71,8 @@ public class Authentication
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
-    private final LoadingCache<String, String> tokens = CacheBuilder.newBuilder()
-            .build(CacheLoader.from(this::getToken));
+    private final LoadingCache<String, TokenWithExpiry> tokens = CacheBuilder.newBuilder()
+            .build(CacheLoader.from(this::fetchTokenWithExpiry));
 
     @Inject
     public Authentication(OpenApiConfig config,
@@ -153,7 +154,10 @@ public class Authentication
                                             firstNonNull(
                                                     flows.getClientCredentials(),
                                                     flows.getImplicit())));
-                            applyOAuth(builder, flow.getAuthorizationUrl());
+                            // clientCredentials and password flows use tokenUrl; interactive flows
+                            // (authorizationCode, implicit) use authorizationUrl.
+                            String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
+                            applyOAuth(builder, tokenUrl);
                         }
                         default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
                     }
@@ -212,26 +216,16 @@ public class Authentication
         return builder.addHeader("Authorization", value);
     }
 
-    private Request.Builder applyOAuth(Request.Builder builder, String authorizationUrl)
+    private Request.Builder applyOAuth(Request.Builder builder, String tokenUrl)
     {
         // TODO pick one of supported securitySchema.getFlows(), instead of hardcoding clientCredentials
         // TODO use options as scopes
-                /*
-                type: oauth2
-                flows:
-                  implicit:
-                    authorizationUrl: https://example.com/api/oauth/dialog
-                    scopes:
-                      write:pets: modify pets in your account
-                      read:pets: read your pets
-                  authorizationCode:
-                    authorizationUrl: https://example.com/api/oauth/dialog
-                    tokenUrl: https://example.com/api/oauth/token
-                    scopes:
-                      write:pets: modify pets in your account
-                      read:pets: read your pets
-                 */
-        return builder.addHeader("Authorization", "Bearer " + tokens.getUnchecked(authorizationUrl));
+        TokenWithExpiry tokenWithExpiry = tokens.getUnchecked(tokenUrl);
+        if (tokenWithExpiry.isExpiringSoon()) {
+            tokens.invalidate(tokenUrl);
+            tokenWithExpiry = tokens.getUnchecked(tokenUrl);
+        }
+        return builder.addHeader("Authorization", "Bearer " + tokenWithExpiry.token());
     }
 
     private static String getAuthHeader(String scheme, String username, String password)
@@ -244,18 +238,29 @@ public class Authentication
         return input.substring(0, 1).toUpperCase(Locale.ENGLISH) + input.substring(1).toLowerCase(Locale.ENGLISH);
     }
 
-    private String getToken(String authorizationUrl)
+    private TokenWithExpiry fetchTokenWithExpiry(String tokenUrl)
     {
-        return httpClient.execute(
-                        preparePost()
-                                .setUri(URI.create(authorizationUrl))
-                                .setHeader("Content-Type", "application/x-www-form-urlencoded")
-                                .setBodyGenerator(createStaticBodyGenerator(
-                                        getBody("client_credentials", clientId, clientSecret),
-                                        UTF_8))
-                                .build(),
-                        createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)))
-                .accessToken();
+        TokenResponse response = httpClient.execute(
+                preparePost()
+                        .setUri(URI.create(tokenUrl))
+                        .setHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .setBodyGenerator(createStaticBodyGenerator(
+                                getBody("client_credentials", clientId, clientSecret),
+                                UTF_8))
+                        .build(),
+                createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
+        long expiresIn = response.expiresIn() != null ? response.expiresIn() : 3600L;
+        return new TokenWithExpiry(response.accessToken(), Instant.now().plusSeconds(expiresIn));
+    }
+
+    private record TokenWithExpiry(String token, Instant expiresAt)
+    {
+        private static final long REFRESH_MARGIN_SECONDS = 60L;
+
+        boolean isExpiringSoon()
+        {
+            return Instant.now().isAfter(expiresAt.minusSeconds(REFRESH_MARGIN_SECONDS));
+        }
     }
 
     private static String getBody(String grantType, String clientId, String clientSecret)
@@ -282,5 +287,6 @@ public class Authentication
 
     public record TokenResponse(
             @JsonProperty("token_type") String tokenType,
-            @JsonProperty("access_token") String accessToken) {}
+            @JsonProperty("access_token") String accessToken,
+            @JsonProperty("expires_in") Long expiresIn) {}
 }
