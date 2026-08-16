@@ -195,7 +195,7 @@ public class OpenApiColumn
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
-            this.comment = handle.getMetadata().getComment();
+            this.comment = handle.getMetadata().getComment().orElse(null);
         }
 
         public OpenApiColumn.Builder setName(String name)

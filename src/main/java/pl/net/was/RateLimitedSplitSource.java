@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import io.airlift.log.Logger;
 import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorSplitSource;
+import io.trino.spi.connector.DynamicFilterSnapshot;
 
 import java.util.Iterator;
 import java.util.List;
@@ -43,9 +44,9 @@ public class RateLimitedSplitSource
     }
 
     @Override
-    public CompletableFuture<ConnectorSplitBatch> getNextBatch(int maxSize)
+    public CompletableFuture<List<ConnectorSplit>> getNextBatch(int maxSize, DynamicFilterSnapshot dynamicFilterSnapshot)
     {
-        return CompletableFuture.supplyAsync(() -> new ConnectorSplitBatch(prepareNextBatch(maxSize), isFinished()), executor);
+        return CompletableFuture.supplyAsync(() -> prepareNextBatch(maxSize), executor);
     }
 
     private List<ConnectorSplit> prepareNextBatch(int maxSize)
@@ -71,7 +72,7 @@ public class RateLimitedSplitSource
     @Override
     public void close()
     {
-        splits.forEachRemaining(split -> {});
+        splits.forEachRemaining(_ -> {});
     }
 
     @Override

@@ -23,7 +23,10 @@ import io.trino.spi.connector.ConnectorPageSink;
 import io.trino.spi.connector.ConnectorPageSinkId;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
 import io.trino.spi.connector.ConnectorSession;
+import io.trino.spi.connector.ConnectorTableCredentials;
 import io.trino.spi.connector.ConnectorTransactionHandle;
+
+import java.util.Optional;
 
 public class OpenApiPageSinkProvider
         implements ConnectorPageSinkProvider
@@ -37,19 +40,19 @@ public class OpenApiPageSinkProvider
     }
 
     @Override
-    public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorOutputTableHandle tableHandle, ConnectorPageSinkId pageSinkId)
+    public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorOutputTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId)
     {
         return new OpenApiPageSink(client, (OpenApiOutputTableHandle) tableHandle);
     }
 
     @Override
-    public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorInsertTableHandle tableHandle, ConnectorPageSinkId pageSinkId)
+    public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorInsertTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId)
     {
         return new OpenApiPageSink(client, (OpenApiOutputTableHandle) tableHandle);
     }
 
     @Override
-    public ConnectorMergeSink createMergeSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorMergeTableHandle tableHandle, ConnectorPageSinkId pageSinkId)
+    public ConnectorMergeSink createMergeSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorMergeTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId)
     {
         return new OpenApiMergeSink(client, (OpenApiOutputTableHandle) tableHandle);
     }

@@ -19,13 +19,14 @@ import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
+import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.connector.ConnectorSplitSource;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
-import io.trino.spi.connector.DynamicFilter;
+import io.trino.spi.connector.DynamicFilterSnapshot;
 import io.trino.spi.connector.FixedSplitSource;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
@@ -37,15 +38,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
-import static io.trino.spi.connector.DynamicFilter.NOT_BLOCKED;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -74,83 +73,72 @@ public class OpenApiSplitManager
             ConnectorTransactionHandle transaction,
             ConnectorSession session,
             ConnectorTableHandle table,
-            DynamicFilter dynamicFilter,
+            Set<ColumnHandle> dynamicFilterColumns,
             Constraint constraint)
     {
-        if (!dynamicFilter.isAwaitable()) {
-            return getSplitSource(table, dynamicFilter);
-        }
-        CompletableFuture<?> dynamicFilterFuture = whenCompleted(dynamicFilter)
-                .completeOnTimeout(null, TIMEOUT_MILLIS, MILLISECONDS);
-        CompletableFuture<ConnectorSplitSource> splitSourceFuture = dynamicFilterFuture.thenApply(
-                ignored -> getSplitSource(table, dynamicFilter));
-        return new DynamicFilteringSplitSource(dynamicFilterFuture, splitSourceFuture);
+        return new DynamicFilteringSplitSource(table);
     }
 
-    private static CompletableFuture<?> whenCompleted(DynamicFilter dynamicFilter)
-    {
-        if (dynamicFilter.isAwaitable()) {
-            return dynamicFilter.isBlocked().thenCompose(ignored -> whenCompleted(dynamicFilter));
-        }
-        return NOT_BLOCKED;
-    }
-
-    private static class DynamicFilteringSplitSource
+    private class DynamicFilteringSplitSource
             implements ConnectorSplitSource
     {
-        private final CompletableFuture<?> dynamicFilterFuture;
-        private final CompletableFuture<ConnectorSplitSource> splitSourceFuture;
+        private final ConnectorTableHandle table;
+        private Optional<ConnectorSplitSource> delegate = Optional.empty();
 
-        private DynamicFilteringSplitSource(
-                CompletableFuture<?> dynamicFilterFuture,
-                CompletableFuture<ConnectorSplitSource> splitSourceFuture)
+        private DynamicFilteringSplitSource(ConnectorTableHandle table)
         {
-            this.dynamicFilterFuture = requireNonNull(dynamicFilterFuture, "dynamicFilterFuture is null");
-            this.splitSourceFuture = requireNonNull(splitSourceFuture, "splitSourceFuture is null");
+            this.table = requireNonNull(table, "table is null");
         }
 
         @Override
-        public CompletableFuture<ConnectorSplitBatch> getNextBatch(int maxSize)
+        public long getRequestedDynamicFilterWaitTimeoutMillis()
         {
-            return splitSourceFuture.thenCompose(splitSource -> splitSource.getNextBatch(maxSize));
+            return TIMEOUT_MILLIS;
         }
 
         @Override
-        @SuppressWarnings("FutureReturnValueIgnored")
+        public CompletableFuture<List<ConnectorSplit>> getNextBatch(int maxSize, DynamicFilterSnapshot dynamicFilterSnapshot)
+        {
+            return getDelegate(dynamicFilterSnapshot).getNextBatch(maxSize, dynamicFilterSnapshot);
+        }
+
+        @Override
         public void close()
         {
-            if (!dynamicFilterFuture.cancel(true)) {
-                splitSourceFuture.thenAccept(ConnectorSplitSource::close);
-            }
+            getDelegate().ifPresent(ConnectorSplitSource::close);
         }
 
         @Override
         public boolean isFinished()
         {
-            if (!splitSourceFuture.isDone()) {
-                return false;
+            return getDelegate()
+                    .map(ConnectorSplitSource::isFinished)
+                    .orElse(false);
+        }
+
+        private synchronized ConnectorSplitSource getDelegate(DynamicFilterSnapshot dynamicFilterSnapshot)
+        {
+            if (delegate.isEmpty()) {
+                delegate = Optional.of(getSplitSource(table, dynamicFilterSnapshot.currentPredicate()));
             }
-            if (splitSourceFuture.isCompletedExceptionally()) {
-                return false;
-            }
-            try {
-                return splitSourceFuture.get().isFinished();
-            }
-            catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
+            return delegate.get();
+        }
+
+        private synchronized Optional<ConnectorSplitSource> getDelegate()
+        {
+            return delegate;
         }
     }
 
     private ConnectorSplitSource getSplitSource(
             ConnectorTableHandle tableHandle,
-            DynamicFilter dynamicFilter)
+            TupleDomain<ColumnHandle> dynamicFilterPredicate)
     {
         OpenApiTableHandle table = (OpenApiTableHandle) tableHandle;
         Map<String, OpenApiColumn> columns = spec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .collect(toMap(OpenApiColumn::getName, identity()));
         // merge in constraints from dynamicFilter, which may contain multivalued domains
-        Optional<ConstraintApplicationResult<ConnectorTableHandle>> result = table.applyFilter(new Constraint(dynamicFilter.getCurrentPredicate()), columns, domainExpansionLimit);
+        Optional<ConstraintApplicationResult<ConnectorTableHandle>> result = table.applyFilter(new Constraint(dynamicFilterPredicate), columns, domainExpansionLimit);
         if (result.isPresent()) {
             table = (OpenApiTableHandle) result.get().getHandle();
         }
