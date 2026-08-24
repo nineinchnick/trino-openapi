@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>395</version>
+        <version>402</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -54,9 +54,9 @@
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector</air.test.jvm.additional-arguments>
 
         <dep.trino.version>483</dep.trino.version>
-        <dep.airlift.version>439</dep.airlift.version>
-        <dep.swagger-parser.version>2.1.46</dep.swagger-parser.version>
-        <dep.swagger-models.version>2.2.53</dep.swagger-models.version>
+        <dep.airlift.version>444</dep.airlift.version>
+        <dep.swagger-parser.version>2.1.47</dep.swagger-parser.version>
+        <dep.swagger-models.version>2.2.54</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
