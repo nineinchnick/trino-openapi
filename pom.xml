@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>395</version>
+        <version>416</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -54,9 +54,9 @@
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector</air.test.jvm.additional-arguments>
 
         <dep.trino.version>483</dep.trino.version>
-        <dep.airlift.version>439</dep.airlift.version>
-        <dep.swagger-parser.version>2.1.46</dep.swagger-parser.version>
-        <dep.swagger-models.version>2.2.53</dep.swagger-models.version>
+        <dep.airlift.version>451</dep.airlift.version>
+        <dep.swagger-parser.version>2.1.48</dep.swagger-parser.version>
+        <dep.swagger-models.version>2.2.55</dep.swagger-models.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
         <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
@@ -264,7 +264,7 @@
             <plugin>
                 <groupId>io.trino</groupId>
                 <artifactId>trino-maven-plugin</artifactId>
-                <version>24</version>
+                <version>26</version>
                 <extensions>true</extensions>
                 <configuration>
                     <pluginClassName>io.trino.spi.Plugin</pluginClassName>
@@ -276,7 +276,7 @@
             <plugin>
                 <groupId>ca.vanzyl.provisio.maven.plugins</groupId>
                 <artifactId>provisio-maven-plugin</artifactId>
-                <version>2.0.0</version>
+                <version>2.0.1</version>
                 <extensions>true</extensions>
             </plugin>
         </plugins>
