@@ -109,6 +109,10 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
   response matches only some of them, like a success or an error object.
   A field defined in multiple alternatives with different types is mapped to a
   single `VARCHAR` column with the raw JSON value.
+* A field that is a union of only objects is mapped to a `ROW` with the fields
+  of all alternatives, using the same rules. Fields of other alternatives are
+  NULL when reading, and they're not sent in request bodies. Other unions are
+  mapped to `VARCHAR` with the raw JSON value.
 * Fields of the request body are also mapped to columns, if a POST request is
   used for SELECT.
 * All columns are disambiguated - if a field with the same name but a different
