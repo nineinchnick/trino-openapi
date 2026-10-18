@@ -474,7 +474,7 @@ ignored. Request and response bodies must be JSON.
 
 Some behavior can't be described with standard OpenAPI. The connector reads an
 `x-trino` extension in an operation, and one of the whole document, which
-describes [rate limits](#retries):
+describes [rate limits](#retries) and [error messages](#error-messages):
 
 ```yaml
 paths:
@@ -708,6 +708,18 @@ method, the URL without the query string, and the HTTP status code. It doesn't
 contain the response body, because the body might not be readable, and it might
 contain sensitive information. Set `errorPath` to include a readable message
 from the response.
+
+Most APIs report errors the same way in all operations, so `errorPath` can also
+be set in the `x-trino` extension of the whole document. Operations use it,
+unless they set their own:
+
+```yaml
+openapi: 3.0.3
+x-trino:
+  errorPath: "$response.body#/message"
+paths:
+  # ...
+```
 
 Failed requests have an `EXTERNAL` error type, so clients can tell them apart
 from errors in the connector:

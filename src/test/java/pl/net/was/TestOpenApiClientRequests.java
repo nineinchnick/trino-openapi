@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
@@ -45,6 +46,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Throwables.getStackTraceAsString;
 import static io.airlift.slice.Slices.utf8Slice;
@@ -119,6 +121,12 @@ class TestOpenApiClientRequests
               rateLimitResetHeader: x-ratelimit-reset
               rateLimitResetFormat: epochSeconds
               rateLimitRemainingHeader: x-ratelimit-remaining
+            paths:
+            """);
+
+    private static final String DOCUMENT_ERROR_PATH_SPEC = SPEC.replace("paths:\n", """
+            x-trino:
+              errorPath: $response.body#/error
             paths:
             """);
 
@@ -421,6 +429,24 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testDocumentErrorPathWithCompressedResponse()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(DOCUMENT_ERROR_PATH_SPEC)
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(respondGzip(422, "{\"error\": \"Validation Failed\", \"message\": \"Invalid page\"}"));
+
+        assertThatThrownBy(() -> getRows(config, "untitled", null))
+                .hasMessage("Request GET %s/untitled for path /untitled failed with HTTP 422: \"Validation Failed\"", baseUri);
+
+        // the operation's errorPath takes precedence
+        responses.add(respondGzip(422, "{\"error\": \"Validation Failed\", \"message\": \"Invalid page\"}"));
+
+        assertThatThrownBy(() -> getRows(config, "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 422: \"Invalid page\"", baseUri);
+    }
+
+    @Test
     void testRetriesCountAgainstRateLimit()
             throws IOException
     {
@@ -562,6 +588,22 @@ class TestOpenApiClientRequests
     {
         return _ -> {
             throw new IOException("Closing the connection without a response");
+        };
+    }
+
+    private static HttpHandler respondGzip(int statusCode, String body)
+    {
+        return exchange -> {
+            ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+            try (GZIPOutputStream output = new GZIPOutputStream(compressed)) {
+                output.write(body.getBytes(UTF_8));
+            }
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.getResponseHeaders().add("Content-Encoding", "gzip");
+            exchange.sendResponseHeaders(statusCode, compressed.size());
+            try (OutputStream output = exchange.getResponseBody()) {
+                compressed.writeTo(output);
+            }
         };
     }
 

@@ -2872,7 +2872,80 @@ class TestOpenApiSpec
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("  rateLimitResetHeader: x-ratelimit-reset\n", "")))
                 .hasMessage("rateLimitResetFormat requires rateLimitResetHeader");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("rateLimitRemainingHeader", "pageParam")))
-                .hasMessage("Invalid property of the document-level x-trino extension: pageParam, must be one of: rateLimitResetHeader, rateLimitResetFormat, rateLimitRemainingHeader");
+                .hasMessage("Invalid property of the document-level x-trino extension: pageParam, must be one of: errorPath, rateLimitResetHeader, rateLimitResetFormat, rateLimitRemainingHeader");
+    }
+
+    @Test
+    public void testDocumentErrorPath()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                x-trino:
+                  errorPath: $response.body#/error
+                paths:
+                  /items:
+                    get:
+                      x-trino:
+                        errorPath: $response.body#/message
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: integer
+                  /items/{id}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: id
+                        required: true
+                        schema:
+                          type: integer
+                      x-trino:
+                        resultsPath: $response.body#/item
+                      responses:
+                        "200":
+                          description: Item
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  item:
+                                    type: object
+                                    properties:
+                                      id:
+                                        type: integer
+                    delete:
+                      parameters:
+                      - in: path
+                        name: id
+                        required: true
+                        schema:
+                          type: integer
+                      responses:
+                        "204":
+                          description: Deleted
+                """;
+
+        // operations without their own errorPath, with or without other extension properties, use the one of the document
+        Assertions.assertThat(parseSpec(specContents).getErrorPointers(schemaTableName(SCHEMA_NAME, "items")))
+                .containsOnly(
+                        Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/message")),
+                        Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items/{id}"), JsonPointer.compile("/error")),
+                        Map.entry(new HttpPath(PathItem.HttpMethod.DELETE, "/items/{id}"), JsonPointer.compile("/error")));
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("$response.body#/error", "$response.body.error")))
+                .hasMessage("Invalid value of errorPath: $response.body.error, must point to a field of the response");
     }
 
     @Test

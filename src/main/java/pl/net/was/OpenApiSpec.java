@@ -133,7 +133,7 @@ public class OpenApiSpec
     private static final String RATE_LIMIT_RESET_HEADER = "rateLimitResetHeader";
     private static final String RATE_LIMIT_RESET_FORMAT = "rateLimitResetFormat";
     private static final String RATE_LIMIT_REMAINING_HEADER = "rateLimitRemainingHeader";
-    private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
+    private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(ERROR_PATH, RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -148,6 +148,7 @@ public class OpenApiSpec
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
     private final Optional<RateLimitHeaders> rateLimitHeaders;
+    private final Optional<JsonPointer> documentErrorPointer;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
@@ -158,6 +159,10 @@ public class OpenApiSpec
     OpenApiSpec(OpenAPI openApi)
     {
         this.openApi = requireNonNull(openApi, "openApi is null");
+        Map<String, String> documentExtension = getDocumentExtension(openApi);
+        this.rateLimitHeaders = getRateLimitHeaders(documentExtension);
+        // errors are usually reported the same way by all operations of an API
+        this.documentErrorPointer = getDocumentErrorPointer(documentExtension);
 
         /*
         Path params are assumed to be primary keys, so paths without any params are merged with same path with params.
@@ -281,7 +286,6 @@ public class OpenApiSpec
                 .map(Components::getSecuritySchemes)
                 .orElse(ImmutableMap.of());
         this.securityRequirements = openApi.getSecurity();
-        this.rateLimitHeaders = getRateLimitHeaders(getDocumentExtension(openApi));
     }
 
     private static Map<String, String> getDocumentExtension(OpenAPI openApi)
@@ -297,6 +301,17 @@ public class OpenApiSpec
             checkArgument(value instanceof String, "Invalid value of %s: expected a string", key);
         });
         return getMapOfStrings(extension);
+    }
+
+    private static Optional<JsonPointer> getDocumentErrorPointer(Map<String, String> documentExtension)
+    {
+        if (!documentExtension.containsKey(ERROR_PATH)) {
+            return Optional.empty();
+        }
+        JsonPointer pointer = pointer(documentExtension, ERROR_PATH);
+        // an empty pointer selects the whole response, which would include the whole body of error responses of every operation in error messages
+        checkArgument(!pointer.equals(JsonPointer.empty()), "Invalid value of %s: %s, must point to a field of the response", ERROR_PATH, documentExtension.get(ERROR_PATH));
+        return Optional.of(pointer);
     }
 
     private static Optional<RateLimitHeaders> getRateLimitHeaders(Map<String, String> documentExtension)
@@ -1085,7 +1100,13 @@ public class OpenApiSpec
 
     private Map<HttpPath, JsonPointer> errorPointers(PathItem pathItem, String path)
     {
-        return pointers(pathItem, path, ERROR_PATH);
+        Map<HttpPath, JsonPointer> operationPointers = pointers(pathItem, path, ERROR_PATH);
+        if (documentErrorPointer.isEmpty()) {
+            return operationPointers;
+        }
+        return pathItem.readOperationsMap().keySet().stream()
+                .map(method -> new HttpPath(method, path))
+                .collect(toImmutableMap(httpPath -> httpPath, httpPath -> operationPointers.getOrDefault(httpPath, documentErrorPointer.get())));
     }
 
     private Map<HttpPath, JsonPointer> resultsPointers(PathItem pathItem, String path)
