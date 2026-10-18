@@ -1054,17 +1054,20 @@ class TestOpenApiSpec
                                 .setType(new ArrayType(RowType.from(List.of(
                                         RowType.field("code", BIGINT),
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("messages").setSourceName("messages")
                                 .setType(new ArrayType(RowType.from(List.of(
                                         RowType.field("code", BIGINT),
                                         RowType.field("message", VARCHAR))))).setSourceType(arraySchema)
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("success").setSourceName("success")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setComment("Whether the API call was successful")
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("result_info").setSourceName("result_info")
@@ -2138,6 +2141,94 @@ class TestOpenApiSpec
                 """, null, new ParseOptions());
 
         Assertions.assertThat(result.getOpenAPI().getSecurity()).isNull();
+    }
+
+    @Test
+    public void testResponseOnlyColumnsAreNullableInInsertableTables()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /notes/{note_id}:
+                    parameters:
+                    - in: path
+                      name: note_id
+                      required: true
+                      schema:
+                        type: integer
+                    get:
+                      responses:
+                        "200":
+                          description: Note
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Note'
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              type: object
+                              required:
+                              - text
+                              properties:
+                                text:
+                                  type: string
+                      responses:
+                        "201":
+                          description: Note
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Note'
+                  /archived_notes/{note_id}:
+                    parameters:
+                    - in: path
+                      name: note_id
+                      required: true
+                      schema:
+                        type: integer
+                    get:
+                      responses:
+                        "200":
+                          description: Note
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Note'
+                components:
+                  schemas:
+                    Note:
+                      type: object
+                      required:
+                      - id
+                      - text
+                      properties:
+                        id:
+                          type: integer
+                        text:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("notes"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("id", true),
+                        Assertions.tuple("text", false),
+                        Assertions.tuple("note_id", true));
+        Assertions.assertThat(spec.getTables().get("archived_notes"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("id", false),
+                        Assertions.tuple("text", false),
+                        Assertions.tuple("note_id", true));
     }
 
     private OpenApiSpec loadSpec(String name)

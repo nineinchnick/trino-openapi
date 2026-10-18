@@ -209,8 +209,9 @@ public class OpenApiSpec
                         handles.put(tableName, tableHandle(tableName, tablePaths));
                     });
         }
-        this.tables = tables.buildOrThrow();
         this.handles = handles.buildOrThrow();
+        this.tables = tables.buildOrThrow().entrySet().stream()
+                .collect(toImmutableMap(Map.Entry::getKey, entry -> allowInsertsWithoutResponseColumns(entry.getValue(), this.handles.get(entry.getKey()))));
         this.errorPointers = errorPointers.buildOrThrow();
         this.resultsPointers = resultsPointers.buildOrThrow();
         this.paginations = paginations.buildOrThrow();
@@ -965,6 +966,27 @@ public class OpenApiSpec
                                 .setName(sameColumns.get(i).getName() + (i > 0 ? "_" + (i + 1) : ""))
                                 .build()))
                 .toList();
+    }
+
+    private static List<OpenApiColumn> allowInsertsWithoutResponseColumns(List<OpenApiColumn> columns, OpenApiTableHandle tableHandle)
+    {
+        if (tableHandle.getInsertPaths().isEmpty()) {
+            return columns;
+        }
+        // columns that only exist in responses are never sent in INSERT requests, so they can't be set,
+        // but Trino rejects INSERT statements that would leave a NOT NULL column empty
+        return columns.stream()
+                .map(column -> isResponseOnly(column) && !column.getMetadata().isNullable()
+                        ? OpenApiColumn.builderFrom(column).setIsNullable(true).build()
+                        : column)
+                .toList();
+    }
+
+    private static boolean isResponseOnly(OpenApiColumn column)
+    {
+        return column.getRequiresPredicate().isEmpty()
+                && column.getOptionalPredicate().isEmpty()
+                && !column.getMetadata().isHidden();
     }
 
     private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, List<String>> tablePaths)
