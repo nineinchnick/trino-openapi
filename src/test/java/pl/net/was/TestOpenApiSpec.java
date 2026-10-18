@@ -638,6 +638,42 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void getGithubPaginatedTables()
+    {
+        OpenApiSpec spec = loadSpecFile("specs/github.json");
+
+        // the pagination extensions come from dev/specs/github.patch.json, so check that they match the upstream operations:
+        // the page parameters must exist, and rows must be read from an array, either the whole response or the results path
+        record PaginatedPath(String table, String path, String resultColumn) {}
+        List<PaginatedPath> paginatedPaths = List.of(
+                new PaginatedPath("orgs_members", "/orgs/{org}/members", "login"),
+                new PaginatedPath("repos_actions_runs", "/repos/{owner}/{repo}/actions/runs", "head_branch"),
+                new PaginatedPath("repos_actions_runs_jobs", "/repos/{owner}/{repo}/actions/runs/{run_id}/jobs", "steps"),
+                new PaginatedPath("repos_actions_workflows", "/repos/{owner}/{repo}/actions/workflows", "badge_url"),
+                new PaginatedPath("repos_actions_workflows_runs", "/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", "head_branch"),
+                new PaginatedPath("repos_owner_repo_issues_comments_comment_id", "/repos/{owner}/{repo}/issues/comments", "body"),
+                new PaginatedPath("user_repos", "/user/repos", "full_name"));
+        for (PaginatedPath paginatedPath : paginatedPaths) {
+            HttpPath httpPath = new HttpPath(PathItem.HttpMethod.GET, paginatedPath.path());
+            Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, paginatedPath.table())).get(httpPath))
+                    .as("pagination of %s", paginatedPath.path())
+                    .isNotNull()
+                    .extracting(Pagination::limitParam)
+                    .isEqualTo(Optional.of("per_page"));
+            List<OpenApiColumn> columns = spec.getTables().get(paginatedPath.table());
+            Assertions.assertThat(columns)
+                    .as("page number of %s", paginatedPath.path())
+                    .filteredOn(OpenApiColumn::isPageNumber)
+                    .singleElement()
+                    .satisfies(column -> Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY));
+            Assertions.assertThat(columns)
+                    .as("columns of %s", paginatedPath.path())
+                    .extracting(OpenApiColumn::getName)
+                    .contains(paginatedPath.resultColumn(), "per_page");
+        }
+    }
+
+    @Test
     public void getJiraTables()
     {
         OpenApiSpec spec = loadSpec("jira.json");
