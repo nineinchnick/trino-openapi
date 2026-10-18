@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -202,6 +203,44 @@ public class TestOpenApiQueries
                 -0.5f,
                 List.of(2.5f, -1.25f),
                 List.of(new BigDecimal("0.25000000"), new BigDecimal("-12.50000000")));
+    }
+
+    @Test
+    public void selectDecimalsWithMaximumPrecision()
+    {
+        assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(
+                new BigDecimal("1234567890.12345678"),
+                List.of(new BigDecimal("0.00000001"), new BigDecimal("-9999999999.99999999")),
+                Map.of("a", new BigDecimal("1234567890.12345678")));
+    }
+
+    @Test
+    public void selectWithMaximumPrecisionDecimalsInRequestBody()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT decimal_value, decimal_values FROM fastapi.default.echo_numbers " +
+                "WHERE decimal_value = DECIMAL '-9999999999.99999999' AND decimal_values = CAST(ARRAY[1234567890.12345678, 0.00000001] AS ARRAY(DECIMAL(18, 8)))").getMaterializedRows();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getFields()).containsExactly(
+                new BigDecimal("-9999999999.99999999"),
+                List.of(new BigDecimal("1234567890.12345678"), new BigDecimal("0.00000001")));
+    }
+
+    @Test
+    public void selectWithDecimalParametersInNonUsLocale()
+    {
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMANY);
+            assertQuery(
+                    "SELECT decimal_value, decimal_text FROM fastapi.default.decimal_parameters WHERE decimal_value = DECIMAL '1234567890.12345678'",
+                    "VALUES (1234567890.12345678, '1234567890.12345678')");
+            assertQuery(
+                    "SELECT decimal_value, decimal_text FROM fastapi.default.decimal_parameters WHERE decimal_value = DECIMAL '0.00000001'",
+                    "VALUES (0.00000001, '0.00000001')");
+        }
+        finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 
     @Test

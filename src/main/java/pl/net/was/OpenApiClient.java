@@ -17,6 +17,7 @@ package pl.net.was;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamWriteFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -51,7 +52,6 @@ import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.DecimalType;
-import io.trino.spi.type.Int128;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 
@@ -63,7 +63,6 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
-import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -88,8 +87,6 @@ import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
-import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
-import static io.trino.spi.type.DecimalConversions.shortDecimalToDouble;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.min;
 import static java.lang.String.format;
@@ -109,6 +106,8 @@ public class OpenApiClient
     // small decimals would otherwise be written in the scientific notation, like 1E-8, which some servers can't parse
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
             .enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
+            // doubles can't hold all values of DECIMAL columns, so keep the exact value of every number with a fraction
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
             .build();
     public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
 
@@ -117,22 +116,6 @@ public class OpenApiClient
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
     private final RateLimiter rateLimiter;
-
-    static final long[] POWERS_OF_TEN = {
-            1L,
-            10L,
-            100L,
-            1000L,
-            10_000L,
-            100_000L,
-            1_000_000L,
-            10_000_000L,
-            100_000_000L,
-            1_000_000_000L,
-            10_000_000_000L,
-            100_000_000_000L,
-            1000_000_000_000L
-    };
 
     @Inject
     public OpenApiClient(OpenApiConfig config, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
@@ -295,7 +278,7 @@ public class OpenApiClient
     {
         String uriPath = httpPath.path();
         for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-            uriPath = uriPath.replace(format("{%s}", entry.getKey()), entry.getValue().toString());
+            uriPath = uriPath.replace(format("{%s}", entry.getKey()), formatParamValue(entry.getValue()));
         }
         URI uri;
         try {
@@ -408,11 +391,25 @@ public class OpenApiClient
             value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
         }
         if (!(value instanceof ArrayNode arrayNode)) {
-            return List.of(value.toString());
+            return List.of(formatParamValue(value));
         }
         return Streams.stream(arrayNode)
-                .map(element -> element.isValueNode() ? element.asText() : element.toString())
+                .map(element -> {
+                    if (element.isBigDecimal()) {
+                        return formatParamValue(element.decimalValue());
+                    }
+                    return element.isValueNode() ? element.asText() : element.toString();
+                })
                 .toList();
+    }
+
+    private static String formatParamValue(Object value)
+    {
+        // BigDecimal.toString() uses the scientific notation for small values
+        if (value instanceof BigDecimal decimalValue) {
+            return decimalValue.toPlainString();
+        }
+        return value.toString();
     }
 
     private Map<String, Object> getFilterValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in)
@@ -486,7 +483,7 @@ public class OpenApiClient
             case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> value;
             case StandardTypes.REAL -> intBitsToFloat(((Long) value).intValue());
             case StandardTypes.DOUBLE -> (Double) value;
-            case StandardTypes.DECIMAL -> toDecimal(value, (DecimalType) column.getType());
+            case StandardTypes.DECIMAL -> JsonTrinoConverter.toBigDecimal(value, (DecimalType) column.getType());
             case StandardTypes.VARCHAR -> ((Slice) value).toStringUtf8();
             case StandardTypes.DATE -> toDate((Long) value, column.getSourceType());
             case StandardTypes.TIMESTAMP -> toDatetime((Long) value, column.getSourceType());
@@ -533,18 +530,6 @@ public class OpenApiClient
             return null;
         }
         return JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
-    }
-
-    private static String toDecimal(Object object, DecimalType type)
-    {
-        double value;
-        if (type.isShort()) {
-            value = shortDecimalToDouble((Long) object, POWERS_OF_TEN[type.getScale()]);
-        }
-        else {
-            value = longDecimalToDouble((Int128) object, type.getScale());
-        }
-        return NumberFormat.getInstance().format(value);
     }
 
     private static String toDate(long days, Schema<?> schema)

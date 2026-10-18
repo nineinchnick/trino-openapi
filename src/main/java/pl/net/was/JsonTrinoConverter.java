@@ -64,8 +64,10 @@ import java.util.stream.IntStream;
 
 import static com.google.common.base.Verify.verify;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
-import static io.trino.spi.type.DecimalConversions.doubleToLongDecimal;
-import static io.trino.spi.type.DecimalConversions.doubleToShortDecimal;
+import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
+import static io.trino.spi.type.Decimals.encodeScaledValue;
+import static io.trino.spi.type.Decimals.encodeShortScaledValue;
+import static io.trino.spi.type.Decimals.overflows;
 import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
@@ -74,6 +76,7 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
+import static java.math.RoundingMode.HALF_UP;
 
 public class JsonTrinoConverter
 {
@@ -112,10 +115,7 @@ public class JsonTrinoConverter
             return jsonNode.doubleValue();
         }
         if (type instanceof DecimalType decimalType) {
-            double value = jsonNode.doubleValue();
-            return decimalType.isShort() ?
-                    doubleToShortDecimal(value, decimalType.getPrecision(), decimalType.getScale()) :
-                    doubleToLongDecimal(value, decimalType.getPrecision(), decimalType.getScale());
+            return toUnscaledValue(jsonNode.decimalValue(), decimalType);
         }
         if (type instanceof VarcharType) {
             if (jsonNode.isValueNode()) {
@@ -170,6 +170,18 @@ public class JsonTrinoConverter
             return rowType.getObject(block, block.getPositionCount() - 1);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
+    }
+
+    private static Object toUnscaledValue(BigDecimal value, DecimalType type)
+    {
+        BigDecimal rescaled = value.setScale(type.getScale(), HALF_UP);
+        if (overflows(rescaled, type.getPrecision())) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Value %s doesn't fit in %s", value.toPlainString(), type));
+        }
+        if (type.isShort()) {
+            return encodeShortScaledValue(rescaled, type.getScale());
+        }
+        return encodeScaledValue(rescaled, type.getScale());
     }
 
     private static Block buildArray(ArrayNode jsonArray, ArrayType arrayType, Schema<?> schemaType)
