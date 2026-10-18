@@ -30,11 +30,10 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableVersion;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
+import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.RowChangeParadigm;
 import io.trino.spi.connector.SchemaTableName;
-import io.trino.spi.connector.SchemaTablePrefix;
-import io.trino.spi.connector.TableColumnsMetadata;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.statistics.ComputedStatistics;
 
@@ -43,10 +42,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.RowChangeParadigm.CHANGE_ONLY_UPDATED_COLUMNS;
+import static java.util.Collections.emptyIterator;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -151,12 +154,20 @@ public class OpenApiMetadata
     }
 
     @Override
-    public Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
+    public Iterator<RelationColumnsMetadata> streamRelationColumns(
+            ConnectorSession session,
+            Optional<String> schemaName,
+            UnaryOperator<Set<SchemaTableName>> relationFilter)
     {
-        return spec.getTables().entrySet().stream()
-                .map(entry -> TableColumnsMetadata.forTable(
-                        new SchemaTableName(prefix.getSchema().orElse(""), entry.getKey()),
-                        entry.getValue().stream().map(OpenApiColumn::getMetadata).toList()))
+        if (schemaName.isPresent() && !schemaName.get().equals(SCHEMA_NAME)) {
+            return emptyIterator();
+        }
+        Map<SchemaTableName, List<OpenApiColumn>> tables = spec.getTables().entrySet().stream()
+                .collect(toImmutableMap(entry -> new SchemaTableName(SCHEMA_NAME, entry.getKey()), Map.Entry::getValue));
+        return relationFilter.apply(tables.keySet()).stream()
+                .map(table -> RelationColumnsMetadata.forTable(
+                        table,
+                        tables.get(table).stream().map(OpenApiColumn::getMetadata).toList()))
                 .iterator();
     }
 

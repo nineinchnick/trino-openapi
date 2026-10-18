@@ -113,6 +113,21 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void listColumns()
+    {
+        // listing columns without a schema must return the same columns as listing them in the only schema
+        assertThat(computeActual("SELECT table_schema, column_name FROM petstore.information_schema.columns WHERE table_name = 'store_order'"))
+                .isEqualTo(computeActual("SELECT table_schema, column_name FROM petstore.information_schema.columns WHERE table_schema = 'default' AND table_name = 'store_order'"));
+        assertThat(computeActual("SELECT DISTINCT table_schema FROM petstore.information_schema.columns WHERE table_name = 'store_order'").getOnlyColumnAsSet())
+                .containsExactly("default");
+        // all petstore tables except store_inventory, which has no columns
+        assertQuery(
+                "SELECT count(DISTINCT table_name) FROM petstore.information_schema.columns WHERE table_schema = 'default'",
+                "VALUES 8");
+        assertQueryReturnsEmptyResult("SELECT column_name FROM petstore.information_schema.columns WHERE table_schema = 'other'");
+    }
+
+    @Test
     public void selectFromPetTable()
     {
         assertQuery(
