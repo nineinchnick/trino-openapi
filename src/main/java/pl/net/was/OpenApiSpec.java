@@ -707,9 +707,7 @@ public class OpenApiSpec
 
     private Optional<TypeTuple> convertType(Schema<?> property)
     {
-        if (property.getOneOf() != null
-                || property.getAnyOf() != null
-                || property.getAllOf() != null) {
+        if (JsonTrinoConverter.isUnion(property)) {
             // TODO oneOf types can be incompatible (object and an array), so it would require generating separate fields for every type
             // TODO allOf and anyOf types could be merged into a single type
             return Optional.of(new TypeTuple(VARCHAR, property));
