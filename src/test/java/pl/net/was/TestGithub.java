@@ -629,6 +629,19 @@ public class TestGithub
     }
 
     @Test
+    public void selectPaginatedTables()
+    {
+        // without pagination, only the first page of 30 results would be returned
+        assertQuery("SELECT count(*) > 30 FROM orgs_repos WHERE org = 'trinodb'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM repos_contributors WHERE owner = 'trinodb' AND repo = 'trino-python-client'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'closed'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'closed'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM repos_releases WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM repos_tags WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
+        assertQuery("SELECT count(*) > 30 FROM users_repos WHERE username = 'nineinchnick'", "VALUES true");
+    }
+
+    @Test
     public void selectJoinDynamicFilter()
     {
         /*

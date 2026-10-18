@@ -45468,6 +45468,10 @@
           "enabledForGitHubApps": true,
           "category": "repos",
           "subcategory": "repos"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       },
       "post": {
@@ -56615,6 +56619,10 @@
           "enabledForGitHubApps": true,
           "category": "branches",
           "subcategory": "branches"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       }
     },
@@ -65857,6 +65865,10 @@
           "enabledForGitHubApps": true,
           "category": "repos",
           "subcategory": "repos"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       }
     },
@@ -73003,6 +73015,10 @@
           "enabledForGitHubApps": true,
           "category": "issues",
           "subcategory": "issues"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       },
       "post": {
@@ -80181,6 +80197,10 @@
           "enabledForGitHubApps": true,
           "category": "pulls",
           "subcategory": "pulls"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       },
       "post": {
@@ -83334,6 +83354,10 @@
           "enabledForGitHubApps": true,
           "category": "releases",
           "subcategory": "releases"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       },
       "post": {
@@ -88915,6 +88939,10 @@
           "enabledForGitHubApps": true,
           "category": "repos",
           "subcategory": "repos"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       }
     },
@@ -102515,6 +102543,10 @@
           "enabledForGitHubApps": true,
           "category": "repos",
           "subcategory": "repos"
+        },
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       }
     },

@@ -716,7 +716,15 @@ class TestOpenApiSpec
                 new PaginatedPath("repos_actions_workflows", "/repos/{owner}/{repo}/actions/workflows", "badge_url"),
                 new PaginatedPath("repos_actions_workflows_runs", "/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", "head_branch"),
                 new PaginatedPath("repos_owner_repo_issues_comments_comment_id", "/repos/{owner}/{repo}/issues/comments", "body"),
-                new PaginatedPath("user_repos", "/user/repos", "full_name"));
+                new PaginatedPath("user_repos", "/user/repos", "full_name"),
+                new PaginatedPath("orgs_repos", "/orgs/{org}/repos", "full_name"),
+                new PaginatedPath("repos_branches", "/repos/{owner}/{repo}/branches", "protected"),
+                new PaginatedPath("repos_contributors", "/repos/{owner}/{repo}/contributors", "contributions"),
+                new PaginatedPath("repos_issues", "/repos/{owner}/{repo}/issues", "title"),
+                new PaginatedPath("repos_pulls", "/repos/{owner}/{repo}/pulls", "title"),
+                new PaginatedPath("repos_releases", "/repos/{owner}/{repo}/releases", "tag_name"),
+                new PaginatedPath("repos_tags", "/repos/{owner}/{repo}/tags", "zipball_url"),
+                new PaginatedPath("users_repos", "/users/{username}/repos", "full_name"));
         for (PaginatedPath paginatedPath : paginatedPaths) {
             HttpPath httpPath = new HttpPath(PathItem.HttpMethod.GET, paginatedPath.path());
             Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, paginatedPath.table())).get(httpPath))
