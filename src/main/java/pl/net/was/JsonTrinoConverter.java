@@ -380,10 +380,11 @@ public class JsonTrinoConverter
     private static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ObjectNode mapNode = objectMapper.createObjectNode();
+        // JSON object keys are always strings, so map types are created only with VARCHAR keys
+        Schema<?> valueSchema = (Schema<?>) schemaType.getAdditionalProperties();
         for (int i = 0; i < mapBlock.getSize(); i++) {
-            // TODO passing schemaType.getItems() to both key and value is probably incorrect
-            String key = convert(mapBlock.getRawKeyBlock(), mapBlock.getRawOffset() + i, mapType.getKeyType(), schemaType.getItems(), objectMapper).toString();
-            Object itemValue = convert(mapBlock.getRawValueBlock(), mapBlock.getRawOffset() + i, mapType.getValueType(), schemaType.getItems(), objectMapper);
+            String key = VARCHAR.getSlice(mapBlock.getRawKeyBlock(), mapBlock.getRawOffset() + i).toStringUtf8();
+            Object itemValue = convert(mapBlock.getRawValueBlock(), mapBlock.getRawOffset() + i, mapType.getValueType(), valueSchema, objectMapper);
             if (itemValue == null) {
                 mapNode.putNull(key);
             }
@@ -401,6 +402,9 @@ public class JsonTrinoConverter
             }
             else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
                 mapNode.set(key, (JsonNode) itemValue);
+            }
+            else if (itemValue instanceof RawValue rawValue) {
+                mapNode.putRawValue(key, rawValue);
             }
             else {
                 throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));

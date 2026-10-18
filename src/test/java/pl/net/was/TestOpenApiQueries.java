@@ -201,6 +201,22 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsWithPageNumbers()
+    {
+        assertQuery(
+                "SELECT name, page FROM fastapi.default.items",
+                "VALUES ('Portal Gun', 1), ('Plumbus', 2)");
+    }
+
+    @Test
+    public void itemsByIntegerArrayQueryParameter()
+    {
+        assertQuery(
+                "SELECT name, item_ids FROM fastapi.default.items_by_ids WHERE item_ids = ARRAY[1, 2]",
+                "VALUES ('Portal Gun', ARRAY[1, 2]), ('Plumbus', ARRAY[1, 2])");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();

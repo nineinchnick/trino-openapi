@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Streams;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -71,7 +72,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -85,7 +85,6 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
 import static io.trino.spi.type.DecimalConversions.shortDecimalToDouble;
-import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.min;
 import static java.lang.String.format;
@@ -146,18 +145,12 @@ public class OpenApiClient
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = new HttpPath(method, pathWithParams.getKey());
-        JsonResponseHandler responseHandler = new JsonResponseHandler(
-                table,
-                httpPath,
-                openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
-                openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
-                openApiSpec.getTotalResultsPointers(table.getSchemaTableName()).get(httpPath));
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .findFirst();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
-            return makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), responseHandler).rows();
+            return makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows();
         }
         return pageIterator(
                 page -> {
@@ -167,12 +160,23 @@ public class OpenApiClient
                                     pageColumn.get().getType(),
                                     pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
                     OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
-                    // the body must be serialized for every page, since it can contain the page number
-                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), responseHandler);
+                    // the body must be serialized for every page, since it can contain the page number,
+                    // and the response handler copies the page number to every row
+                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
                 },
                 0,
                 Long.MAX_VALUE,
                 1);
+    }
+
+    private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        return new JsonResponseHandler(
+                table,
+                httpPath,
+                openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
+                openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
+                openApiSpec.getTotalResultsPointers(table.getSchemaTableName()).get(httpPath));
     }
 
     private BodyGenerator getBodyGenerator(OpenApiTableHandle table, HttpPath httpPath)
@@ -272,7 +276,7 @@ public class OpenApiClient
         }
         URI uri;
         try {
-            uri = buildUri(baseUri, uriPath, getFilterValues(table, httpPath, ParameterLocation.QUERY));
+            uri = buildUri(baseUri, uriPath, getQueryParams(table, httpPath));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -337,27 +341,39 @@ public class OpenApiClient
         return Map.entry(selectedPath, pathParams.getOrDefault(new HttpPath(method, selectedPath), ImmutableMap.of()));
     }
 
-    private static URI buildUri(URI uri, String path, Map<String, Object> queryParams)
+    private static URI buildUri(URI uri, String path, Map<String, Iterable<String>> queryParams)
             throws URISyntaxException
     {
         URI oldUri = uri.resolve(uri.getPath() + path);
         HttpUriBuilder builder = HttpUriBuilder.uriBuilderFrom(oldUri);
-        queryParams.forEach((key, value) -> builder.addParameter(key, encodeQueryParamValue(value)));
+        queryParams.forEach(builder::addParameter);
         return builder.build();
     }
 
-    private static Iterable<String> encodeQueryParamValue(Object value)
+    private Map<String, Iterable<String>> getQueryParams(OpenApiTableHandle table, HttpPath httpPath)
     {
-        if (value instanceof Block block) {
-            return IntStream
-                    .range(0, block.getPositionCount())
-                    .mapToObj(i -> VARCHAR.getSlice(block, i).toStringUtf8())
-                    .toList();
+        return getFilterColumnValues(table, httpPath, ParameterLocation.QUERY).entrySet().stream()
+                .collect(toMap(entry -> entry.getKey().getSourceName(), entry -> encodeQueryParamValue(entry.getKey(), entry.getValue())));
+    }
+
+    private static Iterable<String> encodeQueryParamValue(OpenApiColumn column, Object value)
+    {
+        if (!(value instanceof Block block)) {
+            return List.of(value.toString());
         }
-        return List.of(value.toString());
+        JsonNode arrayNode = (JsonNode) JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
+        return Streams.stream(arrayNode)
+                .map(element -> element.isValueNode() ? element.asText() : element.toString())
+                .toList();
     }
 
     private Map<String, Object> getFilterValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in)
+    {
+        return getFilterColumnValues(table, httpPath, in).entrySet().stream()
+                .collect(toMap(entry -> entry.getKey().getSourceName(), Map.Entry::getValue));
+    }
+
+    private Map<OpenApiColumn, Object> getFilterColumnValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in)
     {
         checkState(!ParameterLocation.PATH.equals(in), "getFilterValues cannot be used for path parameters");
         String tableName = table.getSchemaTableName().getTableName();
@@ -369,7 +385,7 @@ public class OpenApiClient
                     if (value == null && isRequiredPredicate(column, httpPath, in)) {
                         throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
                     }
-                    return new SimpleEntry<>(column.getSourceName(), value);
+                    return new SimpleEntry<>(column, value);
                 })
                 .filter(entry -> entry.getValue() != null)
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -683,30 +699,14 @@ public class OpenApiClient
                     continue;
                 }
                 String parameterName = column.getSourceName();
-                if (resultsPointer != null) {
-                    recordBuilder.add(
-                            JsonTrinoConverter.convert(
-                                    resultNode.get(parameterName),
-                                    column.getType(),
-                                    column.getSourceType()));
-                    continue;
-                }
-                if (isPredicate(column, httpPath, null)) {
-                    if (column.getName().equals(column.getSourceName()) && jsonNode.has(parameterName)) {
-                        recordBuilder.add(
-                                JsonTrinoConverter.convert(
-                                        jsonNode.get(parameterName),
-                                        column.getType(),
-                                        column.getSourceType()));
-                    }
-                    else {
-                        recordBuilder.add(params.getOrDefault(parameterName, null));
-                    }
+                // request parameters are usually not included in the response, so copy them from predicates
+                if (isPredicate(column, httpPath, null) && !(column.getName().equals(column.getSourceName()) && resultNode.has(parameterName))) {
+                    recordBuilder.add(params.getOrDefault(parameterName, null));
                     continue;
                 }
                 recordBuilder.add(
                         JsonTrinoConverter.convert(
-                                jsonNode.get(parameterName),
+                                resultNode.get(parameterName),
                                 column.getType(),
                                 column.getSourceType()));
             }
