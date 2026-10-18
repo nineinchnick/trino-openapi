@@ -756,21 +756,11 @@ public class OpenApiSpec
             // TODO allOf and anyOf types could be merged into a single type
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
-        if (property instanceof ArraySchema array) {
-            return convertType(array.getItems()).map(elementType -> new TypeTuple(
-                    new ArrayType(elementType.type()),
-                    array.items(elementType.schema())));
+        if (property instanceof ArraySchema) {
+            return convertArray(property);
         }
-        if (property instanceof MapSchema map && map.getAdditionalProperties() instanceof Schema<?> valueSchema) {
-            Optional<TypeTuple> mapType = convertType(valueSchema);
-            if (mapType.isEmpty()) {
-                // fallback for invalid types - the value will be serialized json,
-                // which can be later processed using SQL json functions
-                return Optional.of(FALLBACK_TYPE);
-            }
-            return mapType.map(type -> new TypeTuple(
-                    new MapType(VARCHAR, type.type(), new TypeOperators()),
-                    map.additionalProperties(type.schema())));
+        if (property instanceof MapSchema && property.getAdditionalProperties() instanceof Schema<?> valueSchema) {
+            return convertMap(property, valueSchema);
         }
         Optional<String> format = Optional.ofNullable(property.getFormat());
         if (property instanceof IntegerSchema) {
@@ -780,14 +770,7 @@ public class OpenApiSpec
             return Optional.of(new TypeTuple(BIGINT, property));
         }
         if (property instanceof NumberSchema) {
-            if (format.filter("float"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(REAL, property));
-            }
-            if (format.filter("double"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(DOUBLE, property));
-            }
-            // arbitrary scale and precision but should fit most numbers
-            return Optional.of(new TypeTuple(createDecimalType(18, 8), property));
+            return Optional.of(new TypeTuple(convertNumber(property.getFormat()), property));
         }
         if (property instanceof StringSchema) {
             return Optional.of(new TypeTuple(VARCHAR, property));
@@ -802,38 +785,10 @@ public class OpenApiSpec
         if (property instanceof BooleanSchema) {
             return Optional.of(new TypeTuple(BOOLEAN, property));
         }
-        if (property instanceof ObjectSchema object) {
-            // composite type
-            Map<String, Schema> properties = object.getProperties();
-            if (properties == null) {
-                return Optional.of(FALLBACK_TYPE);
-            }
-            Map<String, TypeTuple> fieldTypes = properties.entrySet().stream()
-                    .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
-                    .filter(entry -> entry.getValue().isPresent())
-                    .collect(toMap(
-                            Map.Entry::getKey,
-                            entry -> entry.getValue().get(),
-                            (a, b) -> a,
-                            LinkedHashMap::new));
-            List<RowType.Field> fields = fieldTypes.entrySet().stream()
-                    .map(prop -> RowType.field(prop.getKey(), prop.getValue().type()))
-                    .toList();
-            if (fields.isEmpty()) {
-                return Optional.of(FALLBACK_TYPE);
-            }
-            Map<String, Schema> newProperties = fieldTypes.entrySet().stream()
-                    .collect(toMap(
-                            Map.Entry::getKey,
-                            entry -> entry.getValue().schema(),
-                            (a, b) -> a,
-                            LinkedHashMap::new));
-            return Optional.of(new TypeTuple(RowType.from(fields), object.properties(newProperties)));
+        if (property instanceof ObjectSchema) {
+            return convertRow(property);
         }
-        String type = property.getType();
-        if (type == null && property.getTypes() != null && property.getTypes().size() == 1) {
-            type = property.getTypes().iterator().next();
-        }
+        String type = getTypeName(property);
         if (type == null) {
             return Optional.of(FALLBACK_TYPE);
         }
@@ -847,20 +802,10 @@ public class OpenApiSpec
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
         if (type.equals("object") && property.getAdditionalProperties() instanceof Schema<?> valueSchema) {
-            Optional<TypeTuple> mapType = convertType(valueSchema);
-            if (mapType.isEmpty()) {
-                // fallback for invalid types - the value will be serialized json,
-                // which can be later processed using SQL json functions
-                return Optional.of(FALLBACK_TYPE);
-            }
-            return mapType.map(convertedType -> new TypeTuple(
-                    new MapType(VARCHAR, convertedType.type(), new TypeOperators()),
-                    new MapSchema().type("string").additionalProperties(convertedType.schema())));
+            return convertMap(property, valueSchema);
         }
         if (type.equals("array")) {
-            return convertType(property.getItems()).map(elementType -> new TypeTuple(
-                    new ArrayType(elementType.type()),
-                    new ArraySchema().items(elementType.schema())));
+            return convertArray(property);
         }
         if (type.equals("number")) {
             // arbitrary scale and precision but should fit most numbers
@@ -878,6 +823,77 @@ public class OpenApiSpec
         }
         // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
         return Optional.of(FALLBACK_TYPE);
+    }
+
+    private static String getTypeName(Schema<?> property)
+    {
+        if (property.getType() != null) {
+            return property.getType();
+        }
+        if (property.getTypes() != null && property.getTypes().size() == 1) {
+            return property.getTypes().iterator().next();
+        }
+        return null;
+    }
+
+    private Optional<TypeTuple> convertArray(Schema<?> array)
+    {
+        return convertType(array.getItems()).map(elementType -> new TypeTuple(
+                new ArrayType(elementType.type()),
+                array.items(elementType.schema())));
+    }
+
+    private Optional<TypeTuple> convertMap(Schema<?> map, Schema<?> valueSchema)
+    {
+        Optional<TypeTuple> mapType = convertType(valueSchema);
+        if (mapType.isEmpty()) {
+            // fallback for invalid types - the value will be serialized json,
+            // which can be later processed using SQL json functions
+            return Optional.of(FALLBACK_TYPE);
+        }
+        return mapType.map(type -> new TypeTuple(
+                new MapType(VARCHAR, type.type(), new TypeOperators()),
+                map.additionalProperties(type.schema())));
+    }
+
+    private static Type convertNumber(String format)
+    {
+        return switch (format) {
+            case "float" -> REAL;
+            case "double" -> DOUBLE;
+            // arbitrary scale and precision but should fit most numbers
+            case null, default -> createDecimalType(18, 8);
+        };
+    }
+
+    private Optional<TypeTuple> convertRow(Schema<?> object)
+    {
+        // composite type
+        Map<String, Schema> properties = object.getProperties();
+        if (properties == null) {
+            return Optional.of(FALLBACK_TYPE);
+        }
+        Map<String, TypeTuple> fieldTypes = properties.entrySet().stream()
+                .map(prop -> Map.entry(prop.getKey(), convertType(prop.getValue())))
+                .filter(entry -> entry.getValue().isPresent())
+                .collect(toMap(
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().get(),
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+        List<RowType.Field> fields = fieldTypes.entrySet().stream()
+                .map(prop -> RowType.field(prop.getKey(), prop.getValue().type()))
+                .toList();
+        if (fields.isEmpty()) {
+            return Optional.of(FALLBACK_TYPE);
+        }
+        Map<String, Schema> newProperties = fieldTypes.entrySet().stream()
+                .collect(toMap(
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().schema(),
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+        return Optional.of(new TypeTuple(RowType.from(fields), object.properties(newProperties)));
     }
 
     private Optional<Schema<?>> getComponentSchema(String name)
