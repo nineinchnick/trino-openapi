@@ -8,6 +8,14 @@
         }
       }
     },
+    "/orgs/{org}/repos": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/actions/runs": {
       "get": {
         "x-trino": {
@@ -44,6 +52,30 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/branches": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/contributors": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/issues/comments": {
       "get": {
         "x-trino": {
@@ -52,7 +84,39 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/pulls": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/releases": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/tags": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/user/repos": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/repos": {
       "get": {
         "x-trino": {
           "pageParam": "page",
