@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
@@ -387,12 +388,52 @@ public class OpenApiClient
     {
         // values read from pages are already converted, and values read from predicates are native Trino values
         if (value instanceof JsonNode node) {
-            return node;
+            return resolveRawValues(node);
+        }
+        if (value instanceof RawValue rawValue) {
+            return parseRawValue(rawValue);
         }
         if (value instanceof Block || value instanceof SqlRow || value instanceof SqlMap) {
-            return (JsonNode) JsonTrinoConverter.convert(writeNativeValue(column.getType(), value), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
+            return resolveRawValues((JsonNode) JsonTrinoConverter.convert(writeNativeValue(column.getType(), value), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER));
         }
         return TextNode.valueOf(formatParamValue(value));
+    }
+
+    /**
+     * Replaces values of union types, which are converted to raw JSON, with parsed JSON nodes,
+     * so they're serialized like any other value, instead of as the string representation of RawValue.
+     */
+    private static JsonNode resolveRawValues(JsonNode node)
+    {
+        if (node instanceof POJONode pojoNode && pojoNode.getPojo() instanceof RawValue rawValue) {
+            return parseRawValue(rawValue);
+        }
+        if (node.isArray()) {
+            ArrayNode result = OBJECT_MAPPER.createArrayNode();
+            node.forEach(element -> result.add(resolveRawValues(element)));
+            return result;
+        }
+        if (node.isObject()) {
+            ObjectNode result = OBJECT_MAPPER.createObjectNode();
+            node.properties().forEach(field -> result.set(field.getKey(), resolveRawValues(field.getValue())));
+            return result;
+        }
+        return node;
+    }
+
+    private static JsonNode parseRawValue(RawValue rawValue)
+    {
+        String text = rawValue.rawValue().toString();
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(text);
+            if (!node.isMissingNode()) {
+                return node;
+            }
+        }
+        catch (JsonProcessingException _) {
+            // union columns are VARCHAR, so they can also hold plain text, which is sent as-is
+        }
+        return TextNode.valueOf(text);
     }
 
     private static String formatParamValue(Object value)
