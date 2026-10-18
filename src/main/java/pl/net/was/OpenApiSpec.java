@@ -442,7 +442,7 @@ public class OpenApiSpec
                     .map(parameter -> {
                         ParameterLocation parameterLocation = parameter.getIn() == null ? ParameterLocation.NONE : ParameterLocation.valueOf(parameter.getIn().toUpperCase(Locale.ENGLISH));
                         boolean isRequired = TRUE.equals(parameter.getRequired());
-                        ParameterStyle parameterStyle = ParameterStyle.of(parameter.getStyle(), parameter.getExplode(), parameterLocation);
+                        ParameterStyle parameterStyle = ParameterStyle.of(parameter.getStyle(), parameter.getExplode(), parameter.getAllowReserved(), parameterLocation);
                         return getPredicateColumn(
                                 parameter.getName(),
                                 parameter.getSchema(),

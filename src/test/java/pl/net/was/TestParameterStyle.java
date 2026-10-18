@@ -167,6 +167,29 @@ class TestParameterStyle
     }
 
     @Test
+    void testQueryValuesAllowingReservedCharacters()
+    {
+        ParameterStyle form = new ParameterStyle(StyleEnum.FORM, true, true);
+        assertThat(form.serializeQueryParameter("a/b", TextNode.valueOf(RESERVED + "+=:@!$'()*,;[]%2F%zz")))
+                .containsExactly("a%2Fb=a/b?c&d%23e%20f+=:@!$'()*,;%5B%5D%2F%25zz");
+        assertThat(form.serializeQueryParameter("color", OBJECT_MAPPER.createObjectNode().put("a/b", "c/d")))
+                .containsExactly("a%2Fb=c/d");
+        assertThat(new ParameterStyle(StyleEnum.PIPEDELIMITED, false, true).serializeQueryParameter("color", OBJECT_MAPPER.createArrayNode().add("a/b").add("c d")))
+                .containsExactly("color=a/b%7Cc%20d");
+        assertThat(new ParameterStyle(StyleEnum.DEEPOBJECT, true, true).serializeQueryParameter("color", OBJECT_MAPPER.createObjectNode().put("a/b", "c/d")))
+                .containsExactly("color[a%2Fb]=c/d");
+    }
+
+    @Test
+    void testAllowReservedOnlyAppliesToQueryParameters()
+    {
+        assertThat(ParameterStyle.of(null, null, true, ParameterLocation.QUERY)).isEqualTo(new ParameterStyle(StyleEnum.FORM, true, true));
+        assertThat(ParameterStyle.of(null, null, true, ParameterLocation.PATH)).isEqualTo(ParameterStyle.defaultFor(ParameterLocation.PATH));
+        assertThat(ParameterStyle.of(null, null, true, ParameterLocation.HEADER)).isEqualTo(ParameterStyle.defaultFor(ParameterLocation.HEADER));
+        assertThat(ParameterStyle.of(null, null, true, ParameterLocation.COOKIE)).isEqualTo(ParameterStyle.defaultFor(ParameterLocation.COOKIE));
+    }
+
+    @Test
     void testUnsupportedQueryStyles()
     {
         for (StyleEnum style : new StyleEnum[] {StyleEnum.SIMPLE, StyleEnum.LABEL, StyleEnum.MATRIX}) {

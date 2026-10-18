@@ -88,6 +88,17 @@ paths:
       responses:
         "200":
           $ref: '#/components/responses/Echo'
+  /echo/query_reserved:
+    get:
+      parameters:
+        - in: query
+          name: value
+          allowReserved: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
   /echo/query_object:
     get:
       parameters:

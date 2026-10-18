@@ -379,6 +379,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void queryParameterAllowingReservedCharacters()
+    {
+        assertQuery(
+                "SELECT query FROM echo.default.echo_query_reserved WHERE value = 'a/b?c&d#e f+%2F[x]'",
+                "VALUES 'value=a/b?c&d%23e%20f+%2F%5Bx%5D'");
+    }
+
+    @Test
     public void objectParameterStyles()
     {
         String color = "CAST(ROW(100, 'a/b c') AS ROW(r bigint, name varchar))";
