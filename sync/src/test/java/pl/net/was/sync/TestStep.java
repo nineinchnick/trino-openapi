@@ -95,6 +95,20 @@ public class TestStep
     }
 
     @Test
+    public void testBundledSteps()
+    {
+        StepCatalog catalog = StepCatalog.fromClasspath(StepCatalog.DEFAULT_CLASSPATH_DIR);
+        assertThat(catalog.getDefaultSteps()).startsWith("repos", "commits", "issues");
+        for (String name : List.of("org_repos", "pull_stats", "artifacts", "teams", "members", "collaborators")) {
+            assertThat(catalog.getDefaultSteps()).doesNotContain(name);
+            assertThat(catalog.getStep(name).name()).isEqualTo(name);
+        }
+        catalog.getDefaultSteps().forEach(catalog::getStep);
+        assertThatThrownBy(() -> catalog.getStep("job_logs"))
+                .hasMessage("Unknown step job_logs, missing classpath:github/job_logs.sql");
+    }
+
+    @Test
     public void testConfig()
             throws Exception
     {
