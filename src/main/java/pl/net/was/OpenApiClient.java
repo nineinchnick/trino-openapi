@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -48,6 +49,8 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.ColumnHandle;
+import io.trino.spi.connector.InMemoryRecordSet;
+import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.connector.SortItem;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
@@ -58,6 +61,7 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 
 import java.io.ByteArrayOutputStream;
@@ -152,16 +156,15 @@ public class OpenApiClient
                 .filter(OpenApiColumn::isPageNumber)
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .findFirst();
+        Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
-            return makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows();
+            return Iterables.filter(makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows(), rowFilter::test);
         }
         Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
         OpenApiTableHandle pagedTable = sortedTable.orElse(table);
         // without the sort parameters, the first rows are not the top ones, so all pages must be read
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
-        // pages are requested until the previous ones have fewer rows than this, so a page that would start past it is never requested
-        long limit = min(queryLimit.orElse(Long.MAX_VALUE), pagination.maxResults().orElse(Long.MAX_VALUE));
         return pageIterator(
                 page -> {
                     TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
@@ -175,10 +178,57 @@ public class OpenApiClient
                     return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
                 },
                 0,
-                limit,
+                queryLimit.orElse(Long.MAX_VALUE),
+                // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
+                pagination.maxResults().orElse(Long.MAX_VALUE),
                 1,
                 getPageSize(table, httpPath),
-                pagination.maxPages());
+                pagination.maxPages(),
+                rowFilter);
+    }
+
+    private Predicate<List<?>> getRowFilter(OpenApiTableHandle table)
+    {
+        Map<ColumnHandle, Domain> domains = table.getRowFilter().getDomains().orElseThrow();
+        if (domains.isEmpty()) {
+            return _ -> true;
+        }
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        List<Type> types = columns.stream()
+                .map(OpenApiColumn::getType)
+                .toList();
+        Map<Integer, Domain> domainsByField = domains.entrySet().stream()
+                .collect(toImmutableMap(
+                        entry -> columns.stream().map(OpenApiColumn::getHandle).toList().indexOf((OpenApiColumnHandle) entry.getKey()),
+                        Map.Entry::getValue));
+        return row -> {
+            // read values the same way as the record set Trino reads rows from, so they're compared like Trino would compare them
+            RecordCursor cursor = new InMemoryRecordSet(types, List.of(row)).cursor();
+            checkState(cursor.advanceNextPosition(), "row is missing");
+            return domainsByField.entrySet().stream()
+                    .allMatch(entry -> entry.getValue().includesNullableValue(readNativeValue(cursor, entry.getKey(), types.get(entry.getKey()))));
+        };
+    }
+
+    private static Object readNativeValue(RecordCursor cursor, int field, Type type)
+    {
+        if (cursor.isNull(field)) {
+            return null;
+        }
+        Class<?> javaType = type.getJavaType();
+        if (javaType == long.class) {
+            return cursor.getLong(field);
+        }
+        if (javaType == double.class) {
+            return cursor.getDouble(field);
+        }
+        if (javaType == boolean.class) {
+            return cursor.getBoolean(field);
+        }
+        if (javaType == Slice.class) {
+            return cursor.getSlice(field);
+        }
+        return cursor.getObject(field);
     }
 
     private Optional<OpenApiTableHandle> getSortedTable(OpenApiTableHandle table, HttpPath httpPath, SortItem sortItem)
@@ -978,15 +1028,19 @@ public class OpenApiClient
     private Iterable<List<?>> pageIterator(
             IntFunction<ResultsPage> getter,
             int offset,
-            long limit,
+            long rowLimit,
+            long maxResults,
             int pageIncrement,
             OptionalLong pageSize,
-            OptionalInt maxPages)
+            OptionalInt maxPages,
+            Predicate<List<?>> rowFilter)
     {
         return () -> new Iterator<>()
         {
+            // results are counted before the row filter, because that's what the server counts
             long resultSize;
-            long resultLimit = limit;
+            long resultLimit = maxResults;
+            long rowCount;
             int page = offset + 1;
             int fetchedPages;
             boolean isLastPage;
@@ -995,19 +1049,37 @@ public class OpenApiClient
             @Override
             public boolean hasNext()
             {
-                if (rows != null && rows.hasNext()) {
-                    return true;
+                // pages without rows matching the row filter don't end pagination
+                while (rows == null || !rows.hasNext()) {
+                    if (isLastPage || resultSize >= resultLimit || rowCount >= rowLimit) {
+                        return false;
+                    }
+                    fetchPage();
                 }
-                if (isLastPage || resultSize >= resultLimit) {
-                    return false;
-                }
+                return true;
+            }
+
+            @Override
+            public List<?> next()
+            {
+                rowCount += 1;
+                return rows.next();
+            }
+
+            private void fetchPage()
+            {
                 ResultsPage resultsPage = getter.apply(page);
                 int fetchedPage = page;
                 page += pageIncrement;
                 fetchedPages++;
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
-                if (pageSize.isPresent() && Iterables.size(resultsPage.rows()) < pageSize.getAsLong()) {
+                int pageResults = Iterables.size(resultsPage.rows());
+                resultSize += pageResults;
+                if (pageResults == 0) {
+                    isLastPage = true;
+                }
+                if (pageSize.isPresent() && pageResults < pageSize.getAsLong()) {
                     isLastPage = true;
                 }
                 if (resultsPage.totalPages().isPresent() && fetchedPage >= resultsPage.totalPages().getAsLong()) {
@@ -1019,15 +1091,7 @@ public class OpenApiClient
                 if (maxPages.isPresent() && fetchedPages >= maxPages.getAsInt()) {
                     isLastPage = true;
                 }
-                rows = resultsPage.rows().iterator();
-                return rows.hasNext();
-            }
-
-            @Override
-            public List<?> next()
-            {
-                resultSize += 1;
-                return rows.next();
+                rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);
             }
         };
     }
