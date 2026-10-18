@@ -120,6 +120,10 @@ class UnionEcho(BaseModel):
     wrapper: UnionWrapper
 
 
+class MapEcho(BaseModel):
+    labels: dict[str, int]
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -280,6 +284,11 @@ async def echo_numbers(request: Request) -> Response:
 @router.post("/echo_union")
 def echo_union(body: UnionEcho) -> UnionEcho:
     # validating the body rejects union values sent as quoted JSON strings
+    return body
+
+
+@router.post("/echo_map")
+def echo_map(body: MapEcho) -> MapEcho:
     return body
 
 

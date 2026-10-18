@@ -52,6 +52,7 @@ import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 
@@ -632,6 +633,9 @@ public class OpenApiClient
                 ObjectNode rowNode = OBJECT_MAPPER.createObjectNode();
                 JsonTrinoConverter.convertRow(rowNode, sqlRow, (RowType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
                 value = rowNode;
+            }
+            else if (value instanceof SqlMap sqlMap) {
+                value = JsonTrinoConverter.convertMap(sqlMap, (MapType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
             JsonTrinoConverter.putValue(node, column.getSourceName(), value);
         }

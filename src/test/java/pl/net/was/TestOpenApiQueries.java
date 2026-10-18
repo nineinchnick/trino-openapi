@@ -225,6 +225,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithMapInRequestBody()
+    {
+        assertQuery(
+                "SELECT labels['a'], labels['b'] FROM echo.default.echo_map WHERE labels = MAP(ARRAY['a', 'b'], ARRAY[1, 2])",
+                "VALUES (1, 2)");
+    }
+
+    @Test
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(
