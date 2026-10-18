@@ -3,6 +3,13 @@ name: Java CI with Maven
 on:
   pull_request:
     branches: [main]
+  # builds on main save the Maven cache in the scope of the default branch, which pull requests can restore
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -15,7 +22,16 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           server-id: github
-          cache: 'maven'
+      # the release bumps versions in pom.xml, so exact cache keys rarely match; restore the most recent cache instead
+      - name: Cache Maven artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
       - name: Configure Problem Matchers
         run: |
           echo "::add-matcher::.github/problem-matcher.json"
