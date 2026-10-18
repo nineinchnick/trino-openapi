@@ -198,9 +198,9 @@ public class OpenApiTableHandle
             }
             Domain domain = newConstraint.getDomains().get().get(column.getHandle());
             boolean isAlwaysSent = isSentByAllSelectPaths(column);
-            // splits are generated for every value of a pushed down domain, so if the selected path ignores it,
-            // every split would return the same rows, and the remaining filter wouldn't remove these duplicates
-            if (!isAlwaysSent && !domain.isSingleValue()) {
+            // splits are generated for every value of a pushed down domain, so it's only useful if some path can send it,
+            // and splits for paths that ignore it are merged, so they don't return the same rows
+            if (!domain.isSingleValue() && !isSentBySomeSelectPath(column)) {
                 continue;
             }
             if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
@@ -243,6 +243,13 @@ public class OpenApiTableHandle
         return selectPaths.stream()
                 .map(path -> new HttpPath(selectMethod, path))
                 .allMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
+    }
+
+    private boolean isSentBySomeSelectPath(OpenApiColumn column)
+    {
+        return selectPaths.stream()
+                .map(path -> new HttpPath(selectMethod, path))
+                .anyMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
     }
 
     private TupleDomain<ColumnHandle> normalizeConstraint(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, int domainExpansionLimit)
