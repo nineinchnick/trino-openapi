@@ -655,6 +655,15 @@ public class TestGithub
     }
 
     @Test
+    public void selectWithErrorMessage()
+    {
+        // the API responds with 404 to a missing repository, which returns no rows, but with 422 to a missing commit
+        assertQueryFails(
+                "SELECT sha FROM repos_commits WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND ref = 'nonexistent-ref'",
+                "Request GET https://api\\.github\\.com/repos/nineinchnick/trino-openapi/commits/nonexistent-ref for operation repos/get-commit failed with HTTP 422: \"No commit found for SHA: nonexistent-ref\"");
+    }
+
+    @Test
     public void selectTopNSortedByApi()
     {
         // the path to get a single pull request can't filter by state, but the connector would filter its rows, so the filter doesn't prevent the pushdown

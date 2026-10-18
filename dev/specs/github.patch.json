@@ -2,7 +2,8 @@
   "x-trino": {
     "rateLimitResetHeader": "x-ratelimit-reset",
     "rateLimitResetFormat": "epochSeconds",
-    "rateLimitRemainingHeader": "x-ratelimit-remaining"
+    "rateLimitRemainingHeader": "x-ratelimit-remaining",
+    "errorPath": "$response.body#/message"
   },
   "paths": {
     "/agents/automations": {

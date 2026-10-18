@@ -34,7 +34,8 @@ otherwise return only the latest attempt.
 
 The document-level `x-trino` extension declares the headers of GitHub's
 [rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api),
-so queries wait until an exceeded limit resets.
+so queries wait until an exceeded limit resets, and sets `errorPath` to the
+`message` field of error responses, so failed queries say why.
 
 ```shell
 curl -fsSL -o /tmp/github.json https://github.com/github/rest-api-description/raw/main/descriptions/api.github.com/api.github.com.json

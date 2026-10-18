@@ -772,6 +772,10 @@ class TestOpenApiSpec
         // GitHub sends the reset time in every response, so only the remaining requests tell an exceeded rate limit from missing permissions
         Assertions.assertThat(spec.getRateLimitHeaders())
                 .contains(new RateLimitHeaders("x-ratelimit-reset", RateLimitHeaders.ResetFormat.EPOCH_SECONDS, Optional.of("x-ratelimit-remaining")));
+        // error responses have a message, and operations without the extension use the one of the document
+        Assertions.assertThat(spec.getErrorPointers(schemaTableName(SCHEMA_NAME, "repos_commits")))
+                .containsEntry(new HttpPath(PathItem.HttpMethod.GET, "/repos/{owner}/{repo}/commits/{ref}"), JsonPointer.compile("/message"))
+                .containsEntry(new HttpPath(PathItem.HttpMethod.GET, "/repos/{owner}/{repo}/commits"), JsonPointer.compile("/message"));
 
         // nothing else checks that every operation in the patch still matches the upstream spec
         JsonNode patchPaths = new ObjectMapper().readTree(Path.of("dev/specs/github.patch.json").toFile()).get("paths");
