@@ -1327,7 +1327,7 @@ class TestOpenApiSpec
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "zones"));
         String listPath = "/zones";
-        String onePath = "/zones/{identifier}";
+        String onePath = "/zones/{zone_id}";
         Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, listPath), new HttpPath(PathItem.HttpMethod.GET, onePath));
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, listPath));
         Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PATCH, onePath));
@@ -1347,6 +1347,7 @@ class TestOpenApiSpec
                         RowType.field("id", VARCHAR),
                         RowType.field("name", VARCHAR)))),
                 RowType.field("activated_on", TIMESTAMP_MILLIS),
+                RowType.field("cname_suffix", VARCHAR),
                 RowType.field("created_on", TIMESTAMP_MILLIS),
                 RowType.field("development_mode", createDecimalType(18, 8)),
                 RowType.field("id", VARCHAR),
@@ -1360,6 +1361,7 @@ class TestOpenApiSpec
                         RowType.field("step", BIGINT)))),
                 RowType.field("modified_on", TIMESTAMP_MILLIS),
                 RowType.field("name", VARCHAR),
+                RowType.field("name_servers", new ArrayType(VARCHAR)),
                 RowType.field("original_dnshost", VARCHAR),
                 RowType.field("original_name_servers", new ArrayType(VARCHAR)),
                 RowType.field("original_registrar", VARCHAR),
@@ -1367,13 +1369,23 @@ class TestOpenApiSpec
                         RowType.field("id", VARCHAR),
                         RowType.field("name", VARCHAR),
                         RowType.field("type", VARCHAR)))),
-                RowType.field("vanity_name_servers", new ArrayType(VARCHAR))));
-        RowType result3Type = RowType.from(List.of(RowType.field("id", VARCHAR)));
+                RowType.field("paused", BOOLEAN),
+                RowType.field("permissions", new ArrayType(VARCHAR)),
+                RowType.field("plan", VARCHAR),
+                RowType.field("status", VARCHAR),
+                RowType.field("tenant", VARCHAR),
+                RowType.field("tenant_unit", VARCHAR),
+                RowType.field("type", VARCHAR),
+                RowType.field("vanity_name_servers", new ArrayType(VARCHAR)),
+                RowType.field("verification_key", VARCHAR)));
+        RowType result3Type = RowType.from(List.of(
+                RowType.field("id", VARCHAR)));
         RowType resultInfoType = RowType.from(List.of(
                 RowType.field("count", createDecimalType(18, 8)),
                 RowType.field("page", createDecimalType(18, 8)),
                 RowType.field("per_page", createDecimalType(18, 8)),
-                RowType.field("total_count", createDecimalType(18, 8))));
+                RowType.field("total_count", createDecimalType(18, 8)),
+                RowType.field("total_pages", createDecimalType(18, 8))));
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
@@ -1398,8 +1410,8 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("success").setSourceName("success")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setComment("Whether the API call was successful")
                                 .setIsNullable(true)
+                                .setComment("Whether the API call was successful.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("result_info").setSourceName("result_info")
@@ -1426,45 +1438,69 @@ class TestOpenApiSpec
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY))
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
-                                .setComment("A domain name. Optional filter operators can be provided to extend refine the search:\n" +
-                                        "  * `equal` (default)\n" +
-                                        "  * `not_equal`\n" +
-                                        "  * `starts_with`\n" +
-                                        "  * `ends_with`\n" +
-                                        "  * `contains`\n" +
-                                        "  * `starts_with_case_sensitive`\n" +
-                                        "  * `ends_with_case_sensitive`\n" +
-                                        "  * `contains_case_sensitive`\n")
                                 .setIsNullable(true)
+                                .setComment("""
+                                            A domain name. Optional filter operators can be provided to extend refine the search:
+                                              * `equal` (default)
+                                              * `not_equal`
+                                              * `starts_with`
+                                              * `ends_with`
+                                              * `contains`
+                                              * `starts_with_case_sensitive`
+                                              * `ends_with_case_sensitive`
+                                              * `contains_case_sensitive`
+                                            """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("A zone status")
+                                .setComment("Specify a zone status to filter by.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("type").setSourceName("type")
+                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
+                                .setParameterStyles(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), new ParameterStyle(Parameter.StyleEnum.FORM, false)))
+                                .setIsNullable(true)
+                                .setComment("Zone types to filter by. Multiple types can be specified as a comma-separated list (e.g., ?type=full,partial,secondary). When this parameter is not provided, zones with type \"internal\" are excluded from the results.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("type_2").setSourceName("type")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
+                                .setIsNullable(true)
+                                .setComment("""
+                                            A full zone implies that DNS is hosted with Cloudflare. A partial zone is
+                                            typically a partner-hosted zone or a CNAME setup.
+                                            """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.id").setSourceName("account.id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("An account ID")
+                                .setComment("Filter by an account ID.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.name").setSourceName("account.name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("An account Name. Optional filter operators can be provided to extend refine the search:\n" +
-                                        "  * `equal` (default)\n" +
-                                        "  * `not_equal`\n" +
-                                        "  * `starts_with`\n" +
-                                        "  * `ends_with`\n" +
-                                        "  * `contains`\n" +
-                                        "  * `starts_with_case_sensitive`\n" +
-                                        "  * `ends_with_case_sensitive`\n" +
-                                        "  * `contains_case_sensitive`\n")
+                                .setComment("""
+                                            An account Name. Optional filter operators can be provided to extend refine the search:
+                                              * `equal` (default)
+                                              * `not_equal`
+                                              * `starts_with`
+                                              * `ends_with`
+                                              * `contains`
+                                              * `starts_with_case_sensitive`
+                                              * `ends_with_case_sensitive`
+                                              * `contains_case_sensitive`
+                                            """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
@@ -1503,27 +1539,18 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account").setSourceName("account")
-                                .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
+                                .setType(RowType.from(List.of(
+                                        RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY))
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("type").setSourceName("type")
+                                .setName("zone_id").setSourceName("zone_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(
-                                        new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY,
-                                        new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
-                                .setIsNullable(true)
-                                .setComment("A full zone implies that DNS is hosted with Cloudflare. A partial zone is \n" +
-                                        "typically a partner-hosted zone or a CNAME setup.\n")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("identifier").setSourceName("identifier")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                // TODO we've merged /zones and /zones/{identifier} and now we require identifier for /zones, which is wrong
+                                // TODO we've merged /zones and /zones/{zone_id} and now we require zone_id for /zones, which is wrong
                                 .setRequiresPredicate(Map.of(
                                         new HttpPath(PathItem.HttpMethod.GET, onePath), ParameterLocation.PATH,
-                                        new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.PATH,
-                                        new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.PATH))
+                                        new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.PATH,
+                                        new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .setComment("Identifier")
                                 .build(),
@@ -1532,27 +1559,33 @@ class TestOpenApiSpec
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("Indicates whether the zone is only using Cloudflare DNS services. A\n" +
-                                        "true value means the zone will not receive security or performance\n" +
-                                        "benefits.\n")
+                                .setComment("""
+                                            Indicates whether the zone is only using Cloudflare DNS services. A
+                                            true value means the zone will not receive security or performance
+                                            benefits.
+                                            """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
-                                .setType(RowType.from(List.of(RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
+                                .setType(RowType.from(List.of(
+                                        RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("(Deprecated) Please use the `/zones/{identifier}/subscription` API\n" +
-                                        "to update a zone's plan. Changing this value will create/cancel\n" +
-                                        "associated subscriptions. To view available plans for this zone,\n" +
-                                        "see Zone Plans.\n")
+                                .setComment("""
+                                            (Deprecated) Please use the `/zones/{zone_id}/subscription` API
+                                            to update a zone's plan. Changing this value will create/cancel
+                                            associated subscriptions. To view available plans for this zone,
+                                            see Zone Plans.
+                                            """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("vanity_name_servers").setSourceName("vanity_name_servers")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("An array of domains used for custom name servers. This is only\n" +
-                                        "available for Business and Enterprise plans.")
+                                .setComment("""
+                                            An array of domains used for custom name servers. This is only
+                                            available for Business and Enterprise plans.""")
                                 .build());
     }
 

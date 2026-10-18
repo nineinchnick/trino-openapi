@@ -1,0 +1,56 @@
+{
+  "paths": {
+    "/accounts/{account_id}/workers/assets/upload": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "encoding": null
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "healthchecks_http_config": {
+        "properties": {
+          "expected_codes": {
+            "default": null
+          }
+        }
+      },
+      "images_image_direct_upload_request_v2": {
+        "properties": {
+          "expiry": {
+            "default": null
+          }
+        }
+      },
+      "stream_direct_upload_request": {
+        "properties": {
+          "expiry": {
+            "default": null
+          }
+        }
+      }
+    },
+    "requestBodies": {
+      "workers_namespace_upload": {
+        "content": {
+          "multipart/form-data": {
+            "encoding": null
+          }
+        }
+      },
+      "workers_script_upload": {
+        "content": {
+          "multipart/form-data": {
+            "encoding": null
+          }
+        }
+      }
+    }
+  }
+}

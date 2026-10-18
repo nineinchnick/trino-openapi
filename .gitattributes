@@ -1,7 +1,6 @@
 # vendored OpenAPI specs: regenerate them instead of diffing or merging, see dev/specs/README.md
 specs/github.json -diff -merge linguist-generated
 src/test/resources/cloudflare.json -diff -merge linguist-generated
-src/test/resources/cloudflare.orig.json -diff -merge linguist-generated
 src/test/resources/datadog.yaml -diff -merge linguist-generated
 src/test/resources/galaxy.json -diff -merge linguist-generated
 src/test/resources/github.json -diff -merge linguist-generated
