@@ -27,7 +27,6 @@ import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
@@ -67,7 +66,6 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +74,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -94,10 +91,8 @@ import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.AbstractMap.SimpleEntry;
-import static java.util.Comparator.comparing;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSpec.ROW_ID;
@@ -353,41 +348,14 @@ public class OpenApiClient
     {
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
-        // ignore paths where required params are not present
-        List<String> invalidPaths = columns.stream()
-                .flatMap(column -> column.getRequiresPredicate().entrySet().stream()
-                        .filter(entry -> entry.getValue() == ParameterLocation.PATH)
-                        .map(entry -> new SimpleEntry<>(entry.getKey(), valueProvider.apply(column)))
-                        .filter(entry -> entry.getValue() == null)
-                        .map(entry -> entry.getKey().path()))
-                .toList();
-        // index params (created from column predicates) by path
-        Map<HttpPath, Map<OpenApiColumn, Object>> pathParams = columns.stream()
-                .flatMap(column -> Stream.concat(
-                                column.getOptionalPredicate().entrySet().stream(),
-                                column.getRequiresPredicate().entrySet().stream())
-                        .filter(entry -> entry.getValue() == ParameterLocation.PATH)
-                        .map(entry -> new SimpleEntry<>(
-                                entry.getKey(),
-                                valueProvider.apply(column)))
-                        .filter(entry -> entry.getValue() != null)
-                        .map(entry -> Map.entry(entry.getKey(), Map.entry(column, entry.getValue()))))
-                .collect(groupingBy(
-                        Map.Entry::getKey,
-                        toMap(
-                                entry -> entry.getValue().getKey(),
-                                entry -> entry.getValue().getValue())));
-
-        // pick the path that has the highest number of params present in query predicates, and the shortest if there are ties
-        Map<HttpPath, Integer> pathParamCounts = pathParams.entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> entry.getValue().size()));
-        Comparator<Object> comparator = comparing(path -> requireNonNull(pathParamCounts.getOrDefault(new HttpPath(method, (String) path), 0)))
-                .thenComparing(path -> -((String) path).length());
-        String selectedPath = paths.stream()
-                .filter(path -> !invalidPaths.contains(path))
-                .max(comparator)
-                .orElseThrow();
-        return Map.entry(selectedPath, pathParams.getOrDefault(new HttpPath(method, selectedPath), ImmutableMap.of()));
+        String selectedPath = PathSelector.selectPath(columns, method, paths, column -> valueProvider.apply(column) != null);
+        HttpPath httpPath = new HttpPath(method, selectedPath);
+        Map<OpenApiColumn, Object> pathParams = columns.stream()
+                .filter(column -> isPredicate(column, httpPath, ParameterLocation.PATH))
+                .map(column -> new SimpleEntry<>(column, valueProvider.apply(column)))
+                .filter(entry -> entry.getValue() != null)
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+        return Map.entry(selectedPath, pathParams);
     }
 
     private static URI buildUri(URI uri, String path, List<String> queryParams)
