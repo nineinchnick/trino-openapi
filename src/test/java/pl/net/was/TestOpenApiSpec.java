@@ -769,6 +769,10 @@ class TestOpenApiSpec
                         .map(path -> Map.entry(path, table)))
                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue, (first, _) -> first));
 
+        // GitHub sends the reset time in every response, so only the remaining requests tell an exceeded rate limit from missing permissions
+        Assertions.assertThat(spec.getRateLimitHeaders())
+                .contains(new RateLimitHeaders("x-ratelimit-reset", RateLimitHeaders.ResetFormat.EPOCH_SECONDS, Optional.of("x-ratelimit-remaining")));
+
         // nothing else checks that every operation in the patch still matches the upstream spec
         JsonNode patchPaths = new ObjectMapper().readTree(Path.of("dev/specs/github.patch.json").toFile()).get("paths");
         Assertions.assertThat(patchPaths.properties()).isNotEmpty();

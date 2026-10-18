@@ -359108,5 +359108,10 @@
         }
       }
     }
+  },
+  "x-trino": {
+    "rateLimitResetHeader": "x-ratelimit-reset",
+    "rateLimitResetFormat": "epochSeconds",
+    "rateLimitRemainingHeader": "x-ratelimit-remaining"
   }
 }
