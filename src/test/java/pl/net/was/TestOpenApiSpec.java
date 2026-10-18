@@ -2890,6 +2890,63 @@ class TestOpenApiSpec
         Assertions.assertThat(objectMapper.writeValueAsString(node)).isEqualTo("{\"id\":7,\"meta\":{\"b\":1},\"email\":\"a@b.c\"}");
     }
 
+    @Test
+    public void testNestedUnionOfObjectArrays()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /rules:
+                    get:
+                      responses:
+                        "200":
+                          description: Rules
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  queries:
+                                    oneOf:
+                                    - type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          name:
+                                            type: string
+                                    - type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          id:
+                                            type: integer
+                                  values:
+                                    oneOf:
+                                    - type: array
+                                      items:
+                                        type: string
+                                    - type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          id:
+                                            type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("rules"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("queries", new ArrayType(RowType.from(List.of(
+                                RowType.field("name", VARCHAR),
+                                RowType.field("id", BIGINT))))),
+                        Assertions.tuple("values", VARCHAR));
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
