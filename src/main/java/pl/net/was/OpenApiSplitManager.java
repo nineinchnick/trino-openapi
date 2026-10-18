@@ -295,6 +295,6 @@ public class OpenApiSplitManager
         if (maxSplitsPerSecond == Double.MAX_VALUE) {
             return new FixedSplitSource(splits);
         }
-        return new RateLimitedSplitSource(executor, splits, maxSplitsPerSecond);
+        return new RateLimitedSplitSource(executor, List.of(() -> ImmutableList.copyOf(splits)), maxSplitsPerSecond);
     }
 }
