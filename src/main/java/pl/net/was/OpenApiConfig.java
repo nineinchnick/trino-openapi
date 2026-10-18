@@ -74,6 +74,7 @@ public class OpenApiConfig
     // (or sequence of range predicates).
     // Too large IN lists cause too many requests being made, so a hard limit is required.
     private int domainExpansionLimit = 256;
+    private SplitStrategy splitStrategy = SplitStrategy.OFF;
 
     @NotNull
     public String getSpecLocation()
@@ -392,6 +393,20 @@ public class OpenApiConfig
     public OpenApiConfig setDomainExpansionLimit(int domainExpansionLimit)
     {
         this.domainExpansionLimit = domainExpansionLimit;
+        return this;
+    }
+
+    @NotNull
+    public SplitStrategy getSplitStrategy()
+    {
+        return splitStrategy;
+    }
+
+    @Config("split-strategy")
+    @ConfigDescription("How to read pages of results in separate splits: probe or off")
+    public OpenApiConfig setSplitStrategy(SplitStrategy splitStrategy)
+    {
+        this.splitStrategy = splitStrategy;
         return this;
     }
 }

@@ -139,6 +139,7 @@ Restart Trino. Every catalog can point to a different API.
 | `http-cache.directory`         | `OPENAPI_HTTP_CACHE_DIRECTORY`      |           | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
 | `http-cache.max-size`          | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog; the least recently used responses are removed above it                  |
 | `http-cache.max-entry-size`    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
+| `split-strategy`               | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe` or `off`; see [Pagination](#pagination)                           |
 
 ## Authentication
 
@@ -519,6 +520,7 @@ paths:
 | `hasMorePath`       | JSON pointer to a boolean that is `false` on the last page                                                                                          |
 | `maxPages`          | Maximum number of pages to request                                                                                                                  |
 | `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
+| `splitStrategy`     | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
 | `errorPath`         | JSON pointer to a human-readable message in error responses                                                                                         |
 | `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
@@ -576,6 +578,28 @@ only when:
 Otherwise it requests all pages, and Trino sorts the rows. Declare only fields
 that the server sorts the same way as Trino. For example, servers often sort
 text ignoring case.
+
+### Reading pages concurrently
+
+By default, all pages are read one after another, in a single split. The
+`split-strategy` catalog property, and the `splitStrategy` property in `x-trino`
+for a single operation, can make the connector read pages concurrently, in
+separate splits:
+
+* `probe` - when `totalResultsPath` or `totalPagesPath` is set, the first page
+  is read in a split right away, and the coordinator also requests it to get the
+  total, and creates a split for every remaining page. The number of pages is
+  the value at `totalPagesPath`, or the value at `totalResultsPath` divided by
+  the page size. When the page size isn't known, it's the number of results on
+  the first page. If the first page has no total, the remaining pages are read
+  in a single split. Results with a single page are requested twice.
+* `off` - read all pages in a single split.
+
+Pages are read one after another when the query has a `LIMIT`, so pagination
+can stop once it's reached, and when filters on multiple values, like `IN`
+lists, already read every value in a separate split. Splits are still limited by
+`maxPages`, `max-requests-per-second`, and `max-splits-per-second`. Rows from
+different pages can be returned in any order.
 
 ## Range filters
 

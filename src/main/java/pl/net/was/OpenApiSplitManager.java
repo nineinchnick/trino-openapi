@@ -44,8 +44,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.util.Objects.requireNonNull;
@@ -53,6 +53,7 @@ import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
 
 public class OpenApiSplitManager
         implements ConnectorSplitManager
@@ -60,17 +61,21 @@ public class OpenApiSplitManager
     private static final long TIMEOUT_MILLIS = 20000;
 
     private final OpenApiSpec spec;
+    private final OpenApiClient client;
     private final double maxSplitsPerSecond;
     private final int domainExpansionLimit;
+    private final SplitStrategy splitStrategy;
 
     private final ExecutorService executor = newCachedThreadPool(daemonThreadsNamed(OpenApiSplitManager.class.getName() + "-%d"));
 
     @Inject
-    public OpenApiSplitManager(OpenApiSpec spec, OpenApiConfig config)
+    public OpenApiSplitManager(OpenApiSpec spec, OpenApiClient client, OpenApiConfig config)
     {
         this.spec = requireNonNull(spec, "spec is null");
+        this.client = requireNonNull(client, "client is null");
         this.maxSplitsPerSecond = config.getMaxSplitsPerSecond();
         this.domainExpansionLimit = config.getDomainExpansionLimit();
+        this.splitStrategy = config.getSplitStrategy();
     }
 
     @Override
@@ -83,18 +88,20 @@ public class OpenApiSplitManager
     {
         OpenApiTableHandle tableHandle = (OpenApiTableHandle) table;
         tableHandle.checkHasPaths("SELECT", tableHandle.getSelectPaths());
-        return new DynamicFilteringSplitSource(table, dynamicFilterColumns);
+        return new DynamicFilteringSplitSource(session, table, dynamicFilterColumns);
     }
 
     private class DynamicFilteringSplitSource
             implements ConnectorSplitSource
     {
+        private final ConnectorSession session;
         private final ConnectorTableHandle table;
         private final Set<ColumnHandle> dynamicFilterColumns;
         private Optional<ConnectorSplitSource> delegate = Optional.empty();
 
-        private DynamicFilteringSplitSource(ConnectorTableHandle table, Set<ColumnHandle> dynamicFilterColumns)
+        private DynamicFilteringSplitSource(ConnectorSession session, ConnectorTableHandle table, Set<ColumnHandle> dynamicFilterColumns)
         {
+            this.session = requireNonNull(session, "session is null");
             this.table = requireNonNull(table, "table is null");
             this.dynamicFilterColumns = ImmutableSet.copyOf(requireNonNull(dynamicFilterColumns, "dynamicFilterColumns is null"));
         }
@@ -128,7 +135,7 @@ public class OpenApiSplitManager
         private synchronized ConnectorSplitSource getDelegate(DynamicFilterSnapshot dynamicFilterSnapshot)
         {
             if (delegate.isEmpty()) {
-                delegate = Optional.of(getSplitSource(table, dynamicFilterSnapshot, dynamicFilterColumns));
+                delegate = Optional.of(getSplitSource(session, table, dynamicFilterSnapshot, dynamicFilterColumns));
             }
             return delegate.get();
         }
@@ -140,6 +147,7 @@ public class OpenApiSplitManager
     }
 
     private ConnectorSplitSource getSplitSource(
+            ConnectorSession session,
             ConnectorTableHandle tableHandle,
             DynamicFilterSnapshot dynamicFilterSnapshot,
             Set<ColumnHandle> dynamicFilterColumns)
@@ -159,7 +167,7 @@ public class OpenApiSplitManager
                 : pushedDownPredicate.intersect(dynamicPredicate);
         if (predicate.isNone()) {
             // the join has no matching rows
-            return getSplitSource(List.of());
+            return getSplitSource(List.of(), List.of());
         }
         // merge in constraints from dynamicFilter, which may contain multivalued domains,
         // and must be intersected with pushed down constraints, so the handle starts without them
@@ -207,7 +215,7 @@ public class OpenApiSplitManager
             singleDomains.add(splitDomains.build());
         }
         // then create constraints with every multivalued domain replaced with single-value sets
-        Map<TupleDomain<ColumnHandle>, TupleDomain<ColumnHandle>> splitRowFilters = new LinkedHashMap<>();
+        Map<TupleDomain<ColumnHandle>, SplitTable> splitTables = new LinkedHashMap<>();
         for (List<Map.Entry<ColumnHandle, Domain>> splitDomains : Lists.cartesianProduct(singleDomains.build())) {
             Map<ColumnHandle, Domain> newDomains = new HashMap<>();
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
@@ -228,16 +236,43 @@ public class OpenApiSplitManager
                     newDomains.put(column, domain);
                 }
             });
-            splitRowFilters.put(TupleDomain.withColumnDomains(newDomains), rowFilter);
+            TupleDomain<ColumnHandle> splitConstraint = TupleDomain.withColumnDomains(newDomains);
+            splitTables.put(splitConstraint, new SplitTable(
+                    table.toBuilder()
+                            .setConstraint(splitConstraint)
+                            .setRowFilter(rowFilter)
+                            .build(),
+                    httpPath));
         }
-        List<OpenApiSplit> splits = splitRowFilters.entrySet().stream()
-                .map(entry -> new OpenApiSplit(table.toBuilder()
-                        .setConstraint(entry.getKey())
-                        .setRowFilter(entry.getValue())
-                        .build()))
-                .collect(toImmutableList());
+        ImmutableList.Builder<ConnectorSplit> splits = ImmutableList.builder();
+        ImmutableList.Builder<Supplier<List<ConnectorSplit>>> splitsAfterFirstPages = ImmutableList.builder();
+        // splits for multiple values of predicates are already read concurrently,
+        // and probing for the number of pages of each would only add requests;
+        // with a limit, reading pages one after another stops once it's reached
+        boolean canProbe = splitTables.size() == 1 && table.getLimit().isEmpty();
+        for (SplitTable splitTable : splitTables.values()) {
+            Optional<OpenApiTableHandle> firstPage = canProbe && getSplitStrategy(table, splitTable.httpPath()) == SplitStrategy.PROBE
+                    ? client.getFirstPageWithTotals(splitTable.table())
+                    : Optional.empty();
+            if (firstPage.isEmpty()) {
+                splits.add(new OpenApiSplit(splitTable.table()));
+                continue;
+            }
+            // the first page tells how many pages there are, but its split doesn't wait for it to be requested
+            splits.add(new OpenApiSplit(firstPage.get()));
+            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(splitTable.table(), !isHttpCacheEnabled(session))));
+        }
         // TODO when implementing limits, this is where we'd break down splits more
-        return getSplitSource(splits);
+        return getSplitSource(splits.build(), splitsAfterFirstPages.build());
+    }
+
+    private record SplitTable(OpenApiTableHandle table, HttpPath httpPath) {}
+
+    private SplitStrategy getSplitStrategy(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        return spec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none())
+                .splitStrategy()
+                .orElse(splitStrategy);
     }
 
     private HttpPath selectPath(
@@ -290,11 +325,17 @@ public class OpenApiSplitManager
         return column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath);
     }
 
-    private ConnectorSplitSource getSplitSource(List<OpenApiSplit> splits)
+    private ConnectorSplitSource getSplitSource(List<ConnectorSplit> splits, List<Supplier<List<ConnectorSplit>>> laterSplits)
     {
-        if (maxSplitsPerSecond == Double.MAX_VALUE) {
+        if (maxSplitsPerSecond == Double.MAX_VALUE && laterSplits.isEmpty()) {
             return new FixedSplitSource(splits);
         }
-        return new RateLimitedSplitSource(executor, List.of(() -> ImmutableList.copyOf(splits)), maxSplitsPerSecond);
+        return new RateLimitedSplitSource(
+                executor,
+                ImmutableList.<Supplier<List<ConnectorSplit>>>builder()
+                        .add(() -> splits)
+                        .addAll(laterSplits)
+                        .build(),
+                maxSplitsPerSecond);
     }
 }

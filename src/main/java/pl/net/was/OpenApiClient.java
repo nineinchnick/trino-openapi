@@ -87,8 +87,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
+import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
@@ -103,6 +106,7 @@ import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static java.lang.Float.intBitsToFloat;
+import static java.lang.Math.ceilDiv;
 import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -265,6 +269,69 @@ public class OpenApiClient
         }
         TupleDomain<ColumnHandle> constraint = TupleDomain.fromFixedValues(sortConstraint);
         return Optional.of(table.cloneWithConstraint(table.getConstraint().isNone() ? constraint : table.getConstraint().intersect(constraint)));
+    }
+
+    public Optional<OpenApiTableHandle> getFirstPageWithTotals(OpenApiTableHandle table)
+    {
+        HttpPath httpPath = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint())).getKey();
+        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
+        if (JsonPointer.empty().equals(pagination.totalResultsPointer()) && JsonPointer.empty().equals(pagination.totalPagesPointer())) {
+            return Optional.empty();
+        }
+        return getUnfilteredPageColumn(table, httpPath)
+                .map(pageColumn -> withPage(table, pageColumn, 1));
+    }
+
+    public List<OpenApiSplit> getSplitsAfterFirstPage(OpenApiTableHandle table, boolean revalidateCachedResponses)
+    {
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint()));
+        HttpPath httpPath = pathWithParams.getKey();
+        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
+        OpenApiColumn pageColumn = getUnfilteredPageColumn(table, httpPath).orElseThrow();
+        // the first page is also read by its own split, because rows can't be sent in splits
+        ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), revalidateCachedResponses);
+        OptionalLong pageSize = getPageSize(table, httpPath);
+        OptionalLong pageCount = getPageCount(firstPage, pageSize);
+        if (pageCount.isEmpty()) {
+            return List.of(new OpenApiSplit(table, 2, 1));
+        }
+        long lastPage = pagination.maxPages().isPresent()
+                ? min(pageCount.getAsLong(), pagination.maxPages().getAsInt())
+                : pageCount.getAsLong();
+        // pages starting past the maximum number of results are never requested
+        long serverPageSize = pageSize.orElse(Iterables.size(firstPage.rows()));
+        if (pagination.maxResults().isPresent() && serverPageSize > 0) {
+            lastPage = min(lastPage, ceilDiv(pagination.maxResults().getAsLong(), serverPageSize));
+        }
+        return LongStream.rangeClosed(2, lastPage)
+                .mapToObj(page -> new OpenApiSplit(withPage(table, pageColumn, page)))
+                .collect(toImmutableList());
+    }
+
+    private static OptionalLong getPageCount(ResultsPage firstPage, OptionalLong pageSize)
+    {
+        long firstPageSize = Iterables.size(firstPage.rows());
+        if (firstPage.hasMore().isPresent() && !firstPage.hasMore().get()) {
+            return OptionalLong.of(1);
+        }
+        if (pageSize.isPresent() && firstPageSize < pageSize.getAsLong()) {
+            return OptionalLong.of(1);
+        }
+        OptionalLong pageCountFromResults = OptionalLong.empty();
+        if (firstPage.totalResults().isPresent()) {
+            long totalResults = firstPage.totalResults().getAsLong();
+            // the first page is full, unless it's the last one, so its size is the page size the server uses
+            long serverPageSize = pageSize.orElse(firstPageSize);
+            if (totalResults <= firstPageSize) {
+                pageCountFromResults = OptionalLong.of(1);
+            }
+            else if (serverPageSize > 0) {
+                pageCountFromResults = OptionalLong.of(ceilDiv(totalResults, serverPageSize));
+            }
+        }
+        return Stream.of(firstPage.totalPages(), pageCountFromResults)
+                .flatMapToLong(OptionalLong::stream)
+                .min();
     }
 
     private Optional<OpenApiColumn> getUnfilteredPageColumn(OpenApiTableHandle table, HttpPath httpPath)

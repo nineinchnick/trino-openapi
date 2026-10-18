@@ -16,11 +16,13 @@ package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
 import io.trino.Session;
+import io.trino.operator.OperatorStats;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
+import io.trino.testing.QueryRunner.MaterializedResultWithPlan;
 import io.trino.testing.sql.TestTable;
 import io.trino.testing.sql.TrinoSqlExecutor;
 import org.junit.jupiter.api.AfterAll;
@@ -38,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static com.google.common.collect.MoreCollectors.onlyElement;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
@@ -102,6 +105,10 @@ public class TestOpenApiQueries
                 "fastapi_cached", ImmutableMap.<String, String>builder()
                         .putAll(fastApiProperties.buildOrThrow())
                         .put("http-cache.directory", Files.createTempDirectory("trino-openapi-http-cache").toString())
+                        .buildOrThrow(),
+                "fastapi_probe", ImmutableMap.<String, String>builder()
+                        .putAll(fastApiProperties.buildOrThrow())
+                        .put("split-strategy", "probe")
                         .buildOrThrow(),
                 "echo", Map.of(
                         "spec-location", "src/test/resources/echo.yml",
@@ -692,7 +699,7 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.items").getMaterializedRows();
         assertThat(rows)
                 .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
+                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
     }
 
     @Test
@@ -925,7 +932,7 @@ public class TestOpenApiQueries
     {
         assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.total_pages_items").getMaterializedRows())
                 .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
+                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
     }
 
     @Test
@@ -942,7 +949,7 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();
         assertThat(rows)
                 .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
+                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
     }
 
     @Test
@@ -1024,7 +1031,27 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.paged_search").getMaterializedRows();
         assertThat(rows)
                 .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
+                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsWithSplitPerPage()
+    {
+        // the number of pages is known from the total number of results or pages in the first page
+        assertSplits("SELECT name FROM fastapi_probe.default.items", 2);
+        assertSplits("SELECT name FROM fastapi_probe.default.items WHERE per_page = 1", 2);
+        assertSplits("SELECT name FROM fastapi_probe.default.items WHERE per_page = 2", 1);
+        assertSplits("SELECT name FROM fastapi_probe.default.clamped_items", 2);
+        assertSplits("SELECT name FROM fastapi_probe.default.total_pages_items", 2);
+        assertSplits("SELECT name FROM fastapi_probe.default.paged_search", 2);
+        // without a total, pages are read in a single split
+        assertSplits("SELECT name FROM fastapi_probe.default.has_more_items", 1);
+        // every value is read in a separate split, without probing for the number of pages
+        assertSplits("SELECT DISTINCT name FROM fastapi_probe.default.items WHERE per_page IN (1, 2)", 2);
+        // pagination stops once the limit is reached
+        assertSplits("SELECT name FROM fastapi_probe.default.items LIMIT 5", 1);
+        // pages are not split by default
+        assertSplits("SELECT name FROM fastapi.default.items", 1);
     }
 
     @Test
@@ -1100,6 +1127,23 @@ public class TestOpenApiQueries
     private MaterializedRow getCountedItemsRequests()
     {
         return getOnlyElement(computeActual("SELECT requests, last_query FROM fastapi.default.counted_items_requests").getMaterializedRows());
+    }
+
+    private void assertSplits(String sql, long expectedSplits)
+    {
+        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(withMaxRunTime(), sql);
+        assertThat(result.result().getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
+        OperatorStats scanStats = getDistributedQueryRunner().getCoordinator()
+                .getQueryManager()
+                .getFullQueryInfo(result.queryId())
+                .getQueryStats()
+                .getOperatorSummaries()
+                .stream()
+                .filter(summary -> summary.getOperatorType().contains("Scan"))
+                .collect(onlyElement());
+        assertThat(scanStats.getTotalDrivers()).isEqualTo(expectedSplits);
     }
 
     // fail instead of hanging when pagination never ends
