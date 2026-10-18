@@ -94,6 +94,7 @@ public class OpenApiSpec
     private static final String SPEC_EXTENSION = "x-trino";
     private static final String LEGACY_SPEC_EXTENSION = "x-pagination";
     private static final String PAGINATION_RESULTS_PATH = "resultsPath";
+    private static final String PAGINATION_TOTAL_RESULTS_PATH = "totalResultsPath";
     private static final String ERROR_PATH = "errorPath";
     private static final String PAGINATION_PAGE_PARAM = "pageParam";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
@@ -104,6 +105,7 @@ public class OpenApiSpec
     private final Map<String, OpenApiTableHandle> handles;
     private final Map<String, Map<HttpPath, JsonPointer>> errorPointers;
     private final Map<String, Map<HttpPath, JsonPointer>> resultsPointers;
+    private final Map<String, Map<HttpPath, JsonPointer>> totalResultsPointers;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -141,6 +143,7 @@ public class OpenApiSpec
         ImmutableMap.Builder<String, OpenApiTableHandle> handles = ImmutableMap.builder();
         ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> errorPointers = ImmutableMap.builder();
         ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> resultsPointers = ImmutableMap.builder();
+        ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> totalResultsPointers = ImmutableMap.builder();
         for (Map.Entry<String, List<Map.Entry<String, PathItem>>> groupEntry : pathGroups.entrySet()) {
             List<PathItem> pathItems = groupEntry.getValue().stream()
                     .map(Map.Entry::getValue)
@@ -154,6 +157,7 @@ public class OpenApiSpec
                 Map<PathItem.HttpMethod, List<String>> tablePaths = methodsToPaths(firstEntry.getValue(), firstEntry.getKey());
                 errorPointers.put(groupEntry.getKey(), errorPointers(firstEntry.getValue(), firstEntry.getKey()));
                 resultsPointers.put(groupEntry.getKey(), resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
+                totalResultsPointers.put(groupEntry.getKey(), totalResultsPointers(firstEntry.getValue(), firstEntry.getKey()));
                 handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
                 continue;
             }
@@ -164,6 +168,7 @@ public class OpenApiSpec
             Map<PathItem.HttpMethod, List<String>> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseErrorPointers = errorPointers(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseResultsPointers = resultsPointers(baseEntry.getValue(), baseEntry.getKey());
+            Map<HttpPath, JsonPointer> baseTotalResultsPointers = totalResultsPointers(baseEntry.getValue(), baseEntry.getKey());
             // treat all combinations of path params as primary keys, which means every path with params is mapped to a separate table,
             // but combine it with columns from the base path
             groupEntry.getValue().stream()
@@ -192,6 +197,10 @@ public class OpenApiSpec
                                         baseResultsPointers.entrySet().stream(),
                                         resultsPointers(entry.getValue(), entry.getKey()).entrySet().stream())
                                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
+                        totalResultsPointers.put(tableName, Stream.concat(
+                                        baseTotalResultsPointers.entrySet().stream(),
+                                        totalResultsPointers(entry.getValue(), entry.getKey()).entrySet().stream())
+                                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
 
                         handles.put(tableName, tableHandle(tableName, tablePaths));
                     });
@@ -200,6 +209,7 @@ public class OpenApiSpec
         this.handles = handles.buildOrThrow();
         this.errorPointers = errorPointers.buildOrThrow();
         this.resultsPointers = resultsPointers.buildOrThrow();
+        this.totalResultsPointers = totalResultsPointers.buildOrThrow();
 
         this.handles.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -305,6 +315,18 @@ public class OpenApiSpec
             throw new SchemaNotFoundException(name.getSchemaName());
         }
         Map<HttpPath, JsonPointer> result = this.resultsPointers.get(name.getTableName());
+        if (result == null) {
+            throw new TableNotFoundException(name);
+        }
+        return result;
+    }
+
+    public Map<HttpPath, JsonPointer> getTotalResultsPointers(SchemaTableName name)
+    {
+        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
+            throw new SchemaNotFoundException(name.getSchemaName());
+        }
+        Map<HttpPath, JsonPointer> result = this.totalResultsPointers.get(name.getTableName());
         if (result == null) {
             throw new TableNotFoundException(name);
         }
@@ -605,6 +627,11 @@ public class OpenApiSpec
     private Map<HttpPath, JsonPointer> resultsPointers(PathItem pathItem, String path)
     {
         return pointers(pathItem, path, PAGINATION_RESULTS_PATH);
+    }
+
+    private Map<HttpPath, JsonPointer> totalResultsPointers(PathItem pathItem, String path)
+    {
+        return pointers(pathItem, path, PAGINATION_TOTAL_RESULTS_PATH);
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)

@@ -87,6 +87,10 @@ class ItemFilter(BaseModel):
     item_ids: list[str] = []
 
 
+class PageFilter(BaseModel):
+    page: int = 1
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -127,6 +131,22 @@ def list_item(page: int = None, per_page: int = None) -> Results:
         total_results=len(items))
 
 
+@router.get("/clamped_items")
+def list_clamped_items(page: int = 1) -> Results:
+    # out of range page numbers return the last page, so only the total number of results can end pagination
+    page = min(max(page, 1), len(items))
+    return Results(
+        results=list(items.values())[page - 1:page],
+        total_results=len(items))
+
+
+@router.post("/paged_search")
+def paged_search(q: PageFilter) -> Results:
+    return Results(
+        results=list(items.values())[q.page - 1:q.page],
+        total_results=len(items))
+
+
 @router.get("/items/{item_id}")
 def get_item(item_id: int) -> Item:
     if item_id not in items:
@@ -164,6 +184,16 @@ def custom_openapi():
     openapi_schema["paths"]["/items"]["get"]["x-trino"] = {
         "pageParam": "page",
         "limitParam": "per_page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
+    }
+    openapi_schema["paths"]["/clamped_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
+    }
+    openapi_schema["paths"]["/paged_search"]["post"]["x-trino"] = {
+        "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
     }
