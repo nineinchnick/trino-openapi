@@ -772,7 +772,9 @@ public class TestOpenApiQueries
     @Test
     public void errors()
     {
-        assertQueryFails("SELECT * FROM fastapi.default.error", "Server responded with error 418: \"Oops! Inevitable error happened. There goes a rainbow...\"");
+        assertQueryFails(
+                "SELECT * FROM fastapi.default.error",
+                "Request GET http://[^ ?]+/error for operation error_error_get failed with HTTP 418: \"Oops! Inevitable error happened\\. There goes a rainbow\\.\\.\\.\"");
     }
 
     private List<Object> selectNumbers(long id, String columns)
