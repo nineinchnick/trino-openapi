@@ -705,7 +705,7 @@ public class OpenApiClient
                 // ignore, so a generic exception will be thrown
             }
         }
-        String message = format("Response code for getRows request was not 200: %s", statusCode);
+        String message = format("Server responded with error %s", statusCode);
         throw new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
     }
 
@@ -807,7 +807,8 @@ public class OpenApiClient
                 throw new RuntimeException(e);
             }
             log.debug("Received response code " + response.getStatusCode() + ": " + result);
-            if (response.getStatusCode() != HttpStatus.OK.code()) {
+            // servers often respond to writes with 201 Created, 202 Accepted, or 204 No Content
+            if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
                 errorResponse(response.getStatusCode(), result, errorPointer);
             }
             return null;

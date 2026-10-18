@@ -87,6 +87,15 @@ class ItemFilter(BaseModel):
     item_ids: list[str] = []
 
 
+class Note(BaseModel):
+    id: int
+    text: str
+
+
+class NoteBody(BaseModel):
+    text: str
+
+
 class PageFilter(BaseModel):
     page: int = 1
 
@@ -100,6 +109,9 @@ items = {
     1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=[date.fromisoformat("2007-10-10"), date.fromisoformat("2022-12-08")], categories=[Category(id="1", name="main")]),
     2: Item(id="2", name="Plumbus", price=32.0, validUntil=date.fromisoformat("2999-01-01"), properties={"feeble": "schleem"}),
 }
+
+
+notes: dict[int, Note] = {}
 
 
 @router.get("/")
@@ -165,6 +177,41 @@ def items_by_header(x_item_ids: Annotated[str, Header()]) -> list[Item]:
 @router.get("/items_by_cookie")
 def items_by_cookie(item_id: Annotated[int, Cookie()]) -> list[Item]:
     return [items[item_id]] if item_id in items else []
+
+
+@router.get("/notes")
+def list_notes() -> list[Note]:
+    return list(notes.values())
+
+
+@router.get("/notes/{note_id}")
+def get_note(note_id: int) -> Note:
+    if note_id not in notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return notes[note_id]
+
+
+@router.post("/notes/{note_id}", status_code=201)
+def create_note(note_id: int, body: NoteBody) -> Note:
+    if note_id in notes:
+        raise HTTPException(status_code=409, detail="Note already exists")
+    notes[note_id] = Note(id=note_id, text=body.text)
+    return notes[note_id]
+
+
+@router.put("/notes/{note_id}", status_code=202)
+def update_note(note_id: int, body: NoteBody) -> Note:
+    if note_id not in notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+    notes[note_id] = Note(id=note_id, text=body.text)
+    return notes[note_id]
+
+
+@router.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: int):
+    if note_id not in notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+    del notes[note_id]
 
 
 @router.get("/items/{item_id}")
