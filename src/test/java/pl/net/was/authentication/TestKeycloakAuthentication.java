@@ -34,9 +34,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static com.google.common.io.BaseEncoding.base64Url;
+import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
+import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 
 @TestInstance(PER_CLASS)
 class TestKeycloakAuthentication
@@ -141,14 +143,14 @@ class TestKeycloakAuthentication
     {
         return prepareGet()
                 .setUri(BASE_URI.resolve("/secured"))
-                .addHeader("X-Trino-OpenAPI-Path", "/secured")
+                .addHeader(OPENAPI_PATH_HEADER, "/secured")
                 .build();
     }
 
     private static JsonNode getTokenClaims(Request request)
             throws IOException
     {
-        String authorization = request.getHeader("Authorization");
+        String authorization = request.getHeader(AUTHORIZATION);
         assertThat(authorization).startsWith("Bearer ");
         String[] tokenParts = authorization.substring("Bearer ".length()).split("\\.");
         assertThat(tokenParts).hasSize(3);

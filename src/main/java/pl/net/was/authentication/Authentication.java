@@ -20,6 +20,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.inject.Inject;
+import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpRequestFilter;
 import io.airlift.http.client.Request;
@@ -42,6 +43,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static com.google.common.io.BaseEncoding.base64Url;
+import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
+import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
+import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.preparePost;
@@ -50,6 +54,7 @@ import static io.airlift.json.JsonCodec.jsonCodec;
 import static io.trino.spi.StandardErrorCode.CONFIGURATION_INVALID;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.Math.min;
+import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -115,7 +120,7 @@ public class Authentication
         URI uri = request.getUri();
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
         Request.Builder builder = fromRequest(request);
-        List<SecurityRequirement> requirements = getRequirements(request.getHeader("X-Trino-OpenAPI-Path"), method);
+        List<SecurityRequirement> requirements = getRequirements(request.getHeader(OPENAPI_PATH_HEADER), method);
         // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
         if (requirements != null) {
             applyAuthFilters(builder, requirements, uri);
@@ -185,8 +190,8 @@ public class Authentication
             value = requireNonNull(apiKeyValue, "Cannot use API Key authentication method, authentication.api-key-value configuration property is not set");
         }
         switch (scheme.getIn()) {
-            case COOKIE -> builder.addHeader("Cookie", encodePair(name, value));
-            case HEADER -> builder.addHeader(name, value);
+            case COOKIE -> builder.addHeader(COOKIE, encodePair(name, value));
+            case HEADER -> builder.addHeader(HeaderName.of(name), value);
             case QUERY -> {
                 String query = encodePair(name, value);
                 try {
@@ -215,7 +220,7 @@ public class Authentication
         else {
             value = getAuthHeader(scheme, username, password);
         }
-        return builder.addHeader("Authorization", value);
+        return builder.addHeader(AUTHORIZATION, value);
     }
 
     private TokenRequest getTokenRequest(String schemeName, OAuthFlows flows)
@@ -257,7 +262,7 @@ public class Authentication
             tokens.invalidate(tokenRequest);
             tokenWithExpiry = getToken(tokenRequest);
         }
-        return builder.addHeader("Authorization", "Bearer " + tokenWithExpiry.token());
+        return builder.addHeader(AUTHORIZATION, "Bearer " + tokenWithExpiry.token());
     }
 
     private TokenWithExpiry getToken(TokenRequest tokenRequest)
@@ -286,7 +291,7 @@ public class Authentication
         TokenResponse response = httpClient.execute(
                 preparePost()
                         .setUri(URI.create(tokenRequest.tokenUrl()))
-                        .setHeader("Content-Type", "application/x-www-form-urlencoded")
+                        .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
                         .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
                         .build(),
                 createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));

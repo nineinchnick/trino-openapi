@@ -33,6 +33,7 @@ import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
+import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.Request;
@@ -79,10 +80,10 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static com.google.common.net.HttpHeaders.ACCEPT;
-import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
-import static com.google.common.net.HttpHeaders.COOKIE;
-import static com.google.common.net.HttpHeaders.USER_AGENT;
+import static io.airlift.http.client.HeaderNames.ACCEPT;
+import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
+import static io.airlift.http.client.HeaderNames.COOKIE;
+import static io.airlift.http.client.HeaderNames.USER_AGENT;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
@@ -110,6 +111,7 @@ public class OpenApiClient
             // doubles can't hold all values of DECIMAL columns, so keep the exact value of every number with a fraction
             .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
             .build();
+    public static final HeaderName OPENAPI_PATH_HEADER = HeaderName.of("X-Trino-OpenAPI-Path");
     public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
 
     private final URI baseUri;
@@ -326,10 +328,10 @@ public class OpenApiClient
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
-                .addHeader("X-Trino-OpenAPI-Path", httpPath.path());
+                .addHeader(OPENAPI_PATH_HEADER, httpPath.path());
         getFilterColumnValues(table, httpPath, ParameterLocation.HEADER, valueProvider)
                 .forEach((column, value) -> builder.addHeader(
-                        column.getSourceName(),
+                        HeaderName.of(column.getSourceName()),
                         getParameterStyle(column, httpPath, ParameterLocation.HEADER).serializeHeaderValue(column.getSourceName(), toJsonNode(column, value))));
         String cookies = getFilterColumnValues(table, httpPath, ParameterLocation.COOKIE, valueProvider).entrySet().stream()
                 .map(entry -> entry.getKey().getSourceName() + "=" + getParameterStyle(entry.getKey(), httpPath, ParameterLocation.COOKIE)
