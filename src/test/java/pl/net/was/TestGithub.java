@@ -16,14 +16,20 @@ package pl.net.was;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
+import io.trino.testing.QueryRunner.MaterializedResultWithPlan;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 
+import static io.trino.sql.planner.optimizations.PlanNodeSearcher.searchFrom;
 import static java.lang.String.format;
+import static java.time.format.DateTimeFormatter.ofPattern;
 import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -639,6 +645,38 @@ public class TestGithub
         assertQuery("SELECT count(*) > 30 FROM repos_releases WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
         assertQuery("SELECT count(*) > 30 FROM repos_tags WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
         assertQuery("SELECT count(*) > 30 FROM users_repos WHERE username = 'nineinchnick'", "VALUES true");
+    }
+
+    @Test
+    public void selectTopNSortedByApi()
+    {
+        // filtering on state would prevent the pushdown, because the path to get a single pull request can't send it,
+        // and with the default state, there might be no open pull requests, so compare with the results sorted by Trino
+        String pulls = "SELECT number FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'";
+        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(getSession(), pulls + " ORDER BY updated_at DESC LIMIT 1");
+        assertThat(result.result().getOnlyColumnAsSet())
+                .isEqualTo(computeActual(pulls + " ORDER BY updated_at DESC, number LIMIT 1").getOnlyColumnAsSet());
+        // the table has an INSERT operation, so updated_at allows nulls, but every response includes it, so the API sorts the rows
+        TableScanNode scan = (TableScanNode) searchFrom(result.queryPlan().orElseThrow().getRoot())
+                .whereIsInstanceOfAny(TableScanNode.class)
+                .findOnlyElement();
+        assertThat(((OpenApiTableHandle) scan.getTable().connectorHandle()).getSortItem()).isPresent();
+    }
+
+    @Test
+    public void selectRangeFilteredByApi()
+    {
+        String issues = "SELECT number FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'closed'";
+        LocalDateTime updatedAt = (LocalDateTime) computeScalar(issues.replace("SELECT number", "SELECT updated_at") + " ORDER BY updated_at DESC OFFSET 2 LIMIT 1");
+        String since = updatedAt.format(ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+
+        // the bound is sent as the since parameter, and the API must return the issue updated exactly at that time
+        Set<Object> filteredByApi = computeActual(format("%s AND updated_at >= TIMESTAMP '%s'", issues, since)).getOnlyColumnAsSet();
+        // a function call is not pushed down, so Trino filters all issues
+        Set<Object> filteredByTrino = computeActual(format("%s AND date_diff('millisecond', TIMESTAMP '%s', updated_at) >= 0", issues, since)).getOnlyColumnAsSet();
+        assertThat(filteredByApi)
+                .hasSizeGreaterThanOrEqualTo(3)
+                .isEqualTo(filteredByTrino);
     }
 
     @Test

@@ -3725,7 +3725,15 @@
         "x-trino": {
           "pageParam": "page",
           "limitParam": "per_page",
-          "resultsPath": "tasks"
+          "resultsPath": "tasks",
+          "sortParam": "sort",
+          "sortValues": {
+            "updated_at": "updated_at",
+            "created_at": "created_at"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -13475,7 +13483,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -17105,7 +17120,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       },
       "post": {
@@ -17305,7 +17327,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -17374,7 +17403,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -18675,7 +18711,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -20020,6 +20071,15 @@
           "enabledForGitHubApps": true,
           "category": "orgs",
           "subcategory": "orgs"
+        },
+        "x-trino": {
+          "rangeFilters": {
+            "id": {
+              "lowerParam": "since",
+              "lowerInclusive": false,
+              "exact": true
+            }
+          }
         }
       }
     },
@@ -30058,7 +30118,17 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated",
+            "ends_at": "ends_at",
+            "published_at": "published"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "post": {
@@ -30734,7 +30804,15 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -39632,7 +39710,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -45828,7 +45921,16 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated",
+            "pushed_at": "pushed"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "post": {
@@ -46909,7 +47011,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -50547,7 +50656,15 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "actions_caches",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created_at",
+            "last_accessed_at": "last_accessed_at"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "delete": {
@@ -61583,7 +61700,15 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -62150,7 +62275,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -73655,7 +73787,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       },
       "post": {
@@ -73976,7 +74123,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -75541,7 +75703,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       },
       "post": {
@@ -79220,7 +79389,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "due_on": "due_on"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "post": {
@@ -80913,7 +81089,15 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "post": {
@@ -81125,7 +81309,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -81906,7 +82105,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       },
       "post": {
@@ -86111,7 +86325,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
@@ -90596,6 +90817,15 @@
           "enabledForGitHubApps": true,
           "category": "repos",
           "subcategory": "repos"
+        },
+        "x-trino": {
+          "rangeFilters": {
+            "id": {
+              "lowerParam": "since",
+              "lowerInclusive": false,
+              "exact": true
+            }
+          }
         }
       }
     },
@@ -95495,7 +95725,22 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -97296,7 +97541,16 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated",
+            "pushed_at": "pushed"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       },
       "post": {
@@ -98760,6 +99014,15 @@
           "enabledForGitHubApps": true,
           "category": "users",
           "subcategory": "users"
+        },
+        "x-trino": {
+          "rangeFilters": {
+            "id": {
+              "lowerParam": "since",
+              "lowerInclusive": false,
+              "exact": true
+            }
+          }
         }
       }
     },
@@ -101500,7 +101763,14 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "rangeFilters": {
+            "updated_at": {
+              "lowerParam": "since",
+              "lowerInclusive": true,
+              "exact": false
+            }
+          }
         }
       }
     },
@@ -103548,7 +103818,16 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "sortParam": "sort",
+          "sortValues": {
+            "created_at": "created",
+            "updated_at": "updated",
+            "pushed_at": "pushed"
+          },
+          "directionParam": "direction",
+          "ascendingValue": "asc",
+          "descendingValue": "desc"
         }
       }
     },
