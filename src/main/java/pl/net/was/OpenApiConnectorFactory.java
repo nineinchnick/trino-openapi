@@ -36,13 +36,14 @@ public class OpenApiConnectorFactory
     }
 
     @Override
-    public Connector create(String s, Map<String, String> requiredConfig, ConnectorContext context)
+    public Connector create(String catalogName, Map<String, String> requiredConfig, ConnectorContext context)
     {
         requireNonNull(requiredConfig, "requiredConfig is null");
 
         // A plugin is not required to use Guice; it is just very convenient
         Bootstrap app = new Bootstrap(
                 new OpenApiModule(
+                        new CatalogName(catalogName),
                         context.getNodeManager(),
                         context.getTypeManager()));
 

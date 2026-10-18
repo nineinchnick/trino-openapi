@@ -29,11 +29,13 @@ import static java.util.Objects.requireNonNull;
 public class OpenApiModule
         extends AbstractConfigurationAwareModule
 {
+    private final CatalogName catalogName;
     private final NodeManager nodeManager;
     private final TypeManager typeManager;
 
-    public OpenApiModule(NodeManager nodeManager, TypeManager typeManager)
+    public OpenApiModule(CatalogName catalogName, NodeManager nodeManager, TypeManager typeManager)
     {
+        this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
     }
@@ -41,6 +43,7 @@ public class OpenApiModule
     @Override
     protected void setup(Binder binder)
     {
+        binder.bind(CatalogName.class).toInstance(catalogName);
         binder.bind(NodeManager.class).toInstance(nodeManager);
         binder.bind(TypeManager.class).toInstance(typeManager);
 
