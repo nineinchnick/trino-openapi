@@ -55,7 +55,7 @@ public class OpenApiSplitManager
     private static final long TIMEOUT_MILLIS = 20000;
 
     private final OpenApiSpec spec;
-    private static double maxSplitsPerSecond;
+    private final double maxSplitsPerSecond;
     private final int domainExpansionLimit;
 
     private final ExecutorService executor = newCachedThreadPool(daemonThreadsNamed(OpenApiSplitManager.class.getName() + "-%d"));
