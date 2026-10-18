@@ -16,6 +16,7 @@ package pl.net.was.authentication;
 import io.airlift.configuration.InvalidConfigurationException;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
+import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.trino.spi.TrinoException;
@@ -31,10 +32,13 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.common.net.MediaType.JSON_UTF_8;
+import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
+import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 
 class TestAuthentication
 {
@@ -97,7 +101,7 @@ class TestAuthentication
                 """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
 
         assertNoCredentials(authentication.filterRequest(request("/anonymous")));
-        assertThat(authentication.filterRequest(request("/inherited")).getHeader("Authorization"))
+        assertThat(authentication.filterRequest(request("/inherited")).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
@@ -128,9 +132,9 @@ class TestAuthentication
 
         assertNoCredentials(authentication.filterRequest(request("/anonymous")));
         Request inherited = authentication.filterRequest(request("/inherited"));
-        assertThat(inherited.getHeader("Authorization")).isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
-        assertThat(inherited.getHeader("X-API-Key")).isEqualTo("header-secret");
-        assertThat(inherited.getHeader("Cookie")).isEqualTo("session=cookie-secret");
+        assertThat(inherited.getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
+        assertThat(inherited.getHeader(HeaderName.of("X-API-Key"))).isEqualTo("header-secret");
+        assertThat(inherited.getHeader(COOKIE)).isEqualTo("session=cookie-secret");
         assertThat(inherited.getUri().getQuery()).isEqualTo("api_key=query-secret");
     }
 
@@ -166,7 +170,7 @@ class TestAuthentication
                 %s
                 """.formatted(SECURITY_SCHEMES));
 
-        assertThat(authentication.filterRequest(request("/unknown")).getHeader("Authorization"))
+        assertThat(authentication.filterRequest(request("/unknown")).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
@@ -269,8 +273,8 @@ class TestAuthentication
                 JSON_UTF_8,
                 "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":30}".formatted(tokenRequests.incrementAndGet()))));
 
-        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization")).isEqualTo("Bearer token-1");
-        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization")).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequests).hasValue(1);
     }
 
@@ -306,15 +310,15 @@ class TestAuthentication
     {
         return prepareGet()
                 .setUri(BASE_URI.resolve(path))
-                .addHeader("X-Trino-OpenAPI-Path", path)
+                .addHeader(OPENAPI_PATH_HEADER, path)
                 .build();
     }
 
     private static void assertNoCredentials(Request request)
     {
-        assertThat(request.getHeader("Authorization")).isNull();
-        assertThat(request.getHeader("X-API-Key")).isNull();
-        assertThat(request.getHeader("Cookie")).isNull();
+        assertThat(request.getHeader(AUTHORIZATION)).isNull();
+        assertThat(request.getHeader(HeaderName.of("X-API-Key"))).isNull();
+        assertThat(request.getHeader(COOKIE)).isNull();
         assertThat(request.getUri().getQuery()).isNull();
     }
 }
