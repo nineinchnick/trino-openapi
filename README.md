@@ -426,6 +426,7 @@ paths:
 | `totalPagesPath`   | JSON pointer to the total number of pages                                                                                                           |
 | `hasMorePath`      | JSON pointer to a boolean that is `false` on the last page                                                                                          |
 | `maxPages`         | Maximum number of pages to request                                                                                                                  |
+| `maxResults`       | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `errorPath`        | JSON pointer to a human-readable message in error responses                                                                                         |
 | `sqlOperation`     | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
 | `sortParam`        | Parameter that selects the field to sort results by                                                                                                 |
@@ -448,6 +449,9 @@ one of these happens:
 * the number of pages reaches the value at `totalPagesPath`;
 * the boolean value at `hasMorePath` is `false`;
 * `maxPages` pages were requested;
+* the number of results reaches `maxResults`. Use it for servers that fail for
+  results past a limit, like GitHub search, which returns at most 1,000 results
+  with any page size;
 * the number of results reaches the query's `LIMIT`, when Trino doesn't apply
   any other filter to the returned rows. With an `IN` list, every value is
   requested separately and reads up to the limit;

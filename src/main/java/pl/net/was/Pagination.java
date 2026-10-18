@@ -18,6 +18,7 @@ import com.fasterxml.jackson.core.JsonPointer;
 
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -28,6 +29,7 @@ public record Pagination(
         JsonPointer totalPagesPointer,
         JsonPointer hasMorePointer,
         OptionalInt maxPages,
+        OptionalLong maxResults,
         Optional<Sorting> sorting)
 {
     private static final Pagination NONE = builder().build();
@@ -40,6 +42,8 @@ public record Pagination(
         requireNonNull(hasMorePointer, "hasMorePointer is null");
         requireNonNull(maxPages, "maxPages is null");
         maxPages.ifPresent(value -> checkArgument(value > 0, "maxPages must be positive"));
+        requireNonNull(maxResults, "maxResults is null");
+        maxResults.ifPresent(value -> checkArgument(value > 0, "maxResults must be positive"));
         requireNonNull(sorting, "sorting is null");
     }
 
@@ -60,6 +64,7 @@ public record Pagination(
         private JsonPointer totalPagesPointer = JsonPointer.empty();
         private JsonPointer hasMorePointer = JsonPointer.empty();
         private OptionalInt maxPages = OptionalInt.empty();
+        private OptionalLong maxResults = OptionalLong.empty();
         private Optional<Sorting> sorting = Optional.empty();
 
         private Builder() {}
@@ -94,6 +99,12 @@ public record Pagination(
             return this;
         }
 
+        public Builder setMaxResults(OptionalLong maxResults)
+        {
+            this.maxResults = requireNonNull(maxResults, "maxResults is null");
+            return this;
+        }
+
         public Builder setSorting(Optional<Sorting> sorting)
         {
             this.sorting = requireNonNull(sorting, "sorting is null");
@@ -102,7 +113,7 @@ public record Pagination(
 
         public Pagination build()
         {
-            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, sorting);
+            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, maxResults, sorting);
         }
     }
 }
