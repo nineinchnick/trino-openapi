@@ -877,6 +877,10 @@ public class OpenApiSpec
                 // a value matches only some of the alternatives, and fields of the other ones are NULL
                 return convertRow(mergeObjectUnion(property));
             }
+            if (isObjectArrayUnion(property)) {
+                // elements of arrays of different objects can match any of them, so they're merged into rows the same way
+                return convertArray(mergeObjectArrayUnion(property));
+            }
             // TODO oneOf types can be incompatible (object and an array), so it would require generating separate fields for every type
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
@@ -921,11 +925,23 @@ public class OpenApiSpec
 
     private static boolean isObjectUnion(Schema<?> union)
     {
-        List<Schema> alternatives = getAlternatives(union).stream()
+        List<Schema> alternatives = getNonNullAlternatives(union);
+        return !alternatives.isEmpty() && alternatives.stream().allMatch(OpenApiSpec::isObjectAlternative);
+    }
+
+    private static boolean isObjectArrayUnion(Schema<?> union)
+    {
+        List<Schema> alternatives = getNonNullAlternatives(union);
+        return !alternatives.isEmpty() && alternatives.stream()
+                .allMatch(alternative -> isArray(alternative) && alternative.getItems() != null && isObjectAlternative(alternative.getItems()));
+    }
+
+    private static List<Schema> getNonNullAlternatives(Schema<?> union)
+    {
+        return getAlternatives(union).stream()
                 // OpenAPI 3.1 declares nullable values with a null alternative
                 .filter(alternative -> !isNullType(alternative))
                 .toList();
-        return !alternatives.isEmpty() && alternatives.stream().allMatch(OpenApiSpec::isObjectAlternative);
     }
 
     private static boolean isNullType(Schema<?> schema)
@@ -959,6 +975,18 @@ public class OpenApiSpec
         merged.setProperties(getAlternativesProperties(union));
         merged.setDescription(union.getDescription());
         merged.addExtension(JsonTrinoConverter.MERGED_UNION_EXTENSION, true);
+        return merged;
+    }
+
+    private static Schema<?> mergeObjectArrayUnion(Schema<?> union)
+    {
+        ComposedSchema items = new ComposedSchema();
+        items.setOneOf(getNonNullAlternatives(union).stream()
+                .<Schema>map(Schema::getItems)
+                .toList());
+        ArraySchema merged = new ArraySchema();
+        merged.setItems(items);
+        merged.setDescription(union.getDescription());
         return merged;
     }
 
