@@ -90,10 +90,20 @@ class ItemFilter(BaseModel):
 class Note(BaseModel):
     id: int
     text: str
+    priority: int | None = None
+    # fields sent in the last PATCH request, to check which columns an UPDATE sends
+    patched_fields: list[str] = []
 
 
 class NoteBody(BaseModel):
     text: str
+
+
+class NotePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str | None = None
+    priority: int | None = None
 
 
 class HasMoreResults(BaseModel):
@@ -416,6 +426,15 @@ def update_note(note_id: int, body: NoteBody) -> Note:
     return notes[note_id]
 
 
+@router.patch("/notes/{note_id}")
+def patch_note(note_id: int, body: NotePatch) -> Note:
+    if note_id not in notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+    changes = body.model_dump(exclude_unset=True)
+    notes[note_id] = notes[note_id].model_copy(update={**changes, "patched_fields": sorted(changes)})
+    return notes[note_id]
+
+
 @router.delete("/notes/{note_id}", status_code=204)
 def delete_note(note_id: int):
     if note_id not in notes:
@@ -679,6 +698,9 @@ def custom_openapi():
     # these POST operations only read data, but POST operations are used for INSERT, unless marked otherwise
     for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_gadget", "/echo_event"]:
         openapi_schema["paths"][path]["post"].setdefault("x-trino", {})["sqlOperation"] = "select"
+    # pydantic describes optional values as unions with null, which are mapped to VARCHAR
+    for schema in ["Note", "NotePatch"]:
+        openapi_schema["components"]["schemas"][schema]["properties"]["priority"] = {"type": ["integer", "null"]}
     # FastAPI can't parse delimited arrays, so declare them only in the spec
     delimited_ids = openapi_schema["paths"]["/items_by_delimited_ids"]["get"]["parameters"][0]
     delimited_ids["schema"] = {"type": "array", "items": {"type": "integer"}}

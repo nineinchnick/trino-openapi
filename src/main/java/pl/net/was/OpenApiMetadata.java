@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.airlift.slice.Slice;
 import io.trino.spi.StandardErrorCode;
@@ -47,6 +48,7 @@ import java.util.function.UnaryOperator;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.RowChangeParadigm.CHANGE_ONLY_UPDATED_COLUMNS;
 import static java.util.Collections.emptyIterator;
@@ -195,7 +197,8 @@ public class OpenApiMetadata
                 (OpenApiTableHandle) tableHandle,
                 columns.stream()
                         .map(OpenApiColumnHandle.class::cast)
-                        .collect(toImmutableList()));
+                        .collect(toImmutableList()),
+                ImmutableMap.of());
     }
 
     @Override
@@ -244,7 +247,17 @@ public class OpenApiMetadata
                 .filter(column -> !column.getMetadata().isHidden())
                 .map(OpenApiColumn::getHandle)
                 .collect(toImmutableList());
-        return new OpenApiOutputTableHandle(table, dataColumns);
+        // the row change paradigm makes merge pages include values of all columns, not only the updated ones,
+        // so the updated columns are known only from the merge cases
+        return new OpenApiOutputTableHandle(
+                table,
+                dataColumns,
+                updateCaseColumns.entrySet().stream()
+                        .collect(toImmutableMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue().stream()
+                                        .map(OpenApiColumnHandle.class::cast)
+                                        .collect(toImmutableSet()))));
     }
 
     @Override

@@ -232,6 +232,10 @@ UPDATE petstore.default.pet SET name = 'Cat Y' WHERE pet_id = 100;
 DELETE FROM petstore.default.pet WHERE pet_id = 100;
 ```
 
+An `UPDATE` using `PATCH` sends only the updated columns, and the required
+fields of the request body, like identifiers. Setting a column to `NULL` sends
+an explicit `null`. Other requests send all columns that are not `NULL`.
+
 A write succeeds if the server responds with any `2xx` status. Writes are not
 transactional: if a statement fails halfway, the rows already sent stay
 changed.

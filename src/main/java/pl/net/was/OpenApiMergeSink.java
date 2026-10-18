@@ -18,6 +18,7 @@ import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorMergeSink;
 
+import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.TinyintType.TINYINT;
 
 public class OpenApiMergeSink
@@ -33,12 +34,13 @@ public class OpenApiMergeSink
     public void storeMergedRows(Page page)
     {
         Block rowIds = page.getBlock(page.getChannelCount() - 1);
+        Block caseNumbers = page.getBlock(page.getChannelCount() - 2);
         Block ops = page.getBlock(page.getChannelCount() - 3);
         for (int position = 0; position < page.getPositionCount(); position++) {
             byte op = TINYINT.getByte(ops, position);
             switch (op) {
                 case INSERT_OPERATION_NUMBER -> insertedPage(page, position);
-                case UPDATE_OPERATION_NUMBER -> updatedPage(page, position);
+                case UPDATE_OPERATION_NUMBER -> updatedPage(page, position, INTEGER.getInt(caseNumbers, position));
                 case DELETE_OPERATION_NUMBER -> deletedPage(rowIds, position);
                 default -> throw new IllegalStateException("Unsupported operation: " + op);
             }
@@ -51,9 +53,9 @@ public class OpenApiMergeSink
         return 0L;
     }
 
-    private void updatedPage(Page page, int position)
+    private void updatedPage(Page page, int position, int caseNumber)
     {
-        client.updateRows(table, page, position);
+        client.updateRows(table, page, position, table.getUpdatedColumns(caseNumber));
     }
 
     private void deletedPage(Block rowIds, int position)
