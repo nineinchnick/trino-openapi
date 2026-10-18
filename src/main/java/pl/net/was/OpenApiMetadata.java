@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.RowChangeParadigm.CHANGE_ONLY_UPDATED_COLUMNS;
 import static java.util.function.UnaryOperator.identity;
@@ -179,7 +180,11 @@ public class OpenApiMetadata
         if (retryMode != RetryMode.NO_RETRIES) {
             throw new TrinoException(NOT_SUPPORTED, "This connector does not support query retries");
         }
-        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle);
+        return new OpenApiOutputTableHandle(
+                (OpenApiTableHandle) tableHandle,
+                columns.stream()
+                        .map(OpenApiColumnHandle.class::cast)
+                        .collect(toImmutableList()));
     }
 
     @Override
@@ -222,7 +227,13 @@ public class OpenApiMetadata
         if (retryMode != RetryMode.NO_RETRIES) {
             throw new TrinoException(NOT_SUPPORTED, "This connector does not support query retries");
         }
-        return new OpenApiOutputTableHandle((OpenApiTableHandle) tableHandle);
+        OpenApiTableHandle table = (OpenApiTableHandle) tableHandle;
+        // merge pages include values for all visible columns
+        List<OpenApiColumnHandle> dataColumns = spec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(column -> !column.getMetadata().isHidden())
+                .map(OpenApiColumn::getHandle)
+                .collect(toImmutableList());
+        return new OpenApiOutputTableHandle(table, dataColumns);
     }
 
     @Override
