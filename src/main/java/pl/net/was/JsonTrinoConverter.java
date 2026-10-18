@@ -69,6 +69,7 @@ import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Float.floatToIntBits;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 
@@ -76,6 +77,19 @@ public class JsonTrinoConverter
 {
     private JsonTrinoConverter()
     {
+    }
+
+    /**
+     * Converts a JSON value into the representation that {@link io.trino.spi.connector.InMemoryRecordSet} expects for a top-level column.
+     */
+    public static Object convertToRecordValue(JsonNode jsonNode, Type type, Schema<?> schemaType)
+    {
+        Object value = convert(jsonNode, type, schemaType);
+        if (type instanceof RealType && value instanceof Float floatValue) {
+            // records read REAL values with getLong(), so they must hold the float bits, like RealType.writeFloat() does for nested values
+            return (long) floatToIntBits(floatValue);
+        }
+        return value;
     }
 
     public static Object convert(JsonNode jsonNode, Type type, Schema<?> schemaType)

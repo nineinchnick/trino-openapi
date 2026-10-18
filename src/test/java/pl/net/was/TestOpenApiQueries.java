@@ -167,6 +167,16 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectRealValues()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values FROM fastapi.default.numbers WHERE id = 1").getMaterializedRows();
+        assertThat(rows).size().isEqualTo(1);
+        assertThat(rows.getFirst().getFields()).containsExactly(
+                -1.5f,
+                List.of(1.5f, -2.25f));
+    }
+
+    @Test
     public void searchItemsWithInPhrase()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (ARRAY['2'])").getMaterializedRows();
