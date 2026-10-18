@@ -338,6 +338,26 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectFromUnionResponse()
+    {
+        // FastAPI describes union responses using anyOf, and echo.yml using oneOf
+        for (String catalog : List.of("fastapi", "echo")) {
+            List<MaterializedRow> rows = getQueryRunner().execute("SELECT views, code, message FROM %s.default.user_views WHERE username = 'jane'".formatted(catalog)).getMaterializedRows();
+            assertThat(rows).hasSize(1);
+            assertThat(rows.getFirst().getFields()).as(catalog).containsExactly(List.of("home", "settings"), null, null);
+
+            rows = getQueryRunner().execute("SELECT views, code, message FROM %s.default.user_views WHERE username = 'unknown'".formatted(catalog)).getMaterializedRows();
+            assertThat(rows).hasSize(1);
+            assertThat(rows.getFirst().getFields()).as(catalog).containsExactly(null, 404L, "Unknown user");
+        }
+
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT views, code, message FROM fastapi.default.user_views_list").getMaterializedRows();
+        assertThat(rows).extracting(MaterializedRow::getFields).containsExactly(
+                Arrays.asList(List.of("home"), null, null),
+                Arrays.asList(null, 404L, "Unknown user"));
+    }
+
+    @Test
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(
