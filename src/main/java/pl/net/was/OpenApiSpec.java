@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.CaseFormat;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -262,14 +263,43 @@ public class OpenApiSpec
     {
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
-        SwaggerParseResult result = new OpenAPIV3Parser().readLocation(specLocation, null, parseOptions);
+        EmptySecurityDetectingParser parser = new EmptySecurityDetectingParser();
+        SwaggerParseResult result = parser.readLocation(specLocation, null, parseOptions);
         OpenAPI openAPI = result.getOpenAPI();
 
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
 
+        // the parser drops an empty top-level security list, but unlike a missing one, it explicitly allows anonymous access to all operations
+        if (openAPI.getSecurity() == null && parser.hasEmptyRootSecurity()) {
+            openAPI.setSecurity(new ArrayList<>());
+        }
         return openAPI;
+    }
+
+    private static class EmptySecurityDetectingParser
+            extends OpenAPIV3Parser
+    {
+        private boolean rootParsed;
+        private boolean emptyRootSecurity;
+
+        @Override
+        public SwaggerParseResult parseJsonNode(String path, JsonNode node, ParseOptions options)
+        {
+            // the root document is parsed first, before any external references are resolved
+            if (!rootParsed) {
+                rootParsed = true;
+                JsonNode security = node.get("security");
+                emptyRootSecurity = security != null && security.isArray() && security.isEmpty();
+            }
+            return super.parseJsonNode(path, node, options);
+        }
+
+        boolean hasEmptyRootSecurity()
+        {
+            return emptyRootSecurity;
+        }
     }
 
     private static boolean hasOpsWithJson(PathItem pathItem)

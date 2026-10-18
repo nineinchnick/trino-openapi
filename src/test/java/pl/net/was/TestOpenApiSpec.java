@@ -2124,6 +2124,22 @@ class TestOpenApiSpec
                 .hasMessage("maxPages must be positive");
     }
 
+    @Test
+    public void testParserDropsEmptyGlobalSecurity()
+    {
+        // OpenApiSpec.parse() restores the empty list, so if this fails after upgrading the parser, that workaround can be removed
+        SwaggerParseResult result = new OpenAPIV3Parser().readContents("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security: []
+                paths: {}
+                """, null, new ParseOptions());
+
+        Assertions.assertThat(result.getOpenAPI().getSecurity()).isNull();
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
