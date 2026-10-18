@@ -213,6 +213,17 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void filterOnNullsInPredicateColumn()
+    {
+        assertUpdate("INSERT INTO fastapi.default.numbers (id) VALUES (4)", 1);
+        assertQuery("SELECT id FROM fastapi.default.numbers WHERE real_value IS NULL AND id IN (1, 4)", "VALUES 4");
+        assertQuery("SELECT id FROM fastapi.default.numbers WHERE real_value IS NOT NULL AND id IN (1, 4)", "VALUES 1");
+        assertQuery("SELECT id FROM fastapi.default.numbers WHERE id = 4 OR id IS NULL", "VALUES 4");
+        // a null can't be sent as a required parameter
+        assertQueryFails("SELECT decimal_value FROM fastapi.default.decimal_parameters WHERE decimal_value IS NULL", "Missing required constraint for decimal_value");
+    }
+
+    @Test
     public void selectWithRealAndDecimalsInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values, decimal_values FROM fastapi.default.echo_numbers " +

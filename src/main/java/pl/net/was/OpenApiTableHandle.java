@@ -249,7 +249,8 @@ public class OpenApiTableHandle
     {
         //noinspection OptionalGetWithoutIsPresent
         Domain domain = constraint.getDomains().get().get(column);
-        if (domain == null) {
+        // predicates are sent as single values, which can't represent nulls
+        if (domain == null || domain.isNullAllowed() || domain.getValues().isNone()) {
             return null;
         }
         TupleDomain<ColumnHandle> newConstraint = constraint.filter(
