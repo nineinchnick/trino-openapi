@@ -100,6 +100,10 @@ class PageFilter(BaseModel):
     page: int = 1
 
 
+class DecimalText(BaseModel):
+    decimal_text: str
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -116,7 +120,7 @@ notes: dict[int, Note] = {}
 # kept as raw JSON, because Python floats can't hold all decimal values exactly
 numbers = [
     '{"id": 1, "real_value": -1.5, "decimal_value": 1234567890.12345678, '
-    '"real_values": [1.5, -2.25], "decimal_values": [0.00000001, -1234.5], '
+    '"real_values": [1.5, -2.25], "decimal_values": [0.00000001, -9999999999.99999999], '
     '"decimal_map": {"a": 1234567890.12345678}}',
 ]
 
@@ -257,6 +261,12 @@ async def echo_numbers(request: Request) -> Response:
     return Response(content=await request.body(), media_type="application/json")
 
 
+@router.get("/decimal_parameters")
+def decimal_parameters(decimal_value: str) -> DecimalText:
+    # returns the exact text of the parameter, to check how it was formatted
+    return DecimalText(decimal_text=decimal_value)
+
+
 @router.get("/error")
 def error() -> Item:
     raise UnicornException(name="Inevitable error")
@@ -315,6 +325,8 @@ def custom_openapi():
     openapi_schema["paths"]["/numbers"]["get"]["responses"]["200"]["content"] = {
         "application/json": {"schema": {"type": "array", "items": numbers_ref}},
     }
+    decimal_parameter = openapi_schema["paths"]["/decimal_parameters"]["get"]["parameters"][0]
+    decimal_parameter["schema"] = {"type": "number"}
     numbers_body = {"required": True, "content": {"application/json": {"schema": numbers_ref}}}
     openapi_schema["paths"]["/numbers"]["post"]["requestBody"] = numbers_body
     openapi_schema["paths"]["/echo_numbers"]["post"]["requestBody"] = numbers_body

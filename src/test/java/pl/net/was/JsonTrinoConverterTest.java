@@ -15,6 +15,8 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamWriteFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -28,6 +30,7 @@ import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
@@ -48,6 +51,7 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DecimalType.createDecimalType;
@@ -57,6 +61,7 @@ import static java.lang.Float.floatToIntBits;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.toIntExact;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JsonTrinoConverterTest
 {
@@ -258,5 +263,72 @@ class JsonTrinoConverterTest
         assertThat(objectMapper.writeValueAsString(row)).isEqualTo("{\"real_value\":-0.5,\"decimal_value\":1234567890.12345678,\"missing\":null}");
         assertThat(objectMapper.writeValueAsString(array)).isEqualTo("[1234567890.12345678,0.00000001,null]");
         assertThat(objectMapper.writeValueAsString(map)).isEqualTo("{\"real\":2.5,\"missing\":null}");
+    }
+
+    @Test
+    void shouldConvertDecimalsWithMaximumPrecision()
+    {
+        var shortType = createDecimalType(18, 8);
+        var longType = createDecimalType(38, 10);
+        var schema = new NumberSchema();
+
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("9999999999.99999999")), shortType, schema))
+                .isEqualTo(999999999999999999L);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("-1234567890.12345678")), shortType, schema))
+                .isEqualTo(-123456789012345678L);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("0.00000001")), shortType, schema))
+                .isEqualTo(1L);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("12")), shortType, schema))
+                .isEqualTo(1200000000L);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("0.000000005")), shortType, schema))
+                .isEqualTo(1L);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("9999999999999999999999999999.9999999999")), longType, schema))
+                .isEqualTo(Int128.valueOf("99999999999999999999999999999999999999"));
+        assertThat(JsonTrinoConverter.convert(NullNode.getInstance(), shortType, schema))
+                .isNull();
+    }
+
+    @Test
+    void shouldParseDecimalsFromExactJsonText()
+            throws JsonProcessingException
+    {
+        var type = createDecimalType(18, 8);
+        var objectMapper = JsonMapper.builder()
+                .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .build();
+
+        JsonNode node = objectMapper.readTree("{\"value\": 1234567890.12345678}");
+
+        assertThat(JsonTrinoConverter.convert(node.get("value"), type, new NumberSchema()))
+                .isEqualTo(123456789012345678L);
+    }
+
+    @Test
+    void shouldRejectDecimalsExceedingPrecision()
+    {
+        var type = createDecimalType(18, 8);
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("10000000000")), type, new NumberSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Value 10000000000 doesn't fit in decimal(18,8)");
+    }
+
+    @Test
+    void shouldFormatDecimalsIndependentlyOfLocale()
+    {
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMANY);
+
+            assertThat(JsonTrinoConverter.toBigDecimal(123456789012345678L, createDecimalType(18, 8)).toPlainString())
+                    .isEqualTo("1234567890.12345678");
+            assertThat(JsonTrinoConverter.toBigDecimal(1L, createDecimalType(18, 8)).toPlainString())
+                    .isEqualTo("0.00000001");
+            assertThat(JsonTrinoConverter.toBigDecimal(Int128.valueOf("-99999999999999999999999999999999999999"), createDecimalType(38, 10)).toPlainString())
+                    .isEqualTo("-9999999999999999999999999999.9999999999");
+        }
+        finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 }
