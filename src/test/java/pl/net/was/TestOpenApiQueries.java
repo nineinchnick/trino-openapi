@@ -659,6 +659,18 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void writableItems()
+    {
+        // tables supporting DELETE have a hidden row ID column, which has no source name
+        assertQuery(
+                "SELECT name, page FROM fastapi.default.writable_items",
+                "VALUES ('Portal Gun', 1), ('Plumbus', 2)");
+        assertQuery(
+                "SELECT name FROM fastapi.default.writable_items ORDER BY price LIMIT 1",
+                "VALUES 'Plumbus'");
+    }
+
+    @Test
     public void paginatedResultsNullability()
     {
         assertQuery(

@@ -202,7 +202,7 @@ public class OpenApiClient
         Map<ColumnHandle, NullableValue> sortConstraint = new HashMap<>();
         for (Map.Entry<String, String> paramValue : paramValues.entrySet()) {
             Optional<OpenApiColumn> paramColumn = columns.stream()
-                    .filter(column -> column.getSourceName().equals(paramValue.getKey()) && isPredicate(column, httpPath, null))
+                    .filter(column -> paramValue.getKey().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
                     .findFirst();
             if (paramColumn.isEmpty() || !(paramColumn.get().getType() instanceof VarcharType)) {
                 return Optional.empty();

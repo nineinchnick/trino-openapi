@@ -185,7 +185,7 @@ public final class RangePushdown
     private static Optional<OpenApiColumn> getParameter(Collection<OpenApiColumn> columns, HttpPath httpPath, Map<ColumnHandle, Domain> domains, String name)
     {
         return columns.stream()
-                .filter(column -> column.getSourceName().equals(name))
+                .filter(column -> name.equals(column.getSourceName()))
                 .filter(column -> isNonPathParameter(column, httpPath))
                 // a filter on the parameter itself is sent instead
                 .filter(column -> !domains.containsKey(column.getHandle()))
