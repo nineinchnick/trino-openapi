@@ -14,6 +14,7 @@ ARG VERSION
 
 COPY --chown=trino:trino --from=plugin /tmp/trino-openapi/trino-openapi-$VERSION/ /usr/lib/trino/plugin/openapi/
 ADD catalog/ /etc/trino/catalog/disabled/
+ADD specs/ /etc/trino/specs/
 ADD docker-entrypoint.sh /usr/local/bin/
 
 ENV OPENAPI_AUTH_TYPE=none \

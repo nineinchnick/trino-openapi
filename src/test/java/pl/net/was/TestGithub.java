@@ -38,7 +38,7 @@ public class TestGithub
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
         properties.putAll(Map.of(
                 // a copy of https://github.com/github/rest-api-description/raw/main/descriptions/api.github.com/api.github.com.json with the pagination extension added to some endpoints
-                "spec-location", "src/test/resources/github-patched.json",
+                "spec-location", "specs/github.json",
                 "base-uri", "https://api.github.com",
                 "authentication.type", "http",
                 "authentication.scheme", "bearer",
