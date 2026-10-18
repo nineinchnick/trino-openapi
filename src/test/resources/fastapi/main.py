@@ -6,7 +6,7 @@ from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Re
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 
@@ -171,6 +171,26 @@ class UserViews(BaseModel):
 class UserViewsError(BaseModel):
     code: int
     message: str
+
+
+# forbidding extra fields rejects values with fields of both alternatives
+class Bot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    bot_name: str
+
+
+class Person(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    email: str
+
+
+class Event(BaseModel):
+    name: str
+    actor: Bot | Person
 
 
 class Results(BaseModel):
@@ -488,6 +508,19 @@ def user_views(username: str) -> UserViews | UserViewsError:
 @router.get("/user_views_list")
 def user_views_list() -> list[UserViews | UserViewsError]:
     return [UserViews(views=["home"]), UserViewsError(code=404, message="Unknown user")]
+
+
+@router.get("/events")
+def list_events() -> list[Event]:
+    return [
+        Event(name="build", actor=Bot(id="ci", bot_name="CI")),
+        Event(name="review", actor=Person(id=7, email="jane@example.com")),
+    ]
+
+
+@router.post("/echo_event")
+def echo_event(body: Event) -> Event:
+    return body
 
 
 @router.get("/decimal_parameters")

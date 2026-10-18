@@ -338,6 +338,21 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectNestedObjectUnion()
+    {
+        // the id is defined as a string and an integer, so it's raw JSON
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT name, actor.id, actor.bot_name, actor.email FROM fastapi.default.events").getMaterializedRows();
+        assertThat(rows).extracting(MaterializedRow::getFields).containsExactly(
+                Arrays.asList("build", "ci", "CI", null),
+                Arrays.asList("review", "7", null, "jane@example.com"));
+
+        assertQuery(
+                "SELECT actor.id, actor.email FROM fastapi.default.echo_event " +
+                        "WHERE name = 'review' AND actor = CAST(ROW('7', NULL, 'jane@example.com') AS ROW(id VARCHAR, bot_name VARCHAR, email VARCHAR))",
+                "VALUES ('7', 'jane@example.com')");
+    }
+
+    @Test
     public void selectFromUnionResponse()
     {
         // FastAPI describes union responses using anyOf, and echo.yml using oneOf

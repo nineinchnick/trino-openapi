@@ -30,6 +30,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.ComposedSchema;
+import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -56,6 +57,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -73,6 +75,7 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
@@ -676,10 +679,15 @@ public class OpenApiSpec
         if (schema.getProperties() != null) {
             schema.getProperties().forEach(properties::put);
         }
-        Stream.of(schema.getAllOf(), schema.getOneOf(), schema.getAnyOf())
+        getAlternatives(schema).forEach(alternative -> collectProperties(alternative, properties));
+    }
+
+    private static List<Schema> getAlternatives(Schema<?> schema)
+    {
+        return Stream.of(schema.getAllOf(), schema.getOneOf(), schema.getAnyOf())
                 .filter(Objects::nonNull)
                 .flatMap(List::stream)
-                .forEach(alternative -> collectProperties(alternative, properties));
+                .toList();
     }
 
     private Schema<?> mergeAlternatives(List<Schema> schemas)
@@ -695,7 +703,7 @@ public class OpenApiSpec
             return schemas.getFirst();
         }
         // a property can't be decoded as different types from a single field, so treat it as a union of its alternatives,
-        // which maps it to VARCHAR with the raw JSON value
+        // which merges objects into a single row, and maps other types to VARCHAR with the raw JSON value
         ComposedSchema union = new ComposedSchema();
         union.setOneOf(schemas);
         union.setDescription(schemas.stream()
@@ -859,8 +867,11 @@ public class OpenApiSpec
     private Optional<TypeTuple> convertType(Schema<?> property)
     {
         if (JsonTrinoConverter.isUnion(property)) {
+            if (isObjectUnion(property)) {
+                // a value matches only some of the alternatives, and fields of the other ones are NULL
+                return convertRow(mergeObjectUnion(property));
+            }
             // TODO oneOf types can be incompatible (object and an array), so it would require generating separate fields for every type
-            // TODO allOf and anyOf types could be merged into a single type
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
         // OpenAPI 3.1 schemas are parsed into generic schemas, not subclasses like IntegerSchema or ObjectSchema,
@@ -900,6 +911,49 @@ public class OpenApiSpec
             return null;
         }
         return types.getFirst();
+    }
+
+    private static boolean isObjectUnion(Schema<?> union)
+    {
+        List<Schema> alternatives = getAlternatives(union).stream()
+                // OpenAPI 3.1 declares nullable values with a null alternative
+                .filter(alternative -> !isNullType(alternative))
+                .toList();
+        return !alternatives.isEmpty() && alternatives.stream().allMatch(OpenApiSpec::isObjectAlternative);
+    }
+
+    private static boolean isNullType(Schema<?> schema)
+    {
+        return "null".equals(schema.getType()) || (schema.getTypes() != null && schema.getTypes().equals(Set.of("null")));
+    }
+
+    private static boolean isObjectAlternative(Schema<?> schema)
+    {
+        if (JsonTrinoConverter.isUnion(schema)) {
+            return isObjectUnion(schema);
+        }
+        String type = getTypeName(schema);
+        if (type == null) {
+            return schema.getProperties() != null;
+        }
+        if (!type.equals("object")) {
+            return false;
+        }
+        Object additionalProperties = schema.getAdditionalProperties();
+        if (additionalProperties instanceof Schema<?> booleanSchema && booleanSchema.getBooleanSchemaValue() != null) {
+            additionalProperties = booleanSchema.getBooleanSchemaValue();
+        }
+        // objects with additional properties are maps, not rows
+        return additionalProperties == null || FALSE.equals(additionalProperties);
+    }
+
+    private Schema<?> mergeObjectUnion(Schema<?> union)
+    {
+        ObjectSchema merged = new ObjectSchema();
+        merged.setProperties(getAlternativesProperties(union));
+        merged.setDescription(union.getDescription());
+        merged.addExtension(JsonTrinoConverter.MERGED_UNION_EXTENSION, true);
+        return merged;
     }
 
     private Optional<TypeTuple> convertArray(Schema<?> array)

@@ -15,12 +15,16 @@
 package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import io.trino.spi.block.SqlRow;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -941,7 +945,26 @@ class TestOpenApiSpec
                                         RowType.field("order", VARCHAR)))))))),
                         RowType.field("from", BIGINT),
                         RowType.field("interval", BIGINT),
-                        RowType.field("queries", new ArrayType(VARCHAR)),
+                        // queries are a oneOf of metrics and events queries, which are merged into a single row
+                        RowType.field("queries", new ArrayType(RowType.from(List.of(
+                                RowType.field("data_source", VARCHAR),
+                                RowType.field("name", VARCHAR),
+                                RowType.field("query", VARCHAR),
+                                RowType.field("compute", RowType.from(List.of(
+                                        RowType.field("aggregation", VARCHAR),
+                                        RowType.field("interval", BIGINT),
+                                        RowType.field("metric", VARCHAR)))),
+                                RowType.field("group_by", new ArrayType(RowType.from(List.of(
+                                        RowType.field("facet", VARCHAR),
+                                        RowType.field("limit", INTEGER),
+                                        RowType.field("sort", RowType.from(List.of(
+                                                RowType.field("aggregation", VARCHAR),
+                                                RowType.field("metric", VARCHAR),
+                                                RowType.field("order", VARCHAR),
+                                                RowType.field("type", VARCHAR)))))))),
+                                RowType.field("indexes", new ArrayType(VARCHAR)),
+                                RowType.field("search", RowType.from(List.of(
+                                        RowType.field("query", VARCHAR)))))))),
                         RowType.field("to", BIGINT)))),
                 RowType.field("type", VARCHAR)));
         Assertions.assertThat(columns)
@@ -2704,6 +2727,93 @@ class TestOpenApiSpec
                 .matches(JsonTrinoConverter::isUnion);
         Assertions.assertThat(columns.getLast().getSourceType())
                 .matches(schema -> !JsonTrinoConverter.isUnion(schema));
+    }
+
+    @Test
+    public void testNestedObjectUnions()
+            throws JsonProcessingException
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /events:
+                    get:
+                      responses:
+                        "200":
+                          description: Events
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    actor:
+                                      oneOf:
+                                      - $ref: "#/components/schemas/Bot"
+                                      - $ref: "#/components/schemas/Person"
+                                    value:
+                                      oneOf:
+                                      - type: string
+                                      - type: object
+                                        properties:
+                                          name:
+                                            type: string
+                components:
+                  schemas:
+                    Bot:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        bot_name:
+                          type: string
+                        meta:
+                          type: object
+                          properties:
+                            a:
+                              type: string
+                    Person:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        email:
+                          type: string
+                        meta:
+                          type: object
+                          properties:
+                            b:
+                              type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        List<OpenApiColumn> columns = spec.getTables().get("events");
+        RowType actorType = RowType.from(List.of(
+                RowType.field("id", VARCHAR),
+                RowType.field("bot_name", VARCHAR),
+                RowType.field("meta", RowType.from(List.of(
+                        RowType.field("a", VARCHAR),
+                        RowType.field("b", BIGINT)))),
+                RowType.field("email", VARCHAR)));
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("actor", actorType),
+                        Assertions.tuple("value", VARCHAR));
+
+        // fields missing from the value are NULL, and they're not sent back, so the value still matches one alternative
+        OpenApiColumn actor = columns.getFirst();
+        ObjectMapper objectMapper = new ObjectMapper();
+        SqlRow row = (SqlRow) JsonTrinoConverter.convert(objectMapper.readTree("{\"id\": 7, \"email\": \"a@b.c\", \"meta\": {\"b\": 1}}"), actor.getType(), actor.getSourceType());
+        Assertions.assertThat(row.getRawFieldBlock(1).isNull(row.getRawIndex())).isTrue();
+        ObjectNode node = objectMapper.createObjectNode();
+        JsonTrinoConverter.convertRow(node, row, actorType, actor.getSourceType(), objectMapper);
+        Assertions.assertThat(objectMapper.writeValueAsString(node)).isEqualTo("{\"id\":7,\"meta\":{\"b\":1},\"email\":\"a@b.c\"}");
     }
 
     private OpenApiSpec loadSpec(String name)

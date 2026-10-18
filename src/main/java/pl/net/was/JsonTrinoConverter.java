@@ -66,12 +66,18 @@ import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
 import static io.trino.spi.type.TypeUtils.readNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Boolean.TRUE;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.String.format;
 import static java.math.RoundingMode.HALF_UP;
 
 public class JsonTrinoConverter
 {
+    /**
+     * Marks object schemas created by merging properties of all object alternatives of a union.
+     */
+    public static final String MERGED_UNION_EXTENSION = "x-trino-merged-union";
+
     private JsonTrinoConverter()
     {
     }
@@ -419,10 +425,15 @@ public class JsonTrinoConverter
 
     public static void convertRow(ObjectNode rowNode, SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
+        boolean isMergedUnion = isMergedUnion(schemaType);
         for (int i = 0; i < row.getFieldCount(); i++) {
             RowType.Field field = rowType.getFields().get(i);
             String key = field.getName().orElse(format("_col%d", i));
             Object value = convert(row.getRawFieldBlock(i), row.getRawIndex(), field.getType(), schemaType.getProperties().get(key), objectMapper);
+            if (value == null && isMergedUnion) {
+                // fields of the other alternatives are not sent, so the value matches only one of them
+                continue;
+            }
             putValue(rowNode, key, value);
         }
     }
@@ -464,8 +475,13 @@ public class JsonTrinoConverter
         }
     }
 
+    private static boolean isMergedUnion(Schema<?> schema)
+    {
+        return schema.getExtensions() != null && TRUE.equals(schema.getExtensions().get(MERGED_UNION_EXTENSION));
+    }
+
     /**
-     * Union schemas are mapped to VARCHAR columns holding raw JSON.
+     * Union schemas are mapped to VARCHAR columns holding raw JSON, unless all alternatives are objects, see {@link #MERGED_UNION_EXTENSION}.
      */
     public static boolean isUnion(Schema<?> schema)
     {
