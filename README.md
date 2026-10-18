@@ -279,7 +279,9 @@ statements it lists.
 > that used them now fail with `Table ... has no operation for ...`, until the
 > specification sets `sqlOperation` in the `x-trino` extension of the
 > operation, like `sqlOperation: select` for a search, or
-> `sqlOperation: update` for a `POST` that changes a resource.
+> `sqlOperation: update` for a `POST` that changes a resource. A marked
+> operation is used only for the statements it lists, so marking a search with
+> `sqlOperation: select` also stops `INSERT` from using it.
 
 When several paths of a table can be used, the connector picks one for every
 request: it skips paths whose required parameters are missing from the query,
