@@ -788,6 +788,28 @@ class TestOpenApiSpec
                             Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY);
                         });
             }
+            // loading the spec already checks that range filters map response fields to parameters of the operation
+            if (!extension.has("sortParam")) {
+                continue;
+            }
+            for (String parameter : List.of(extension.get("sortParam").asText(), extension.get("directionParam").asText())) {
+                Assertions.assertThat(columns)
+                        .as("%s parameter of %s", parameter, httpPath)
+                        .anySatisfy(column -> {
+                            Assertions.assertThat(column.getSourceName()).isEqualTo(parameter);
+                            Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY);
+                        });
+            }
+            for (Map.Entry<String, JsonNode> sortValue : extension.get("sortValues").properties()) {
+                Assertions.assertThat(columns)
+                        .as("%s sorted by %s", httpPath, sortValue.getValue().asText())
+                        .anySatisfy(column -> {
+                            Assertions.assertThat(column.getSourceName()).isEqualTo(sortValue.getKey());
+                            // the field can also be a parameter of operations used for other statements, like INSERT
+                            Assertions.assertThat(column.getRequiresPredicate()).doesNotContainKey(httpPath);
+                            Assertions.assertThat(column.getOptionalPredicate()).doesNotContainKey(httpPath);
+                        });
+            }
         }
     }
 
