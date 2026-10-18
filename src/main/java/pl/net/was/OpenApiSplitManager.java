@@ -227,13 +227,13 @@ public class OpenApiSplitManager
             Set<ColumnHandle> dynamicFilterColumns)
     {
         Predicate<OpenApiColumn> hasValue = column -> domains.containsKey(column.getHandle());
-        Optional<String> path = PathSelector.selectPath(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue);
+        Optional<HttpPath> path = PathSelector.selectPath(columns, table.getSelectPaths(), hasValue);
         if (path.isPresent()) {
-            return new HttpPath(table.getSelectMethod(), path.get());
+            return path.get();
         }
-        String message = PathSelector.describeMissingPredicates(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue);
+        String message = PathSelector.describeMissingPredicates(columns, table.getSelectPaths(), hasValue);
         List<String> missingDynamicFilters = table.getSelectPaths().stream()
-                .flatMap(selectPath -> PathSelector.getMissingRequiredPredicates(columns, new HttpPath(table.getSelectMethod(), selectPath), hasValue).stream())
+                .flatMap(selectPath -> PathSelector.getMissingRequiredPredicates(columns, selectPath, hasValue).stream())
                 .filter(column -> dynamicFilterColumns.contains(column.getHandle()))
                 .map(OpenApiColumn::getName)
                 .distinct()
@@ -256,7 +256,7 @@ public class OpenApiSplitManager
     private static boolean isSentBySomePath(OpenApiColumn column, OpenApiTableHandle table)
     {
         return table.getSelectPaths().stream()
-                .anyMatch(path -> isSentByPath(column, new HttpPath(table.getSelectMethod(), path)));
+                .anyMatch(path -> isSentByPath(column, path));
     }
 
     private static boolean isSentByPath(OpenApiColumn column, HttpPath httpPath)

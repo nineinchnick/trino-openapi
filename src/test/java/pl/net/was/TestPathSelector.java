@@ -31,11 +31,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TestPathSelector
 {
-    private static final String PROJECT_COLUMNS = "/projects/{project_id}/columns";
-    private static final String COLUMNS = "/projects/columns/{column_id}";
-    private static final String CARDS = "/projects/cards/{column_id}";
-    private static final String PROJECT_CARDS = "/projects/{project_id}/cards";
-    private static final String PROJECT_CARD = "/projects/{project_id}/cards/{card_id}";
+    private static final HttpPath PROJECT_COLUMNS = new HttpPath(GET, "/projects/{project_id}/columns");
+    private static final HttpPath COLUMNS = new HttpPath(GET, "/projects/columns/{column_id}");
+    private static final HttpPath CARDS = new HttpPath(GET, "/projects/cards/{column_id}");
+    private static final HttpPath PROJECT_CARDS = new HttpPath(GET, "/projects/{project_id}/cards");
+    private static final HttpPath PROJECT_CARD = new HttpPath(GET, "/projects/{project_id}/cards/{card_id}");
 
     private final OpenApiColumn projectId = pathParameter("project_id", PROJECT_COLUMNS, PROJECT_CARDS, PROJECT_CARD);
     private final OpenApiColumn columnId = pathParameter("column_id", COLUMNS, CARDS);
@@ -45,27 +45,27 @@ class TestPathSelector
             .setSourceName("state")
             .setType(VARCHAR)
             .setSourceType(new StringSchema())
-            .setOptionalPredicate(Map.of(new HttpPath(GET, PROJECT_CARDS), ParameterLocation.QUERY))
+            .setOptionalPredicate(Map.of(PROJECT_CARDS, ParameterLocation.QUERY))
             .build();
     private final List<OpenApiColumn> columns = List.of(projectId, columnId, cardId, state);
 
     @Test
     void selectPathWithAvailablePredicates()
     {
-        List<String> paths = List.of(PROJECT_COLUMNS, COLUMNS);
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId)::contains)).hasValue(PROJECT_COLUMNS);
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(columnId)::contains)).hasValue(COLUMNS);
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of()::contains)).isEmpty();
+        List<HttpPath> paths = List.of(PROJECT_COLUMNS, COLUMNS);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of(projectId)::contains)).hasValue(PROJECT_COLUMNS);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of(columnId)::contains)).hasValue(COLUMNS);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of()::contains)).isEmpty();
     }
 
     @Test
     void selectPathWithMostPathParameters()
     {
-        List<String> paths = List.of(PROJECT_CARDS, PROJECT_CARD);
+        List<HttpPath> paths = List.of(PROJECT_CARDS, PROJECT_CARD);
         // both paths use two predicates, but rows from the shorter path wouldn't have values of the card ID
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId, cardId, state)::contains)).hasValue(PROJECT_CARD);
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId, state)::contains)).hasValue(PROJECT_CARDS);
-        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId)::contains)).hasValue(PROJECT_CARDS);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of(projectId, cardId, state)::contains)).hasValue(PROJECT_CARD);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of(projectId, state)::contains)).hasValue(PROJECT_CARDS);
+        assertThat(PathSelector.selectPath(columns, paths, Set.of(projectId)::contains)).hasValue(PROJECT_CARDS);
     }
 
     @Test
@@ -73,23 +73,23 @@ class TestPathSelector
     {
         Set<OpenApiColumn> allColumns = Set.of(projectId, columnId);
         // both paths use one predicate, so the shorter one is selected
-        assertThat(PathSelector.selectPath(columns, GET, List.of(PROJECT_COLUMNS, COLUMNS), allColumns::contains)).hasValue(COLUMNS);
-        assertThat(PathSelector.selectPath(columns, GET, List.of(COLUMNS, PROJECT_COLUMNS), allColumns::contains)).hasValue(COLUMNS);
+        assertThat(PathSelector.selectPath(columns, List.of(PROJECT_COLUMNS, COLUMNS), allColumns::contains)).hasValue(COLUMNS);
+        assertThat(PathSelector.selectPath(columns, List.of(COLUMNS, PROJECT_COLUMNS), allColumns::contains)).hasValue(COLUMNS);
         // both paths have the same length, so the first one in alphabetical order is selected
-        assertThat(PathSelector.selectPath(columns, GET, List.of(COLUMNS, CARDS), allColumns::contains)).hasValue(CARDS);
-        assertThat(PathSelector.selectPath(columns, GET, List.of(CARDS, COLUMNS), allColumns::contains)).hasValue(CARDS);
+        assertThat(PathSelector.selectPath(columns, List.of(COLUMNS, CARDS), allColumns::contains)).hasValue(CARDS);
+        assertThat(PathSelector.selectPath(columns, List.of(CARDS, COLUMNS), allColumns::contains)).hasValue(CARDS);
     }
 
     @Test
     void describeMissingPredicates()
     {
-        assertThat(PathSelector.describeMissingPredicates(columns, GET, List.of(COLUMNS), Set.of()::contains))
+        assertThat(PathSelector.describeMissingPredicates(columns, List.of(COLUMNS), Set.of()::contains))
                 .isEqualTo("Missing required constraint for column_id");
-        assertThat(PathSelector.describeMissingPredicates(columns, GET, List.of(PROJECT_COLUMNS, COLUMNS), Set.of()::contains))
+        assertThat(PathSelector.describeMissingPredicates(columns, List.of(PROJECT_COLUMNS, COLUMNS), Set.of()::contains))
                 .isEqualTo("Missing required constraints for every path: GET /projects/{project_id}/columns requires project_id; GET /projects/columns/{column_id} requires column_id");
     }
 
-    private static OpenApiColumn pathParameter(String name, String... paths)
+    private static OpenApiColumn pathParameter(String name, HttpPath... paths)
     {
         Schema<?> schema = new Schema<>();
         schema.setType("integer");
@@ -99,7 +99,7 @@ class TestPathSelector
                 .setType(BIGINT)
                 .setSourceType(schema)
                 .setRequiresPredicate(Stream.of(paths)
-                        .collect(toMap(path -> new HttpPath(GET, path), _ -> ParameterLocation.PATH)))
+                        .collect(toMap(path -> path, _ -> ParameterLocation.PATH)))
                 .build();
     }
 }
