@@ -52,6 +52,7 @@ public class OpenApiTableHandle
     private final TupleDomain<ColumnHandle> constraint;
     private final OptionalLong limit;
     private final Optional<SortItem> sortItem;
+    private final TupleDomain<ColumnHandle> rowFilter;
 
     private OpenApiTableHandle(
             SchemaTableName schemaTableName,
@@ -61,7 +62,8 @@ public class OpenApiTableHandle
             List<HttpPath> deletePaths,
             TupleDomain<ColumnHandle> constraint,
             OptionalLong limit,
-            Optional<SortItem> sortItem)
+            Optional<SortItem> sortItem,
+            TupleDomain<ColumnHandle> rowFilter)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
         this.selectPaths = ImmutableList.copyOf(requireNonNull(selectPaths, "selectPaths is null"));
@@ -71,6 +73,7 @@ public class OpenApiTableHandle
         this.constraint = requireNonNull(constraint, "constraint is null");
         this.limit = requireNonNull(limit, "limit is null");
         this.sortItem = requireNonNull(sortItem, "sortItem is null");
+        this.rowFilter = requireNonNull(rowFilter, "rowFilter is null");
     }
 
     // Trino only shares jackson-annotations with plugins, so handles can't be deserialized through a builder;
@@ -84,9 +87,10 @@ public class OpenApiTableHandle
             @JsonProperty("deletePaths") List<HttpPath> deletePaths,
             @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint,
             @JsonProperty("limit") OptionalLong limit,
-            @JsonProperty("sortItem") Optional<SortItem> sortItem)
+            @JsonProperty("sortItem") Optional<SortItem> sortItem,
+            @JsonProperty("rowFilter") TupleDomain<ColumnHandle> rowFilter)
     {
-        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem);
+        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter);
     }
 
     public static Builder builder(SchemaTableName schemaTableName)
@@ -103,7 +107,8 @@ public class OpenApiTableHandle
                 .setDeletePaths(deletePaths)
                 .setConstraint(constraint)
                 .setLimit(limit)
-                .setSortItem(sortItem);
+                .setSortItem(sortItem)
+                .setRowFilter(rowFilter);
     }
 
     @JsonProperty
@@ -168,6 +173,15 @@ public class OpenApiTableHandle
         return sortItem;
     }
 
+    /**
+     * Filters on parameters that the path selected for a split doesn't send, so the connector applies them to the returned rows.
+     */
+    @JsonProperty
+    public TupleDomain<ColumnHandle> getRowFilter()
+    {
+        return rowFilter;
+    }
+
     @Override
     public String toString()
     {
@@ -184,7 +198,8 @@ public class OpenApiTableHandle
                 + SizeOf.estimatedSizeOf(deletePaths, HttpPath::getRetainedSizeInBytes)
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
                 + SizeOf.sizeOf(limit)
-                + SizeOf.sizeOf(sortItem, item -> SizeOf.estimatedSizeOf(item.getName()));
+                + SizeOf.sizeOf(sortItem, item -> SizeOf.estimatedSizeOf(item.getName()))
+                + rowFilter.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes());
     }
 
     public OpenApiTableHandle cloneWithConstraint(TupleDomain<ColumnHandle> constraint)
@@ -366,6 +381,7 @@ public class OpenApiTableHandle
         private TupleDomain<ColumnHandle> constraint = TupleDomain.none();
         private OptionalLong limit = OptionalLong.empty();
         private Optional<SortItem> sortItem = Optional.empty();
+        private TupleDomain<ColumnHandle> rowFilter = TupleDomain.all();
 
         private Builder(SchemaTableName schemaTableName)
         {
@@ -414,9 +430,15 @@ public class OpenApiTableHandle
             return this;
         }
 
+        public Builder setRowFilter(TupleDomain<ColumnHandle> rowFilter)
+        {
+            this.rowFilter = requireNonNull(rowFilter, "rowFilter is null");
+            return this;
+        }
+
         public OpenApiTableHandle build()
         {
-            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem);
+            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter);
         }
     }
 }

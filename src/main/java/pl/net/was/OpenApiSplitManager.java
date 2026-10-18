@@ -36,7 +36,7 @@ import io.trino.spi.predicate.ValueSet;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -207,15 +207,20 @@ public class OpenApiSplitManager
             singleDomains.add(splitDomains.build());
         }
         // then create constraints with every multivalued domain replaced with single-value sets
-        Set<TupleDomain<ColumnHandle>> splitConstraints = new LinkedHashSet<>();
+        Map<TupleDomain<ColumnHandle>, TupleDomain<ColumnHandle>> splitRowFilters = new LinkedHashMap<>();
         for (List<Map.Entry<ColumnHandle, Domain>> splitDomains : Lists.cartesianProduct(singleDomains.build())) {
             Map<ColumnHandle, Domain> newDomains = new HashMap<>();
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
                 newDomains.put(entry.getKey(), entry.getValue());
             }
             HttpPath httpPath = selectPath(table, columnList, newDomains, dynamicFilterSnapshot, dynamicFilterColumns);
-            // Trino still applies filters on predicates the selected path doesn't send,
-            // and splits that differ only in these predicates would return the same rows
+            // the connector applies filters on parameters the selected path doesn't send to the returned rows,
+            // so splits that differ only in these filters would return the same rows;
+            // dynamic filters are left out, because the join still applies them
+            TupleDomain<ColumnHandle> rowFilter = pushedDownPredicate.isNone() ? TupleDomain.all() : pushedDownPredicate.filter((column, _) -> {
+                OpenApiColumn openApiColumn = columns.get(((OpenApiColumnHandle) column).getName());
+                return isParameter(openApiColumn) && !isSentByPath(openApiColumn, httpPath);
+            });
             newDomains.keySet().removeIf(column -> !isSentByPath(columns.get(((OpenApiColumnHandle) column).getName()), httpPath));
             // ranges are the same for every split, and are sent as bounds, so they don't make more splits
             originalDomains.forEach((column, domain) -> {
@@ -223,10 +228,13 @@ public class OpenApiSplitManager
                     newDomains.put(column, domain);
                 }
             });
-            splitConstraints.add(TupleDomain.withColumnDomains(newDomains));
+            splitRowFilters.put(TupleDomain.withColumnDomains(newDomains), rowFilter);
         }
-        List<OpenApiSplit> splits = splitConstraints.stream()
-                .map(splitConstraint -> new OpenApiSplit(table.cloneWithConstraint(splitConstraint)))
+        List<OpenApiSplit> splits = splitRowFilters.entrySet().stream()
+                .map(entry -> new OpenApiSplit(table.toBuilder()
+                        .setConstraint(entry.getKey())
+                        .setRowFilter(entry.getValue())
+                        .build()))
                 .collect(toImmutableList());
         // TODO when implementing limits, this is where we'd break down splits more
         return getSplitSource(splits);
@@ -270,6 +278,11 @@ public class OpenApiSplitManager
     {
         return table.getSelectPaths().stream()
                 .anyMatch(path -> isSentByPath(column, path));
+    }
+
+    private static boolean isParameter(OpenApiColumn column)
+    {
+        return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
     }
 
     private static boolean isSentByPath(OpenApiColumn column, HttpPath httpPath)
