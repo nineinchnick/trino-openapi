@@ -13,11 +13,13 @@
  */
 package pl.net.was;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.jetty.JettyHttpClient;
+import io.airlift.units.Duration;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
@@ -41,11 +43,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
@@ -88,9 +93,22 @@ class TestOpenApiClientRequests
               /untitled:
                 get:
             %s
-            """.formatted(OK_RESPONSES, OK_RESPONSES);
+              /search:
+                post:
+                  operationId: searchItems
+                  x-trino:
+                    sqlOperation: select
+            %s
+              /patched:
+                patch:
+                  operationId: patchItems
+                  x-trino:
+                    sqlOperation: select
+            %s
+            """.formatted(OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES);
 
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger requestCount = new AtomicInteger();
     private HttpServer server;
     private HttpClient httpClient;
     private URI baseUri;
@@ -104,6 +122,7 @@ class TestOpenApiClientRequests
     {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
+            requestCount.incrementAndGet();
             HttpHandler handler = responses.poll();
             if (handler == null) {
                 handler = respond(200, "[]");
@@ -126,6 +145,160 @@ class TestOpenApiClientRequests
     void resetServer()
     {
         responses.clear();
+        requestCount.set(0);
+    }
+
+    @Test
+    void testRetriesTransientErrorResponses()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+        responses.add(respond(503, ""));
+        responses.add(respond(504, ""));
+        responses.add(respond(429, ""));
+        responses.add(respond(200, "[{\"id\":1}]"));
+
+        assertThat(getRows(newConfig().setMaxRetries(4), "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(5);
+    }
+
+    @Test
+    void testRetriesNetworkErrors()
+            throws IOException
+    {
+        responses.add(disconnect());
+        responses.add(respond(200, "[{\"id\":1}]"));
+
+        assertThat(getRows(newConfig(), "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testFailsAfterMaxRetries()
+            throws IOException
+    {
+        responses.add(respond(503, ""));
+        responses.add(respond(503, ""));
+        responses.add(respond(503, "{\"message\":\"Try again later\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig().setMaxRetries(2), "items", null))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 503 after 3 attempts: \"Try again later\"", baseUri);
+        assertThat(requestCount).hasValue(3);
+    }
+
+    @Test
+    void testDoesNotRetryPermanentErrors()
+            throws IOException
+    {
+        responses.add(respond(500, ""));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 500", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testDoesNotRetryNonIdempotentRequests()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "search", null))
+                .hasMessage("Request POST %s/search for operation searchItems failed with HTTP 502", baseUri);
+        assertThat(requestCount).hasValue(1);
+
+        requestCount.set(0);
+        responses.add(respond(502, ""));
+
+        // a PATCH can apply relative changes, like appending to a list, so repeating it can change the result
+        assertThatThrownBy(() -> getRows(newConfig(), "patched", null))
+                .hasMessage("Request PATCH %s/patched for operation patchItems failed with HTTP 502", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testRetriesCanBeDisabled()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+
+        assertThatThrownBy(() -> getRows(newConfig().setMaxRetries(0), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 502", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testHonorsRetryAfter()
+            throws IOException
+    {
+        responses.add(respond(429, "", "Retry-After", "1"));
+        Stopwatch stopwatch = Stopwatch.createStarted();
+
+        assertThat(getRows(newConfig().setRetryMaxDelay(new Duration(1, MINUTES)), "items", null)).isEmpty();
+        assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofSeconds(1));
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testFailsFastWhenRetryAfterExceedsMaxDelay()
+            throws IOException
+    {
+        responses.add(respond(503, "", "Retry-After", "3600"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 503; " +
+                        "the server asked to wait 3600 seconds before retrying, which is longer than retry-max-delay (10.00ms)", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testBackoffDelayIsJitteredWithinBounds()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+        responses.add(respond(502, ""));
+        Stopwatch stopwatch = Stopwatch.createStarted();
+
+        // with equal jitter, every retry waits between half of the delay and the whole delay, so two retries wait between 400 and 800 ms
+        assertThat(getRows(newConfig()
+                .setRetryInitialDelay(new Duration(400, MILLISECONDS))
+                .setRetryMaxDelay(new Duration(400, MILLISECONDS)), "items", null)).isEmpty();
+        assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofMillis(400));
+        assertThat(stopwatch.elapsed()).isLessThan(java.time.Duration.ofSeconds(30));
+        assertThat(requestCount).hasValue(3);
+    }
+
+    @Test
+    void testRetriesForbiddenOnlyWithRetryAfter()
+            throws IOException
+    {
+        responses.add(respond(403, "", "Retry-After", "0"));
+
+        assertThat(getRows(newConfig(), "items", null)).isEmpty();
+        assertThat(requestCount).hasValue(2);
+
+        requestCount.set(0);
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "0"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 403", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testRetriesCountAgainstRateLimit()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+        responses.add(respond(502, ""));
+        Stopwatch stopwatch = Stopwatch.createStarted();
+
+        // the rate limiter lets the first request through immediately, and delays every next one by half a second
+        assertThat(getRows(newConfig().setMaxRequestsPerSecond(2), "items", null)).isEmpty();
+        assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofMillis(900));
+        assertThat(requestCount).hasValue(3);
     }
 
     @Test
@@ -179,7 +352,7 @@ class TestOpenApiClientRequests
 
         assertThatThrownBy(() -> getRows(config, "items", "s3cr3t"))
                 .isInstanceOf(TrinoException.class)
-                .hasMessageStartingWith("Request GET %s/items for operation listItems failed: ", unreachableUri)
+                .hasMessageStartingWith("Request GET %s/items for operation listItems failed after 4 attempts: ", unreachableUri)
                 .hasCauseInstanceOf(IOException.class)
                 .message()
                 .doesNotContain("s3cr3t");
@@ -191,7 +364,9 @@ class TestOpenApiClientRequests
         Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), SPEC);
         return new OpenApiConfig()
                 .setSpecLocation(specFile.toString())
-                .setBaseUri(baseUri);
+                .setBaseUri(baseUri)
+                .setRetryInitialDelay(new Duration(1, MILLISECONDS))
+                .setRetryMaxDelay(new Duration(10, MILLISECONDS));
     }
 
     private List<List<?>> getRows(OpenApiConfig config, String tableName, String secret)
@@ -207,6 +382,13 @@ class TestOpenApiClientRequests
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(secret)))));
         }
         return ImmutableList.copyOf(client.getRows(table));
+    }
+
+    private static HttpHandler disconnect()
+    {
+        return _ -> {
+            throw new IOException("Closing the connection without a response");
+        };
     }
 
     private static HttpHandler respond(int statusCode, String body, String... headers)
