@@ -156,7 +156,7 @@ class TestOpenApiSpec
     @Test
     public void getGithubExtensionTables()
     {
-        OpenApiSpec spec = loadSpec("github-patched.json");
+        OpenApiSpec spec = loadSpecFile("specs/github.json");
         Map<String, List<OpenApiColumn>> tables = spec.getTables();
 
         Set<String> expected = Set.of(
@@ -3086,6 +3086,13 @@ class TestOpenApiSpec
                                 RowType.field("name", VARCHAR),
                                 RowType.field("id", BIGINT))))),
                         Assertions.tuple("values", VARCHAR));
+    }
+
+    private OpenApiSpec loadSpecFile(String path)
+    {
+        OpenApiConfig config = new OpenApiConfig();
+        config.setSpecLocation(path);
+        return new OpenApiSpec(config);
     }
 
     private OpenApiSpec loadSpec(String name)
