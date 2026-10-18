@@ -264,6 +264,13 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT author, text FROM fastapi.default.comments WHERE comment_id = 2",
                 "VALUES ('bob', 'Second')");
+        // both paths use two predicates, but only the longer one returns values of the review ID
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.products_reviews WHERE product_id = 1 AND rating = 5 AND review_id = 2",
+                "VALUES (2, 'Good')");
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.products_reviews WHERE product_id = 1 AND rating = 5",
+                "VALUES (1, 'Great'), (2, 'Good')");
         // every value is read in a separate split, using the path with the comment ID
         assertQuery(
                 "SELECT author, text FROM fastapi.default.comments WHERE comment_id IN (1, 2)",

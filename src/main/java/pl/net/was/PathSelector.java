@@ -32,13 +32,16 @@ public final class PathSelector
     private PathSelector() {}
 
     /**
-     * Returns the path that has all required predicates, and uses the most of the available predicates.
+     * Returns the path that has all required predicates, and uses the most of the available path parameters,
+     * then the most of other available predicates.
      */
     public static Optional<String> selectPath(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
     {
         checkArgument(!paths.isEmpty(), "paths are empty");
-        // the shortest path is the most generic one, and paths of equal length are ordered only to make the choice deterministic
-        Comparator<String> comparator = comparingLong((String path) -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue))
+        // path parameters are counted first, because rows read using a more generic path don't have values of the other path parameters,
+        // so filters on them would remove all rows; paths of equal length are ordered only to make the choice deterministic
+        Comparator<String> comparator = comparingLong((String path) -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue, true))
+                .thenComparingLong(path -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue, false))
                 .thenComparing(comparingInt(String::length).reversed())
                 .thenComparing(Comparator.<String>naturalOrder().reversed());
         return paths.stream()
@@ -66,12 +69,19 @@ public final class PathSelector
                 .toList();
     }
 
-    private static long countAvailablePredicates(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue)
+    private static long countAvailablePredicates(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue, boolean pathParameters)
     {
         return columns.stream()
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
+                .filter(column -> isPathParameter(column, httpPath) == pathParameters)
                 .filter(hasValue)
                 .count();
+    }
+
+    private static boolean isPathParameter(OpenApiColumn column, HttpPath httpPath)
+    {
+        return column.getRequiresPredicate().get(httpPath) == ParameterLocation.PATH
+                || column.getOptionalPredicate().get(httpPath) == ParameterLocation.PATH;
     }
 
     private static String describeColumns(List<OpenApiColumn> columns)
