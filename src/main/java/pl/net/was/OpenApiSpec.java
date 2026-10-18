@@ -42,6 +42,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import io.swagger.v3.parser.util.DeserializationUtils;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
@@ -274,6 +275,10 @@ public class OpenApiSpec
 
     private static OpenAPI parse(String specLocation)
     {
+        // specs of large APIs, like Datadog, exceed the default limit of 3 MB for YAML documents,
+        // which protects against untrusted input, but the spec location is set by the catalog administrator.
+        // The limit can only be changed globally, and the parser is loaded only by this plugin's class loader.
+        DeserializationUtils.getOptions().setMaxYamlCodePoints(Integer.MAX_VALUE);
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
         EmptySecurityDetectingParser parser = new EmptySecurityDetectingParser();
