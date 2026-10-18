@@ -170,7 +170,8 @@ public class OpenApiClient
             return OptionalLong.empty();
         }
         Optional<OpenApiColumn> limitColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
-                .filter(column -> column.getSourceName().equals(limitParam.get()) && isPredicate(column, httpPath, null))
+                // the row ID column has no source name
+                .filter(column -> limitParam.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
                 .findFirst();
         if (limitColumn.isEmpty()) {
             return OptionalLong.empty();
