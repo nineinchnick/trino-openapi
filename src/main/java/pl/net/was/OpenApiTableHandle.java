@@ -254,7 +254,10 @@ public class OpenApiTableHandle
                 currentConstraint = TupleDomain.withColumnDomains(domains);
             }
             else {
-                currentConstraint.getDomains().get().get(column.getHandle()).union(domain);
+                // filters are combined with AND, so a row must match both domains
+                Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().get());
+                domains.put(column.getHandle(), domains.get(column.getHandle()).intersect(domain));
+                currentConstraint = TupleDomain.withColumnDomains(domains);
             }
             found = true;
             if (!isAlwaysSent) {
