@@ -23,10 +23,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Streams;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -87,6 +87,7 @@ import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.min;
 import static java.lang.String.format;
@@ -296,9 +297,13 @@ public class OpenApiClient
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader("X-Trino-OpenAPI-Path", httpPath.path());
         getFilterColumnValues(table, httpPath, ParameterLocation.HEADER, valueProvider)
-                .forEach((column, value) -> builder.addHeader(column.getSourceName(), encodeParamValue(column, value)));
+                .forEach((column, value) -> builder.addHeader(
+                        column.getSourceName(),
+                        getParameterStyle(column, httpPath, ParameterLocation.HEADER).serializeHeaderValue(toJsonNode(column, value))));
         String cookies = getFilterColumnValues(table, httpPath, ParameterLocation.COOKIE, valueProvider).entrySet().stream()
-                .map(entry -> entry.getKey().getSourceName() + "=" + URLEncoder.encode(encodeParamValue(entry.getKey(), entry.getValue()), UTF_8))
+                .map(entry -> entry.getKey().getSourceName() + "=" + URLEncoder.encode(
+                        getParameterStyle(entry.getKey(), httpPath, ParameterLocation.COOKIE).serializeCookieValue(toJsonNode(entry.getKey(), entry.getValue())),
+                        UTF_8))
                 .collect(joining("; "));
         if (!cookies.isEmpty()) {
             builder.addHeader(COOKIE, cookies);
@@ -365,42 +370,26 @@ public class OpenApiClient
     private Map<String, Iterable<String>> getQueryParams(OpenApiTableHandle table, HttpPath httpPath, Function<OpenApiColumn, Object> valueProvider)
     {
         return getFilterColumnValues(table, httpPath, ParameterLocation.QUERY, valueProvider).entrySet().stream()
-                .collect(toMap(entry -> entry.getKey().getSourceName(), entry -> encodeQueryParamValue(entry.getKey(), httpPath, entry.getValue())));
+                .collect(toMap(
+                        entry -> entry.getKey().getSourceName(),
+                        entry -> getParameterStyle(entry.getKey(), httpPath, ParameterLocation.QUERY).serializeQueryValues(toJsonNode(entry.getKey(), entry.getValue()))));
     }
 
-    private static Iterable<String> encodeQueryParamValue(OpenApiColumn column, HttpPath httpPath, Object value)
+    private static ParameterStyle getParameterStyle(OpenApiColumn column, HttpPath httpPath, ParameterLocation location)
     {
-        List<String> values = encodeValues(column, value);
-        ParameterStyle style = column.getParameterStyles().getOrDefault(httpPath, ParameterStyle.defaultFor(ParameterLocation.QUERY));
-        if (style.explode()) {
-            return values;
-        }
-        return List.of(String.join(style.arrayDelimiter(), values));
+        return column.getParameterStyles().getOrDefault(httpPath, ParameterStyle.defaultFor(location));
     }
 
-    private static String encodeParamValue(OpenApiColumn column, Object value)
+    private static JsonNode toJsonNode(OpenApiColumn column, Object value)
     {
-        // header and cookie parameters only support the simple and form styles, which both delimit array elements with commas
-        return String.join(",", encodeValues(column, value));
-    }
-
-    private static List<String> encodeValues(OpenApiColumn column, Object value)
-    {
-        if (value instanceof Block block) {
-            // values from predicates are blocks, but values from written rows are already converted to JSON
-            value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
+        // values read from pages are already converted, and values read from predicates are native Trino values
+        if (value instanceof JsonNode node) {
+            return node;
         }
-        if (!(value instanceof ArrayNode arrayNode)) {
-            return List.of(formatParamValue(value));
+        if (value instanceof Block || value instanceof SqlRow || value instanceof SqlMap) {
+            return (JsonNode) JsonTrinoConverter.convert(writeNativeValue(column.getType(), value), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
         }
-        return Streams.stream(arrayNode)
-                .map(element -> {
-                    if (element.isBigDecimal()) {
-                        return formatParamValue(element.decimalValue());
-                    }
-                    return element.isValueNode() ? element.asText() : element.toString();
-                })
-                .toList();
+        return TextNode.valueOf(formatParamValue(value));
     }
 
     private static String formatParamValue(Object value)
