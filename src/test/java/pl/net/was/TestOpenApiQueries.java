@@ -191,14 +191,16 @@ public class TestOpenApiQueries
     @Test
     public void selectFromForecastTable()
     {
+        // latitude and longitude are strings in requests, since they can hold several comma separated coordinates
         assertQuery(
-                "SELECT elevation, timezone, current_weather.temperature BETWEEN -50 AND 100 AS is_livable " +
-                        "FROM openmeteo.default.v1_forecast WHERE latitude_req = 53.1325 AND longitude_req = 23.1688",
+                "SELECT elevation, timezone, current.temperature_2m BETWEEN -50 AND 100 AS is_livable " +
+                        "FROM openmeteo.default.v1_forecast WHERE latitude_req = '53.1325' AND longitude_req = '23.1688'",
                 "VALUES (135.0, 'GMT', null)");
         assertQuery(
-                "SELECT elevation, timezone, current_weather.temperature BETWEEN -50 AND 100 AS is_livable " +
-                        "FROM openmeteo.default.v1_forecast WHERE latitude_req = 53.1325 AND longitude_req = 23.1688 AND current_weather_req = true",
-                "VALUES (135.0, 'GMT', true)");
+                "SELECT elevation, timezone, current.temperature_2m BETWEEN -50 AND 100 AS is_livable, cardinality(hourly.temperature_2m) " +
+                        "FROM openmeteo.default.v1_forecast WHERE latitude_req = '53.1325' AND longitude_req = '23.1688' " +
+                        "AND current_req = ARRAY['temperature_2m'] AND hourly_req = ARRAY['temperature_2m', 'weather_code'] AND forecast_days = 1",
+                "VALUES (135.0, 'GMT', true, 24)");
     }
 
     @Test
