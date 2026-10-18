@@ -24,6 +24,7 @@ import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
+import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -38,12 +39,14 @@ import java.util.Set;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
+import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.DecimalType.createDecimalType;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.util.Objects.requireNonNull;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
@@ -606,9 +609,29 @@ class TestOpenApiSpec
                 RowType.field("items", VARCHAR),
                 RowType.field("system", VARCHAR),
                 RowType.field("type", VARCHAR))), new TypeOperators());
+        // these fields are objects wrapped in allOf, which the parser merges into object schemas
+        String linkType = "row(href varchar, \"iconClass\" varchar, id varchar, label varchar, \"styleClass\" varchar, title varchar, weight integer)";
+        String userInterfaceType = "row(\"avatarUrl\" varchar, \"displayName\" varchar, \"displayNameKey\" varchar, id varchar, type varchar, url varchar)";
+        Type changelogType = TESTING_TYPE_MANAGER.fromSqlType("row(histories array(row(" +
+                "author row(\"accountId\" varchar, \"accountType\" varchar, active boolean, " +
+                "\"avatarUrls\" row(\"16x16\" varchar, \"24x24\" varchar, \"32x32\" varchar, \"48x48\" varchar), " +
+                "\"displayName\" varchar, \"emailAddress\" varchar, key varchar, name varchar, self varchar, \"timeZone\" varchar), " +
+                "created timestamp(3), " +
+                "\"historyMetadata\" row(\"activityDescription\" varchar, \"activityDescriptionKey\" varchar, actor " + userInterfaceType + ", cause " + userInterfaceType + ", " +
+                "description varchar, \"descriptionKey\" varchar, \"emailDescription\" varchar, \"emailDescriptionKey\" varchar, \"extraData\" map(varchar, varchar), " +
+                "generator " + userInterfaceType + ", type varchar), " +
+                "id varchar, " +
+                "items array(row(field varchar, \"fieldId\" varchar, fieldtype varchar, \"from\" varchar, \"fromString\" varchar, \"to\" varchar, \"toString\" varchar)))), " +
+                "\"maxResults\" integer, \"startAt\" integer, total integer)");
+        Type editmetaType = TESTING_TYPE_MANAGER.fromSqlType("row(fields map(varchar, row(" +
+                "\"allowedValues\" array(varchar), \"autoCompleteUrl\" varchar, configuration map(varchar, varchar), \"defaultValue\" varchar, \"hasDefaultValue\" boolean, " +
+                "key varchar, name varchar, operations array(varchar), required boolean, " +
+                "schema row(configuration map(varchar, varchar), custom varchar, \"customId\" bigint, items varchar, system varchar, type varchar))))");
+        Type operationsType = TESTING_TYPE_MANAGER.fromSqlType("row(\"linkGroups\" array(row(" +
+                "groups array(varchar), header " + linkType + ", id varchar, links array(" + linkType + "), \"styleClass\" varchar, weight integer)))");
         ArrayType issuesType = new ArrayType(RowType.from(List.of(
-                RowType.field("changelog", VARCHAR),
-                RowType.field("editmeta", VARCHAR),
+                RowType.field("changelog", changelogType),
+                RowType.field("editmeta", editmetaType),
                 RowType.field("expand", VARCHAR),
                 RowType.field("fields", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
                 RowType.field("fieldsToInclude", RowType.from(List.of(
@@ -618,7 +641,7 @@ class TestOpenApiSpec
                 RowType.field("id", VARCHAR),
                 RowType.field("key", VARCHAR),
                 RowType.field("names", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
-                RowType.field("operations", VARCHAR),
+                RowType.field("operations", operationsType),
                 RowType.field("properties", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
                 RowType.field("renderedFields", new MapType(VARCHAR, VARCHAR, new TypeOperators())),
                 RowType.field("schema", schemaType),
@@ -1606,6 +1629,164 @@ class TestOpenApiSpec
         Assertions.assertThat(spec.getTables()).isEmpty();
         Assertions.assertThat(spec.getPathSecurityRequirements()).isEmpty();
         Assertions.assertThat(spec.getSecuritySchemas()).containsOnlyKeys("basicAuth");
+    }
+
+    @Test
+    public void testOpenApi31TypesMatchOpenApi30()
+    {
+        RowType objectType = RowType.from(List.of(
+                RowType.field("int64", BIGINT),
+                RowType.field("boolean", BOOLEAN),
+                RowType.field("float", REAL)));
+        RowType dimensionsType = RowType.from(List.of(
+                RowType.field("width", DOUBLE),
+                RowType.field("height", DOUBLE)));
+        List<OpenApiColumn> columns30 = parseSpec(typesSpec("3.0.3")).getTables().get("types");
+        List<OpenApiColumn> columns31 = parseSpec(typesSpec("3.1.0")).getTables().get("types");
+
+        Assertions.assertThat(columns30)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("integer", BIGINT),
+                        Assertions.tuple("int32", INTEGER),
+                        Assertions.tuple("int64", BIGINT),
+                        Assertions.tuple("number", createDecimalType(18, 8)),
+                        Assertions.tuple("float", REAL),
+                        Assertions.tuple("double", DOUBLE),
+                        Assertions.tuple("boolean", BOOLEAN),
+                        Assertions.tuple("string", VARCHAR),
+                        Assertions.tuple("date", DATE),
+                        Assertions.tuple("date_time", TIMESTAMP_MILLIS),
+                        Assertions.tuple("integers", new ArrayType(BIGINT)),
+                        Assertions.tuple("object", objectType),
+                        Assertions.tuple("objects", new ArrayType(objectType)),
+                        Assertions.tuple("map", new MapType(VARCHAR, DOUBLE, new TypeOperators())),
+                        Assertions.tuple("empty_object", VARCHAR),
+                        Assertions.tuple("open_object", VARCHAR),
+                        Assertions.tuple("closed_object", RowType.from(List.of(RowType.field("name", VARCHAR)))),
+                        Assertions.tuple("dimensions", dimensionsType));
+        Assertions.assertThat(columns31)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactlyElementsOf(columns30.stream()
+                        .map(column -> Assertions.tuple(column.getName(), column.getType()))
+                        .toList());
+        // rows are decoded and serialized using the properties of the source schema, in the order of the row fields
+        Assertions.assertThat(columns31)
+                .filteredOn(column -> column.getType() instanceof RowType)
+                .allSatisfy(column -> Assertions.assertThat(column.getSourceType().getProperties().keySet())
+                        .containsExactlyElementsOf(((RowType) column.getType()).getFields().stream()
+                                .map(field -> field.getName().orElseThrow())
+                                .toList()));
+    }
+
+    private static String typesSpec(String version)
+    {
+        return """
+                openapi: %s
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /types:
+                    get:
+                      responses:
+                        "200":
+                          description: Types
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    integer:
+                                      type: integer
+                                    int32:
+                                      type: integer
+                                      format: int32
+                                    int64:
+                                      type: integer
+                                      format: int64
+                                    number:
+                                      type: number
+                                    float:
+                                      type: number
+                                      format: float
+                                    double:
+                                      type: number
+                                      format: double
+                                    boolean:
+                                      type: boolean
+                                    string:
+                                      type: string
+                                    date:
+                                      type: string
+                                      format: date
+                                    date_time:
+                                      type: string
+                                      format: date-time
+                                    integers:
+                                      type: array
+                                      items:
+                                        type: integer
+                                        format: int64
+                                    object:
+                                      type: object
+                                      properties:
+                                        int64:
+                                          type: integer
+                                          format: int64
+                                        boolean:
+                                          type: boolean
+                                        float:
+                                          type: number
+                                          format: float
+                                    objects:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          int64:
+                                            type: integer
+                                            format: int64
+                                          boolean:
+                                            type: boolean
+                                          float:
+                                            type: number
+                                            format: float
+                                    map:
+                                      type: object
+                                      additionalProperties:
+                                        type: number
+                                        format: double
+                                    empty_object:
+                                      type: object
+                                    open_object:
+                                      type: object
+                                      properties:
+                                        name:
+                                          type: string
+                                      additionalProperties: true
+                                    closed_object:
+                                      type: object
+                                      properties:
+                                        name:
+                                          type: string
+                                      additionalProperties: false
+                                    dimensions:
+                                      $ref: '#/components/schemas/Dimensions'
+                components:
+                  schemas:
+                    Dimensions:
+                      type: object
+                      properties:
+                        width:
+                          type: number
+                          format: double
+                        height:
+                          type: number
+                          format: double
+                """.formatted(version);
     }
 
     private static String itemsSpec(String components)

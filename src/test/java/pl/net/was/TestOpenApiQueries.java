@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableMap;
 import io.trino.Session;
 import io.trino.testing.AbstractTestQueryFramework;
+import io.trino.testing.MaterializedResult;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.sql.TestTable;
@@ -34,6 +35,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -262,6 +268,26 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectOpenApi31TypesInRequestBody()
+    {
+        // the serial number doesn't fit in INTEGER, nor in DOUBLE without losing precision
+        MaterializedResult result = getQueryRunner().execute("SELECT in_stock, serial_number, weight, density, dimensions.width, dimensions.height, dimensions.unit " +
+                "FROM fastapi.default.echo_gadget " +
+                "WHERE in_stock = true AND serial_number = 9007199254740993 AND weight = REAL '1.5' AND density = DOUBLE '0.1' " +
+                "AND dimensions = CAST(ROW(2, 3, 'cm') AS ROW(width BIGINT, height BIGINT, unit VARCHAR))");
+        assertThat(result.getTypes()).containsExactly(BOOLEAN, BIGINT, REAL, DOUBLE, BIGINT, BIGINT, VARCHAR);
+        assertThat(result.getMaterializedRows()).hasSize(1);
+        assertThat(result.getMaterializedRows().getFirst().getFields()).containsExactly(
+                true,
+                9007199254740993L,
+                1.5f,
+                0.1,
+                2L,
+                3L,
+                "cm");
+    }
+
+    @Test
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(
@@ -362,7 +388,7 @@ public class TestOpenApiQueries
     {
         assertQuery(
                 "SELECT name, item_ids FROM fastapi.default.items_by_ids WHERE item_ids = ARRAY[1, 2]",
-                "VALUES ('Portal Gun', ARRAY[1, 2]), ('Plumbus', ARRAY[1, 2])");
+                "VALUES ('Portal Gun', ARRAY[CAST(1 AS BIGINT), CAST(2 AS BIGINT)]), ('Plumbus', ARRAY[CAST(1 AS BIGINT), CAST(2 AS BIGINT)])");
     }
 
     @Test
