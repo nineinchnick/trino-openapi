@@ -178,21 +178,6 @@ paths:
       responses:
         "200":
           $ref: '#/components/responses/Echo'
-  /echo_union:
-    post:
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UnionEcho'
-      responses:
-        '200':
-          description: The request body
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UnionEcho'
   /echo_map:
     post:
       requestBody:
@@ -264,20 +249,6 @@ components:
           type: integer
         name:
           type: string
-    UnionEcho:
-      type: object
-      properties:
-        wrapper:
-          type: object
-          properties:
-            name:
-              type: string
-            value:
-              oneOf:
-                - type: integer
-                - type: object
-                  additionalProperties:
-                    type: integer
     MapEcho:
       type: object
       properties:
