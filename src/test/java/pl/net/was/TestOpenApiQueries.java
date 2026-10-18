@@ -411,6 +411,16 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void paginatedResultsNullability()
+    {
+        assertQuery(
+                "SELECT column_name, is_nullable FROM fastapi.information_schema.columns " +
+                        "WHERE table_schema = 'default' AND table_name = 'has_more_items' " +
+                        "AND column_name IN ('has_more', 'id', 'name', 'price', 'description', 'tax')",
+                "VALUES ('has_more', 'NO'), ('id', 'NO'), ('name', 'NO'), ('price', 'NO'), ('description', 'YES'), ('tax', 'YES')");
+    }
+
+    @Test
     public void itemsWithPageNumbers()
     {
         assertQuery(

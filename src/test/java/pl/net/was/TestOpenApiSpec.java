@@ -482,52 +482,42 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
                                 .setType(BIGINT).setSourceType(intSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("node_id").setSourceName("node_id")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("name").setSourceName("name")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("path").setSourceName("path")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("state").setSourceName("state")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("created_at").setSourceName("created_at")
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("updated_at").setSourceName("updated_at")
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("url").setSourceName("url")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("html_url").setSourceName("html_url")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("badge_url").setSourceName("badge_url")
                                 .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("deleted_at").setSourceName("deleted_at")
@@ -2229,6 +2219,119 @@ class TestOpenApiSpec
                         Assertions.tuple("id", false),
                         Assertions.tuple("text", false),
                         Assertions.tuple("note_id", true));
+    }
+
+    @Test
+    public void testPaginatedResultsNullability()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /runs:
+                    get:
+                      parameters:
+                      - in: query
+                        name: page
+                        schema:
+                          type: integer
+                      x-trino:
+                        pageParam: page
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: Runs
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/RunPage'
+                  /nested_runs:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/data/results
+                      responses:
+                        "200":
+                          description: Runs
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  data:
+                                    $ref: '#/components/schemas/RunPage'
+                  /all_runs:
+                    get:
+                      responses:
+                        "200":
+                          description: Runs
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/Run'
+                components:
+                  schemas:
+                    RunPage:
+                      type: object
+                      required:
+                      - results
+                      - total
+                      properties:
+                        results:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/Run'
+                        total:
+                          type: integer
+                        next:
+                          type: string
+                    Run:
+                      type: object
+                      required:
+                      - runId
+                      - name
+                      - note
+                      properties:
+                        runId:
+                          type: integer
+                        name:
+                          type: string
+                        note:
+                          type: string
+                          nullable: true
+                        comment:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("runs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("total", false),
+                        Assertions.tuple("next", true),
+                        Assertions.tuple("run_id", false),
+                        Assertions.tuple("name", false),
+                        Assertions.tuple("note", true),
+                        Assertions.tuple("comment", true),
+                        Assertions.tuple("page", true));
+        Assertions.assertThat(spec.getTables().get("nested_runs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("run_id", false),
+                        Assertions.tuple("name", false),
+                        Assertions.tuple("note", true),
+                        Assertions.tuple("comment", true));
+        Assertions.assertThat(spec.getTables().get("all_runs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("run_id", false),
+                        Assertions.tuple("name", false),
+                        Assertions.tuple("note", true),
+                        Assertions.tuple("comment", true));
     }
 
     private OpenApiSpec loadSpec(String name)

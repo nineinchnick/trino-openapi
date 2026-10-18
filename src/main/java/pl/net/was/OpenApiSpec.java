@@ -411,7 +411,7 @@ public class OpenApiSpec
 
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
-            List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+            List<String> requiredProperties = getRequiredProperties(schema);
             getSchemaProperties(schema)
                     .entrySet().stream()
                     .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
@@ -422,12 +422,14 @@ public class OpenApiSpec
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
-            getSchemaProperties(getResultsSchema(schema, resultsPointer))
+            Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
+            List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
+            getSchemaProperties(resultsSchema)
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
                             propEntry.getValue(),
-                            !requiredProperties.contains(propEntry.getKey()),
+                            !requiredResultsProperties.contains(propEntry.getKey()),
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
@@ -611,6 +613,21 @@ public class OpenApiSpec
             return Map.of();
         }
         return properties;
+    }
+
+    private static List<String> getRequiredProperties(Schema<?> schema)
+    {
+        List<String> required;
+        if (schema instanceof ArraySchema || schema.getItems() != null) {
+            required = schema.getItems().getRequired();
+        }
+        else {
+            required = schema.getRequired();
+        }
+        if (required == null) {
+            return List.of();
+        }
+        return required;
     }
 
     private static Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
