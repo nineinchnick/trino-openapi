@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
@@ -776,6 +777,41 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void topNSendsSortParameters()
+    {
+        // the table has an INSERT operation, so the column allows nulls, but every response includes it
+        assertQuery(
+                "SELECT is_nullable FROM fastapi.information_schema.columns WHERE table_schema = 'default' AND table_name = 'counted_items' AND column_name = 'price'",
+                "VALUES 'YES'");
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items ORDER BY price LIMIT 1", 1, "Plumbus"))
+                .contains("sort=price", "direction=asc");
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items ORDER BY price DESC LIMIT 1", 1, "Portal Gun"))
+                .contains("sort=price", "direction=desc");
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE sort = 'price' AND direction = 'asc' ORDER BY price LIMIT 1", 1, "Plumbus"))
+                .contains("sort=price", "direction=asc");
+    }
+
+    @Test
+    public void topNWithoutSortParametersRequestsAllPages()
+    {
+        // not declared in sortValues
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items ORDER BY name LIMIT 1", 2, "Plumbus"))
+                .doesNotContain("sort=");
+        // the server might place nulls differently than the query
+        assertThat(assertCountedItems("SELECT tax FROM fastapi.default.counted_items ORDER BY tax LIMIT 1", 2, (String) null))
+                .doesNotContain("sort=");
+        // the query filters on the direction parameter with a different value
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE direction = 'desc' ORDER BY price LIMIT 1", 2, "Plumbus"))
+                .doesNotContain("sort=");
+        // rows would contain the values of the sort parameters
+        assertThat(assertCountedItems("SELECT name, sort FROM fastapi.default.counted_items ORDER BY price LIMIT 1", 2, "Plumbus"))
+                .doesNotContain("sort=");
+        // Trino filters the returned rows
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE name <> 'Plumbus' ORDER BY price LIMIT 1", 2, "Portal Gun"))
+                .doesNotContain("sort=");
+    }
+
+    @Test
     public void itemsWithPagesInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.paged_search").getMaterializedRows();
@@ -799,19 +835,21 @@ public class TestOpenApiQueries
         return rows.getFirst().getFields();
     }
 
-    // tests run concurrently, so requests made by other tests must not be counted
-    private synchronized void assertCountedItems(String query, long expectedRequests, String... expectedNames)
+    // tests run concurrently, so requests made by other tests must not be counted, and the query string of the last request is returned
+    private synchronized String assertCountedItems(String query, long expectedRequests, String... expectedNames)
     {
-        long requestsBefore = getCountedItemsRequests();
+        long requestsBefore = (long) getCountedItemsRequests().getField(0);
         assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
                 .extracting(row -> row.getFields().getFirst())
                 .containsExactly((Object[]) expectedNames);
-        assertThat(getCountedItemsRequests() - requestsBefore).isEqualTo(expectedRequests);
+        MaterializedRow requests = getCountedItemsRequests();
+        assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
+        return (String) requests.getField(1);
     }
 
-    private long getCountedItemsRequests()
+    private MaterializedRow getCountedItemsRequests()
     {
-        return (long) computeScalar("SELECT requests FROM fastapi.default.counted_items_requests");
+        return getOnlyElement(computeActual("SELECT requests, last_query FROM fastapi.default.counted_items_requests").getMaterializedRows());
     }
 
     // fail instead of hanging when pagination never ends

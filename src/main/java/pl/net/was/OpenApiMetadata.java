@@ -37,7 +37,9 @@ import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.RowChangeParadigm;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.connector.SortItem;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.connector.TopNApplicationResult;
 import io.trino.spi.statistics.ComputedStatistics;
 
 import java.util.Collection;
@@ -47,6 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -206,6 +209,49 @@ public class OpenApiMetadata
     }
 
     @Override
+    public Optional<TopNApplicationResult<ConnectorTableHandle>> applyTopN(
+            ConnectorSession session,
+            ConnectorTableHandle table,
+            long topNCount,
+            List<SortItem> sortItems,
+            Map<String, ColumnHandle> assignments)
+    {
+        // like with applyLimit, Trino pushes a TopN only into a scan without a remaining filter
+        OpenApiTableHandle openApiTable = (OpenApiTableHandle) table;
+        if (openApiTable.getLimit().isPresent() || sortItems.size() != 1) {
+            return Optional.empty();
+        }
+        SortItem sortItem = sortItems.getFirst();
+        Map<String, OpenApiColumn> columns = getColumns(table);
+        OpenApiColumn column = columns.get(((OpenApiColumnHandle) assignments.get(sortItem.getName())).getName());
+        // the server might place nulls differently than NULLS FIRST or NULLS LAST in the query
+        if (!column.isResponseRequired(openApiTable.getSelectPaths())) {
+            return Optional.empty();
+        }
+        List<Sorting> sortings = spec.getPaginations(openApiTable.getSchemaTableName()).values().stream()
+                .flatMap(pagination -> pagination.sorting().stream())
+                .toList();
+        if (sortings.stream().noneMatch(sorting -> sorting.sortValues().containsKey(column.getSourceName()))) {
+            return Optional.empty();
+        }
+        // rows contain values of request parameters, so sending the sort parameters would change values of their columns
+        Set<String> sortParams = sortings.stream()
+                .flatMap(sorting -> Stream.of(sorting.sortParam(), sorting.directionParam()))
+                .collect(toImmutableSet());
+        boolean readsSortParams = assignments.values().stream()
+                .map(assignment -> columns.get(((OpenApiColumnHandle) assignment).getName()))
+                .anyMatch(assignedColumn -> isRequestParameter(assignedColumn) && sortParams.contains(assignedColumn.getSourceName()));
+        if (readsSortParams) {
+            return Optional.empty();
+        }
+        // every split reads up to the limit, and the last page can have more rows than needed, so Trino must still apply it
+        return Optional.of(new TopNApplicationResult<>(
+                openApiTable.cloneWithTopN(new SortItem(column.getName(), sortItem.getSortOrder()), topNCount),
+                false,
+                false));
+    }
+
+    @Override
     public ConnectorInsertTableHandle beginInsert(
             ConnectorSession session,
             ConnectorTableHandle tableHandle,
@@ -295,5 +341,10 @@ public class OpenApiMetadata
             Collection<Slice> fragments,
             Collection<ComputedStatistics> computedStatistics)
     {
+    }
+
+    private static boolean isRequestParameter(OpenApiColumn column)
+    {
+        return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
     }
 }

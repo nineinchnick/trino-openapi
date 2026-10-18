@@ -27,7 +27,8 @@ public record Pagination(
         JsonPointer totalResultsPointer,
         JsonPointer totalPagesPointer,
         JsonPointer hasMorePointer,
-        OptionalInt maxPages)
+        OptionalInt maxPages,
+        Optional<Sorting> sorting)
 {
     private static final Pagination NONE = builder().build();
 
@@ -39,6 +40,7 @@ public record Pagination(
         requireNonNull(hasMorePointer, "hasMorePointer is null");
         requireNonNull(maxPages, "maxPages is null");
         maxPages.ifPresent(value -> checkArgument(value > 0, "maxPages must be positive"));
+        requireNonNull(sorting, "sorting is null");
     }
 
     public static Pagination none()
@@ -58,6 +60,7 @@ public record Pagination(
         private JsonPointer totalPagesPointer = JsonPointer.empty();
         private JsonPointer hasMorePointer = JsonPointer.empty();
         private OptionalInt maxPages = OptionalInt.empty();
+        private Optional<Sorting> sorting = Optional.empty();
 
         private Builder() {}
 
@@ -91,9 +94,15 @@ public record Pagination(
             return this;
         }
 
+        public Builder setSorting(Optional<Sorting> sorting)
+        {
+            this.sorting = requireNonNull(sorting, "sorting is null");
+            return this;
+        }
+
         public Pagination build()
         {
-            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages);
+            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, sorting);
         }
     }
 }

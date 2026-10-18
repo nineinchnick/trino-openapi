@@ -399,6 +399,12 @@ paths:
         resultsPath: "$response.body#/records"
         totalResultsPath: "$response.body#/total_count"
         errorPath: "$response.body#/message"
+        sortParam: "sort"
+        sortValues:
+          updated_at: "updated"
+        directionParam: "direction"
+        ascendingValue: "asc"
+        descendingValue: "desc"
   /records/search:
     post:
       # ...
@@ -422,6 +428,11 @@ paths:
 | `maxPages`         | Maximum number of pages to request                                                                                                                  |
 | `errorPath`        | JSON pointer to a human-readable message in error responses                                                                                         |
 | `sqlOperation`     | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
+| `sortParam`        | Parameter that selects the field to sort results by                                                                                                 |
+| `sortValues`       | Map of response field names to the `sortParam` values that sort by them                                                                             |
+| `directionParam`   | Parameter with the sort direction; required with `sortParam`                                                                                        |
+| `ascendingValue`   | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
+| `descendingValue`  | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
 
 If you can't change the API to include the extension in its specification, save
 the specification locally and edit it.
@@ -450,6 +461,22 @@ Pagination never guesses from page contents. If none of these apply, for
 example when the server returns the last page for every page number past it and
 declares no page size or total, the query makes requests until it's cancelled.
 Set `maxPages` for such servers.
+
+A query with `ORDER BY` and `LIMIT` on a single column also stops pagination
+after reading enough rows, when the column is in `sortValues`, so the server
+returns the top rows first. The connector sends `sortParam` and `directionParam`
+only when:
+
+* the field is required and not nullable in responses of all operations used
+  for `SELECT`, because the server might place nulls differently than
+  `NULLS FIRST` or `NULLS LAST` in the query;
+* Trino doesn't apply any other filter to the returned rows;
+* the query doesn't read the columns of `sortParam` and `directionParam`, and
+  doesn't filter on them with different values.
+
+Otherwise it requests all pages, and Trino sorts the rows. Declare only fields
+that the server sorts the same way as Trino. For example, servers often sort
+text ignoring case.
 
 ## Error messages
 
@@ -513,7 +540,8 @@ how they're made.
 * Only equality and `IN` filters, and ranges expanded to single values, are sent
   in requests ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
   `LIMIT` doesn't change the page size sent in requests, and it doesn't stop
-  pagination when Trino filters the returned rows.
+  pagination when Trino filters the returned rows. `ORDER BY` is sent only for
+  a single column declared in `sortValues` that every response includes.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another ([#94](https://github.com/nineinchnick/trino-openapi/issues/94)).

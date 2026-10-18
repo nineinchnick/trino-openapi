@@ -122,6 +122,7 @@ class TotalPagesResults(BaseModel):
 
 class RequestCount(BaseModel):
     requests: int
+    last_query: str = None
 
 
 class PageFilter(BaseModel):
@@ -381,22 +382,32 @@ def list_max_pages_items(page: int = 1) -> Results:
         total_results=len(items))
 
 
-counted_items_requests = 0
+counted_items_requests = RequestCount(requests=0)
 
 
 @router.get("/counted_items")
-def list_counted_items(page: int = 1) -> Results:
-    # count requests, so tests can check how many pages were requested using /counted_items_requests
-    global counted_items_requests
-    counted_items_requests += 1
+def list_counted_items(request: Request, page: int = 1, sort: str = None, direction: str = "asc") -> Results:
+    # save requests, so tests can check how many pages were requested, and with which parameters, using /counted_items_requests
+    counted_items_requests.requests += 1
+    counted_items_requests.last_query = request.url.query
+    results = list(items.values())
+    if sort is not None:
+        # nulls are last when ascending and first when descending, unlike the Trino default of NULLS LAST
+        results.sort(key=lambda item: (getattr(item, sort) is None, getattr(item, sort) or 0), reverse=direction == "desc")
     return Results(
-        results=list(items.values())[page - 1:page],
+        results=results[page - 1:page],
         total_results=len(items))
+
+
+# an INSERT operation makes response-only columns, like price, nullable, even though every response includes them
+@router.post("/counted_items", status_code=201)
+def create_counted_item(body: NoteBody) -> Item:
+    return items[1]
 
 
 @router.get("/counted_items_requests")
 def get_counted_items_requests() -> RequestCount:
-    return RequestCount(requests=counted_items_requests)
+    return counted_items_requests
 
 
 @router.post("/paged_search")
@@ -733,6 +744,11 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
+        "sortParam": "sort",
+        "sortValues": {"price": "price", "tax": "tax"},
+        "directionParam": "direction",
+        "ascendingValue": "asc",
+        "descendingValue": "desc",
     }
     openapi_schema["paths"]["/contents_results/{path}"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results",

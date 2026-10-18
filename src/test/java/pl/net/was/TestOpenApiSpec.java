@@ -2488,6 +2488,73 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testSortingExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: page
+                        schema:
+                          type: integer
+                      - in: query
+                        name: sort
+                        schema:
+                          type: string
+                      - in: query
+                        name: direction
+                        schema:
+                          type: string
+                      x-trino:
+                        pageParam: page
+                        sortParam: sort
+                        sortValues:
+                          updated_at: updated
+                        directionParam: direction
+                        ascendingValue: asc
+                        descendingValue: desc
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    updated_at:
+                                      type: string
+                                      format: date-time
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "items")))
+                .containsExactly(Map.entry(
+                        new HttpPath(PathItem.HttpMethod.GET, "/items"),
+                        Pagination.builder()
+                                .setSorting(Optional.of(Sorting.builder()
+                                        .setSortParam("sort")
+                                        .setSortValues(Map.of("updated_at", "updated"))
+                                        .setDirectionParam("direction")
+                                        .setAscendingValue("asc")
+                                        .setDescendingValue("desc")
+                                        .build()))
+                                .build()));
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("directionParam: direction", "")))
+                .hasMessage("directionParam is required with sortParam");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("descendingValue: desc", "")))
+                .hasMessage("descendingValue is required with sortParam");
+    }
+
+    @Test
     public void testParserDropsEmptyGlobalSecurity()
     {
         // OpenApiSpec.parse() restores the empty list, so if this fails after upgrading the parser, that workaround can be removed
