@@ -16,7 +16,7 @@ fi
 if [ -n "$GITHUB_TOKEN" ]; then
     cp $catalog_dir/disabled/github.properties $catalog_dir/github.properties
 fi
-if [ -n "$GALAXY_URI" ]; then
+if [ -n "$GALAXY_URL" ]; then
     cp $catalog_dir/disabled/galaxy.properties $catalog_dir/galaxy.properties
 fi
 if [ -n "$DATADOG_URL" ]; then
