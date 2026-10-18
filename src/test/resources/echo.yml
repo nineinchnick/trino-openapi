@@ -1,0 +1,127 @@
+openapi: 3.0.3
+info:
+  title: Echo
+  description: Endpoints of the FastAPI test server that return the raw request, to verify how parameters are serialized
+  version: 0.1.0
+paths:
+  /echo/path/{value}:
+    get:
+      parameters:
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/path_array/{values}:
+    get:
+      parameters:
+        - in: path
+          name: values
+          required: true
+          schema:
+            $ref: '#/components/schemas/Strings'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/label/{values}:
+    get:
+      parameters:
+        - in: path
+          name: values
+          required: true
+          style: label
+          schema:
+            $ref: '#/components/schemas/Strings'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/matrix/{values}:
+    get:
+      parameters:
+        - in: path
+          name: values
+          required: true
+          style: matrix
+          explode: true
+          schema:
+            $ref: '#/components/schemas/Strings'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/path_object/{color}:
+    get:
+      parameters:
+        - in: path
+          name: color
+          required: true
+          explode: true
+          schema:
+            $ref: '#/components/schemas/Color'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/decimals/{values}:
+    get:
+      parameters:
+        - in: path
+          name: values
+          required: true
+          schema:
+            $ref: '#/components/schemas/Decimals'
+        - in: query
+          name: value
+          schema:
+            type: number
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/query:
+    get:
+      parameters:
+        - in: query
+          name: value
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+components:
+  responses:
+    Echo:
+      description: The raw request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Echo'
+  schemas:
+    Echo:
+      type: object
+      properties:
+        path:
+          type: string
+        query:
+          type: string
+        header:
+          type: string
+          nullable: true
+        cookie:
+          type: string
+          nullable: true
+    Strings:
+      type: array
+      items:
+        type: string
+    Decimals:
+      type: array
+      items:
+        type: number
+    Color:
+      type: object
+      properties:
+        r:
+          type: integer
+        name:
+          type: string
