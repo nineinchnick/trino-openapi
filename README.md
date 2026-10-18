@@ -418,9 +418,15 @@ Set `maxPages` for such servers.
 ## Error messages
 
 When the server responds with an error, the query fails with a message that
-contains only the HTTP status code, not the response body, because the body
-might not be readable, and it might contain sensitive information. Set
-`errorPath` to include a readable message from the response.
+contains the operation ID (or the path, if the operation has no ID), the HTTP
+method, the URL without the query string, and the HTTP status code. It doesn't
+contain the response body, because the body might not be readable, and it might
+contain sensitive information. Set `errorPath` to include a readable message
+from the response.
+
+Only the first 64 KiB of an error response are read. They're logged at the
+`DEBUG` level of the `pl.net.was` logger, and `errorPath` is ignored for longer
+responses.
 
 # Bundled catalogs
 

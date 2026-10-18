@@ -94,6 +94,7 @@ import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.AbstractMap.SimpleEntry;
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
@@ -330,16 +331,55 @@ public class OpenApiClient
             return httpClient.execute(request, responseHandler);
         }
         catch (HttpRequestFailure failure) {
-            throw toTrinoException(failure, openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath));
+            throw toTrinoException(table, httpPath, request, failure);
         }
     }
 
-    private static RuntimeException toTrinoException(HttpRequestFailure failure, JsonPointer errorPointer)
+    private TrinoException toTrinoException(OpenApiTableHandle table, HttpPath httpPath, Request request, HttpRequestFailure failure)
     {
+        String operation = openApiSpec.getOperationId(httpPath)
+                .map(operationId -> "operation " + operationId)
+                .orElse("path " + httpPath.path());
+        // the query string can contain filter values and API keys
+        String context = format("Request %s %s for %s failed", request.getMethod(), withoutQuery(request.getUri()), operation);
         return switch (failure) {
-            case HttpRequestFailure.TransportError error -> new RuntimeException(error.getCause());
-            case HttpRequestFailure.ErrorResponse error -> errorResponse(error.getStatusCode(), error.getResponseBody(), errorPointer);
+            case HttpRequestFailure.TransportError error -> new TrinoException(
+                    GENERIC_INTERNAL_ERROR,
+                    format("%s: %s", context, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
+                    error.getCause());
+            case HttpRequestFailure.ErrorResponse error -> {
+                log.debug("%s with HTTP %d, response body%s: %s", context, error.getStatusCode(), error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
+                String message = format("%s with HTTP %d", context, error.getStatusCode());
+                JsonPointer errorPointer = openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath);
+                // the response body is not included, because it might not be readable, and it might contain sensitive information
+                yield new TrinoException(GENERIC_INTERNAL_ERROR, getErrorMessage(error, errorPointer)
+                        .map(errorMessage -> message + ": " + errorMessage)
+                        .orElse(message));
+            }
         };
+    }
+
+    private static Optional<String> getErrorMessage(HttpRequestFailure.ErrorResponse error, JsonPointer errorPointer)
+    {
+        if (errorPointer == null || error.isResponseBodyTruncated()) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode errorNode = OBJECT_MAPPER.readTree(error.getResponseBody()).at(errorPointer);
+            if (errorNode.isMissingNode()) {
+                return Optional.empty();
+            }
+            return Optional.of(errorNode.toString());
+        }
+        catch (JsonProcessingException _) {
+            return Optional.empty();
+        }
+    }
+
+    private static String withoutQuery(URI uri)
+    {
+        String port = uri.getPort() == -1 ? "" : ":" + uri.getPort();
+        return uri.getScheme() + "://" + uri.getHost() + port + uri.getRawPath();
     }
 
     private Map.Entry<HttpPath, Map<OpenApiColumn, Object>> selectPath(OpenApiTableHandle table, List<HttpPath> paths, Function<OpenApiColumn, Object> valueProvider)
@@ -678,11 +718,11 @@ public class OpenApiClient
             if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
                 return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
+            if (response.getStatusCode() != HttpStatus.OK.code()) {
+                throw HttpRequestFailure.ErrorResponse.read(response);
+            }
             String result = readBody(response);
             log.debug("Received response code " + response.getStatusCode() + ": " + result);
-            if (response.getStatusCode() != HttpStatus.OK.code()) {
-                throw new HttpRequestFailure.ErrorResponse(response.getStatusCode(), result);
-            }
 
             JsonNode jsonNode;
             try {
@@ -722,22 +762,6 @@ public class OpenApiClient
             }
             return Optional.of(valueNode.booleanValue());
         }
-    }
-
-    private static TrinoException errorResponse(int statusCode, String result, JsonPointer errorPointer)
-    {
-        if (errorPointer != null) {
-            try {
-                JsonNode errorNode = OBJECT_MAPPER.readTree(result).at(errorPointer);
-                String message = format("Server responded with error %s: %s", statusCode, errorNode);
-                return new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
-            }
-            catch (JsonProcessingException ex) {
-                // ignore, so a generic exception will be thrown
-            }
-        }
-        String message = format("Server responded with error %s", statusCode);
-        return new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
     }
 
     private static String readBody(Response response)
@@ -842,12 +866,12 @@ public class OpenApiClient
         @Override
         public Void handle(Request request, Response response)
         {
-            String result = readBody(response);
-            log.debug("Received response code " + response.getStatusCode() + ": " + result);
             // servers often respond to writes with 201 Created, 202 Accepted, or 204 No Content
             if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
-                throw new HttpRequestFailure.ErrorResponse(response.getStatusCode(), result);
+                throw HttpRequestFailure.ErrorResponse.read(response);
             }
+            String result = readBody(response);
+            log.debug("Received response code " + response.getStatusCode() + ": " + result);
             return null;
         }
     }

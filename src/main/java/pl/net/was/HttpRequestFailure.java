@@ -13,6 +13,14 @@
  */
 package pl.net.was;
 
+import com.google.common.io.ByteStreams;
+import io.airlift.http.client.Response;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -23,6 +31,9 @@ abstract sealed class HttpRequestFailure
         extends RuntimeException
         permits HttpRequestFailure.ErrorResponse, HttpRequestFailure.TransportError
 {
+    // error responses can be large HTML pages, and only a short message is useful in logs and for errorPath
+    static final int MAX_ERROR_BODY_BYTES = 64 * 1024;
+
     private HttpRequestFailure(String message, Throwable cause)
     {
         super(message, cause);
@@ -33,12 +44,30 @@ abstract sealed class HttpRequestFailure
     {
         private final int statusCode;
         private final String responseBody;
+        private final boolean responseBodyTruncated;
 
-        ErrorResponse(int statusCode, String responseBody)
+        private ErrorResponse(int statusCode, String responseBody, boolean responseBodyTruncated)
         {
             super("Server responded with error " + statusCode, null);
             this.statusCode = statusCode;
             this.responseBody = requireNonNull(responseBody, "responseBody is null");
+            this.responseBodyTruncated = responseBodyTruncated;
+        }
+
+        static ErrorResponse read(Response response)
+        {
+            byte[] body;
+            try (InputStream input = response.getInputStream()) {
+                body = ByteStreams.limit(input, MAX_ERROR_BODY_BYTES + 1).readAllBytes();
+            }
+            catch (IOException e) {
+                throw new TransportError(e);
+            }
+            boolean truncated = body.length > MAX_ERROR_BODY_BYTES;
+            if (truncated) {
+                body = Arrays.copyOf(body, MAX_ERROR_BODY_BYTES);
+            }
+            return new ErrorResponse(response.getStatusCode(), new String(body, UTF_8), truncated);
         }
 
         int getStatusCode()
@@ -49,6 +78,11 @@ abstract sealed class HttpRequestFailure
         String getResponseBody()
         {
             return responseBody;
+        }
+
+        boolean isResponseBodyTruncated()
+        {
+            return responseBodyTruncated;
         }
     }
 
