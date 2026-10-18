@@ -833,12 +833,12 @@ public class OpenApiSpec
     {
         return pathItem.readOperationsMap().entrySet().stream()
                 .filter(entry -> entry.getValue().getExtensions() != null && entry.getValue().getExtensions().containsKey(SPEC_EXTENSION))
+                .map(entry -> Map.entry(entry.getKey(), getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION))))
+                // an empty pointer selects the whole response, which would include the whole body of error responses in error messages
+                .filter(entry -> entry.getValue().containsKey(extensionName))
                 .collect(toImmutableMap(
                         entry -> new HttpPath(entry.getKey(), path),
-                        entry -> {
-                            Map<String, String> specExtension = getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION));
-                            return pointer(specExtension, extensionName);
-                        }));
+                        entry -> pointer(entry.getValue(), extensionName)));
     }
 
     private static JsonPointer pointer(Map<String, String> specExtension, String extensionName)
