@@ -27,7 +27,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
 
-@EnabledIfEnvironmentVariable(named = "GITHUB_TOKEN", matches = ".*")
+@EnabledIfEnvironmentVariable(named = "GITHUB_TOKEN", matches = ".+")
 public class TestGithub
         extends AbstractTestQueryFramework
 {
