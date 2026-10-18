@@ -32,6 +32,10 @@ description, and `state: all` and `filter: all` where their enums include
 `all`, like for issues and pull requests, or jobs and check runs, which
 otherwise return only the latest attempt.
 
+The document-level `x-trino` extension declares the headers of GitHub's
+[rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api),
+so queries wait until an exceeded limit resets.
+
 ```shell
 curl -fsSL -o /tmp/github.json https://github.com/github/rest-api-description/raw/main/descriptions/api.github.com/api.github.com.json
 jq --indent 2 . /tmp/github.json > src/test/resources/github.json
