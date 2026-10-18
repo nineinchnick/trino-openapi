@@ -16,7 +16,7 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.0.26
+  version: 1.0.27
 externalDocs:
   description: Find out more about Swagger
   url: https://swagger.io
@@ -128,7 +128,7 @@ paths:
       - name: status
         in: query
         description: Status values that need to be considered for filter
-        required: false
+        required: true
         explode: true
         schema:
           type: string
@@ -171,7 +171,7 @@ paths:
       - name: tags
         in: query
         description: Tags to filter by
-        required: false
+        required: true
         explode: true
         schema:
           type: array
