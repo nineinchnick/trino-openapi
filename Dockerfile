@@ -35,7 +35,8 @@ ENV OPENAPI_AUTH_TYPE=none \
     OPENAPI_HTTP_CACHE_DIRECTORY="" \
     OPENAPI_HTTP_CACHE_MAX_SIZE="1GB" \
     OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE="10MB" \
-    OPENAPI_SPLIT_STRATEGY="off"
+    OPENAPI_SPLIT_STRATEGY="off" \
+    OPENAPI_PROBE_LIMIT="none"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/usr/lib/trino/bin/run-trino"]

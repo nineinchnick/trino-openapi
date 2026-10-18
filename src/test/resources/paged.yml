@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Paged
+  description: Paginated endpoints, to verify which pages are requested
+  version: 1.0.0
+paths:
+  /items:
+    get:
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 10
+      x-trino:
+        pageParam: page
+        limitParam: size
+        resultsPath: $response.body#/results
+        totalResultsPath: $response.body#/total
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string

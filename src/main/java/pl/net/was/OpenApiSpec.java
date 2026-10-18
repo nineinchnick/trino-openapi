@@ -120,6 +120,7 @@ public class OpenApiSpec
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
     private static final String PAGINATION_STRIDE_SPLITS = "strideSplits";
+    private static final String PAGINATION_PROBE_LIMIT = "probeLimit";
     private static final String SPLIT_STRATEGIES = Arrays.stream(SplitStrategy.values())
             .map(splitStrategy -> splitStrategy.name().toLowerCase(Locale.ENGLISH))
             .collect(joining(", "));
@@ -1139,6 +1140,7 @@ public class OpenApiSpec
                                     .setSorting(getSorting(specExtension, rawExtension))
                                     .setSplitStrategy(getSplitStrategy(rawExtension))
                                     .setStrideSplits(getOptionalInt(rawExtension, PAGINATION_STRIDE_SPLITS))
+                                    .setProbeLimit(getProbeLimit(rawExtension))
                                     .build();
                         }));
     }
@@ -1201,6 +1203,20 @@ public class OpenApiSpec
         Optional<SplitStrategy> splitStrategy = Enums.getIfPresent(SplitStrategy.class, value.toString().trim().toUpperCase(Locale.ENGLISH)).toJavaUtil();
         checkArgument(splitStrategy.isPresent(), "Invalid value of %s: '%s', must be one of: %s", PAGINATION_SPLIT_STRATEGY, value, SPLIT_STRATEGIES);
         return splitStrategy;
+    }
+
+    private static Optional<ProbeLimit> getProbeLimit(Object specExtension)
+    {
+        Object value = specExtension instanceof Map<?, ?> map ? map.get(PAGINATION_PROBE_LIMIT) : null;
+        if (value == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(ProbeLimit.fromString(value.toString()));
+        }
+        catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_PROBE_LIMIT, value), e);
+        }
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)

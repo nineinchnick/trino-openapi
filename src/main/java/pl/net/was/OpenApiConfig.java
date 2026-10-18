@@ -75,6 +75,7 @@ public class OpenApiConfig
     // Too large IN lists cause too many requests being made, so a hard limit is required.
     private int domainExpansionLimit = 256;
     private SplitStrategy splitStrategy = SplitStrategy.OFF;
+    private ProbeLimit probeLimit = ProbeLimit.NONE;
 
     @NotNull
     public String getSpecLocation()
@@ -407,6 +408,20 @@ public class OpenApiConfig
     public OpenApiConfig setSplitStrategy(SplitStrategy splitStrategy)
     {
         this.splitStrategy = splitStrategy;
+        return this;
+    }
+
+    @NotNull
+    public ProbeLimit getProbeLimit()
+    {
+        return probeLimit;
+    }
+
+    @Config("probe-limit")
+    @ConfigDescription("Page size used when requesting the first page to learn the total number of results with the probe split strategy, or none to use the regular page size")
+    public OpenApiConfig setProbeLimit(ProbeLimit probeLimit)
+    {
+        this.probeLimit = probeLimit;
         return this;
     }
 }

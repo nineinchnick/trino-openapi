@@ -2533,6 +2533,7 @@ class TestOpenApiSpec
                         maxResults: 1000
                         splitStrategy: off
                         strideSplits: 4
+                        probeLimit: 0
                       responses:
                         "200":
                           description: Items
@@ -2563,6 +2564,7 @@ class TestOpenApiSpec
                                 .setMaxResults(OptionalLong.of(1000))
                                 .setSplitStrategy(Optional.of(SplitStrategy.OFF))
                                 .setStrideSplits(OptionalInt.of(4))
+                                .setProbeLimit(Optional.of(new ProbeLimit(OptionalInt.of(0))))
                                 .build()));
         Assertions.assertThat(spec.getResultsPointers(schemaTableName(SCHEMA_NAME, "items")))
                 .containsExactly(Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/results")));
@@ -2580,6 +2582,11 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of splitStrategy: 'sometimes', must be one of: probe, stride, off");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("strideSplits: 4", "strideSplits: 0")))
                 .hasMessage("strideSplits must be positive");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("probeLimit: 0", "probeLimit: some")))
+                .hasMessage("Invalid value of probeLimit: some");
+        Assertions.assertThat(parseSpec(specContents.replace("probeLimit: 0", "probeLimit: none")).getPaginations(schemaTableName(SCHEMA_NAME, "items")).values())
+                .extracting(Pagination::probeLimit)
+                .containsExactly(Optional.of(ProbeLimit.NONE));
     }
 
     @Test
