@@ -161,7 +161,7 @@ class TestAuthentication
                 """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
 
         assertNoCredentials(authentication.filterRequest(request("/inherited")));
-        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization"))
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
