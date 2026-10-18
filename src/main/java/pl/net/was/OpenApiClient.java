@@ -141,13 +141,14 @@ public class OpenApiClient
     public OpenApiClient(OpenApiConfig config, CatalogName catalogName, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
     {
         this.baseUri = config.getBaseUri();
-        this.httpClient = config.getHttpCacheDirectory()
+        // the cache is wrapped by decompression, so it stores compressed responses
+        this.httpClient = new DecompressingHttpClient(config.getHttpCacheDirectory()
                 .<HttpClient>map(directory -> new CachingHttpClient(
                         httpClient,
                         // every catalog has its own credentials, so it can't reuse responses of other catalogs
                         new HttpCache(Path.of(directory, catalogName.name()), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
                         Clock.systemUTC()))
-                .orElse(httpClient);
+                .orElse(httpClient));
         this.openApiSpec = openApiSpec;
         if (config.getMaxRequestsPerSecond() != Double.MAX_VALUE) {
             rateLimiter = RateLimiter.create(config.getMaxRequestsPerSecond());

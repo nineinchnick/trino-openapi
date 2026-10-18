@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Callable
 
 from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -54,6 +55,8 @@ class LoggingRoute(APIRoute):
 
 
 app = FastAPI()
+# compress all but the smallest responses, so most tests also read compressed responses
+app.add_middleware(GZipMiddleware, minimum_size=100)
 router = APIRouter(route_class=LoggingRoute)
 logging.basicConfig(format="%(asctime)s %(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
@@ -333,6 +336,15 @@ class CachedItemRequests(BaseModel):
 
 cached_item_requests = CachedItemRequests(total=0, revalidated=0)
 CACHED_ITEMS_ETAG = '"items-v1"'
+
+
+class RequestEncoding(BaseModel):
+    accept_encoding: str | None
+
+
+@router.get("/request_encoding")
+def get_request_encoding(request: Request) -> RequestEncoding:
+    return RequestEncoding(accept_encoding=request.headers.get("accept-encoding"))
 
 
 @router.get("/cached_items")
