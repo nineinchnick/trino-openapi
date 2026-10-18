@@ -1542,16 +1542,12 @@ class TestOpenApiSpec
                               schema:
                                 type: array
                                 items:
-                                  $ref: '#/components/schemas/Item'
-                components:
-                  schemas:
-                    Item:
-                      type: object
-                      properties:
-                        foo-bar:
-                          type: string
-                        foo_bar:
-                          type: string
+                                  type: object
+                                  properties:
+                                    foo-bar:
+                                      type: string
+                                    foo_bar:
+                                      type: string
                 """;
         OpenApiSpec spec = parseSpec(specContents);
 
@@ -1561,6 +1557,90 @@ class TestOpenApiSpec
                         Assertions.tuple("foo_bar", "foo-bar"),
                         Assertions.tuple("foo_bar_2", "foo_bar"),
                         Assertions.tuple("foo_bar_3", "fooBar"));
+    }
+
+    @Test
+    public void testSpecWithoutComponents()
+    {
+        OpenApiSpec spec = parseSpec(itemsSpec(""));
+
+        assertItemsTable(spec);
+        Assertions.assertThat(spec.getSecuritySchemas()).isEmpty();
+    }
+
+    @Test
+    public void testComponentsWithoutSchemas()
+    {
+        OpenApiSpec spec = parseSpec(itemsSpec("""
+                components:
+                  parameters:
+                    limit:
+                      in: query
+                      name: limit
+                      schema:
+                        type: integer
+                """));
+
+        assertItemsTable(spec);
+        Assertions.assertThat(spec.getSecuritySchemas()).isEmpty();
+    }
+
+    @Test
+    public void testSpecWithoutPaths()
+    {
+        OpenApiSpec spec = parseSpec("""
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                components:
+                  securitySchemes:
+                    basicAuth:
+                      type: http
+                      scheme: basic
+                """);
+
+        Assertions.assertThat(spec.getTables()).isEmpty();
+        Assertions.assertThat(spec.getPathSecurityRequirements()).isEmpty();
+        Assertions.assertThat(spec.getSecuritySchemas()).containsOnlyKeys("basicAuth");
+    }
+
+    private static String itemsSpec(String components)
+    {
+        // a non-standard type makes the spec look it up as a named schema in components
+        return """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                    custom:
+                                      type: custom
+                %s
+                """.formatted(components);
+    }
+
+    private static void assertItemsTable(OpenApiSpec spec)
+    {
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("name", VARCHAR),
+                        Assertions.tuple("custom", VARCHAR));
     }
 
     @Test

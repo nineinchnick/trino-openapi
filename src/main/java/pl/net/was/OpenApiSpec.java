@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.inject.Inject;
 import io.airlift.log.Logger;
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -77,6 +78,7 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Boolean.TRUE;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
@@ -136,7 +138,8 @@ public class OpenApiSpec
         * orgs_security_product_enablement
         Where both tables will include columns created from the /orgs path response.
          */
-        Map<String, List<Map.Entry<String, PathItem>>> pathGroups = openApi.getPaths().entrySet().stream()
+        Map<String, PathItem> paths = requireNonNullElse(openApi.getPaths(), ImmutableMap.of());
+        Map<String, List<Map.Entry<String, PathItem>>> pathGroups = paths.entrySet().stream()
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
@@ -227,7 +230,7 @@ public class OpenApiSpec
                                         "optional for: " + column.getOptionalPredicate())))
                 .forEach(log::info);
 
-        this.pathSecurityRequirements = openApi.getPaths().entrySet().stream()
+        this.pathSecurityRequirements = paths.entrySet().stream()
                 .map(pathEntry -> Map.entry(
                         pathEntry.getKey(),
                         pathEntry.getValue().readOperationsMap().entrySet().stream()
@@ -237,7 +240,9 @@ public class OpenApiSpec
                                         opEntry.getValue().getSecurity()))
                                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue))))
                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
-        this.securitySchemas = openApi.getComponents().getSecuritySchemes();
+        this.securitySchemas = Optional.ofNullable(openApi.getComponents())
+                .map(Components::getSecuritySchemes)
+                .orElse(ImmutableMap.of());
         this.securityRequirements = openApi.getSecurity();
     }
 
@@ -830,12 +835,19 @@ public class OpenApiSpec
         if (type.equals("int") || type.equals("integer")) {
             return Optional.of(new TypeTuple(INTEGER, property));
         }
-        Schema<?> referenced = openApi.getComponents().getSchemas().get(type);
-        if (referenced != null) {
-            return convertType(referenced).map(convertedType -> new TypeTuple(convertedType.type(), referenced));
+        Optional<Schema<?>> referenced = getComponentSchema(type);
+        if (referenced.isPresent()) {
+            return convertType(referenced.get()).map(convertedType -> new TypeTuple(convertedType.type(), referenced.get()));
         }
         // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
         return Optional.of(FALLBACK_TYPE);
+    }
+
+    private Optional<Schema<?>> getComponentSchema(String name)
+    {
+        return Optional.ofNullable(openApi.getComponents())
+                .map(Components::getSchemas)
+                .map(schemas -> schemas.get(name));
     }
 
     private record TypeTuple(Type type, Schema<?> schema) {}

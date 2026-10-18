@@ -127,6 +127,42 @@ class TestAuthentication
         assertThat(inherited.getUri().getQuery()).isEqualTo("api_key=query-secret");
     }
 
+    @Test
+    void testSpecWithoutSecuritySchemes()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - basicAuth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                """.formatted(OPERATION_RESPONSES));
+
+        assertNoCredentials(authentication.filterRequest(request("/secured")));
+    }
+
+    @Test
+    void testSpecWithoutPaths()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication("""
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: '1'
+                %s
+                """.formatted(SECURITY_SCHEMES));
+
+        assertThat(authentication.filterRequest(request("/unknown")).getHeader("Authorization"))
+                .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
+    }
+
     private Authentication createAuthentication(String specContents)
             throws IOException, InvalidConfigurationException
     {
