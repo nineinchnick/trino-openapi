@@ -73,6 +73,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -162,7 +163,8 @@ public class OpenApiClient
                 0,
                 Long.MAX_VALUE,
                 1,
-                getPageSize(table, httpPath));
+                getPageSize(table, httpPath),
+                openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).maxPages());
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
@@ -674,7 +676,7 @@ public class OpenApiClient
         return node;
     }
 
-    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults) {}
+    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults, OptionalLong totalPages, Optional<Boolean> hasMore) {}
 
     private class JsonResponseHandler
             implements ResponseHandler<ResultsPage, RuntimeException>
@@ -704,7 +706,7 @@ public class OpenApiClient
         public ResultsPage handle(Request request, Response response)
         {
             if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
-                return new ResultsPage(List.of(), OptionalLong.empty());
+                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
             String result = "";
             try {
@@ -726,19 +728,35 @@ public class OpenApiClient
                 String message = format("Could not marshal JSON from API response: %s", result);
                 throw new TrinoException(GENERIC_INTERNAL_ERROR, message, ex);
             }
-            return new ResultsPage(convertJson(table, httpPath, resultsPointer, jsonNode), getTotalResults(jsonNode));
+            return new ResultsPage(
+                    convertJson(table, httpPath, resultsPointer, jsonNode),
+                    getLong(jsonNode, pagination.totalResultsPointer()),
+                    getLong(jsonNode, pagination.totalPagesPointer()),
+                    getBoolean(jsonNode, pagination.hasMorePointer()));
         }
 
-        private OptionalLong getTotalResults(JsonNode jsonNode)
+        private static OptionalLong getLong(JsonNode jsonNode, JsonPointer pointer)
         {
-            if (JsonPointer.empty().equals(pagination.totalResultsPointer())) {
+            if (JsonPointer.empty().equals(pointer)) {
                 return OptionalLong.empty();
             }
-            JsonNode totalNode = jsonNode.at(pagination.totalResultsPointer());
-            if (!totalNode.canConvertToExactIntegral() || !totalNode.canConvertToLong()) {
+            JsonNode valueNode = jsonNode.at(pointer);
+            if (!valueNode.canConvertToExactIntegral() || !valueNode.canConvertToLong()) {
                 return OptionalLong.empty();
             }
-            return OptionalLong.of(totalNode.asLong());
+            return OptionalLong.of(valueNode.asLong());
+        }
+
+        private static Optional<Boolean> getBoolean(JsonNode jsonNode, JsonPointer pointer)
+        {
+            if (JsonPointer.empty().equals(pointer)) {
+                return Optional.empty();
+            }
+            JsonNode valueNode = jsonNode.at(pointer);
+            if (!valueNode.isBoolean()) {
+                return Optional.empty();
+            }
+            return Optional.of(valueNode.booleanValue());
         }
     }
 
@@ -870,13 +888,15 @@ public class OpenApiClient
             int offset,
             long limit,
             int pageIncrement,
-            OptionalLong pageSize)
+            OptionalLong pageSize,
+            OptionalInt maxPages)
     {
         return () -> new Iterator<>()
         {
             long resultSize;
             long resultLimit = limit;
             int page = offset + 1;
+            int fetchedPages;
             boolean isLastPage;
             Iterator<List<?>> rows;
 
@@ -890,10 +910,21 @@ public class OpenApiClient
                     return false;
                 }
                 ResultsPage resultsPage = getter.apply(page);
+                int fetchedPage = page;
                 page += pageIncrement;
+                fetchedPages++;
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
                 if (pageSize.isPresent() && Iterables.size(resultsPage.rows()) < pageSize.getAsLong()) {
+                    isLastPage = true;
+                }
+                if (resultsPage.totalPages().isPresent() && fetchedPage >= resultsPage.totalPages().getAsLong()) {
+                    isLastPage = true;
+                }
+                if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {
+                    isLastPage = true;
+                }
+                if (maxPages.isPresent() && fetchedPages >= maxPages.getAsInt()) {
                     isLastPage = true;
                 }
                 rows = resultsPage.rows().iterator();

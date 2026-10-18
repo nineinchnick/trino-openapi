@@ -139,11 +139,18 @@ paths:
        limitParam: "per-page"
        resultsPath: "$response.body#/workflows"
        totalResultsPath: "$response.body#/total_count"
+       totalPagesPath: "$response.body#/total_pages"
+       hasMorePath: "$response.body#/has_more"
+       maxPages: 100
 ```
 
 Pagination stops after:
 * an empty page;
 * the number of results given by `totalResultsPath`;
+* the number of pages given by `totalPagesPath`;
+* a page where the boolean value at `hasMorePath` is `false`;
+* `maxPages` pages, which limits the number of requests for servers that don't
+  return any of the other values;
 * a page with fewer results than the page size, when `limitParam` is set and
   its value is known, either from a query predicate or from the default value of
   the parameter in the spec. The page size is limited by the `maximum` of the
@@ -152,7 +159,7 @@ Pagination stops after:
 
 If none of these apply, for example when the server returns the last page for
 every page number past it and declares no default page size or total, the query
-makes requests until it's cancelled.
+makes requests until it's cancelled. Set `maxPages` for such servers.
 
 ### Error messages
 

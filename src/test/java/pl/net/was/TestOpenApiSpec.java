@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -30,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
@@ -1826,6 +1829,69 @@ class TestOpenApiSpec
         Assertions.assertThat(spec.getTables().get("items"))
                 .extracting(OpenApiColumn::getName)
                 .containsExactly("name", "limit");
+    }
+
+    @Test
+    public void testPaginationExtensions()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: page
+                        schema:
+                          type: integer
+                      - in: query
+                        name: size
+                        schema:
+                          type: integer
+                      x-trino:
+                        pageParam: page
+                        limitParam: size
+                        resultsPath: $response.body#/results
+                        totalResultsPath: $response.body#/total
+                        totalPagesPath: $response.body#/pages
+                        hasMorePath: $response.body#/has_more
+                        maxPages: 10
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  results:
+                                    type: array
+                                    items:
+                                      type: object
+                                      properties:
+                                        name:
+                                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "items")))
+                .containsExactly(Map.entry(
+                        new HttpPath(PathItem.HttpMethod.GET, "/items"),
+                        Pagination.builder()
+                                .setLimitParam(Optional.of("size"))
+                                .setTotalResultsPointer(JsonPointer.compile("/total"))
+                                .setTotalPagesPointer(JsonPointer.compile("/pages"))
+                                .setHasMorePointer(JsonPointer.compile("/has_more"))
+                                .setMaxPages(OptionalInt.of(10))
+                                .build()));
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: many")))
+                .hasMessage("Invalid value of maxPages: many");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: 0")))
+                .hasMessage("maxPages must be positive");
     }
 
     private OpenApiSpec loadSpec(String name)

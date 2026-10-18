@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -102,6 +103,9 @@ public class OpenApiSpec
     private static final String ERROR_PATH = "errorPath";
     private static final String PAGINATION_PAGE_PARAM = "pageParam";
     private static final String PAGINATION_LIMIT_PARAM = "limitParam";
+    private static final String PAGINATION_TOTAL_PAGES_PATH = "totalPagesPath";
+    private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
+    private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -678,11 +682,31 @@ public class OpenApiSpec
                 .collect(toImmutableMap(
                         entry -> new HttpPath(entry.getKey(), path),
                         entry -> {
-                            Map<String, String> specExtension = getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION));
-                            return new Pagination(
-                                    Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)),
-                                    pointer(specExtension, PAGINATION_TOTAL_RESULTS_PATH));
+                            Object rawExtension = entry.getValue().getExtensions().get(SPEC_EXTENSION);
+                            Map<String, String> specExtension = getMapOfStrings(rawExtension);
+                            return Pagination.builder()
+                                    .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
+                                    .setTotalResultsPointer(pointer(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
+                                    .setTotalPagesPointer(pointer(specExtension, PAGINATION_TOTAL_PAGES_PATH))
+                                    .setHasMorePointer(pointer(specExtension, PAGINATION_HAS_MORE_PATH))
+                                    .setMaxPages(getMaxPages(rawExtension))
+                                    .build();
                         }));
+    }
+
+    private static OptionalInt getMaxPages(Object specExtension)
+    {
+        // YAML and JSON specs can have the number either as a number or a string
+        Object value = specExtension instanceof Map<?, ?> map ? map.get(PAGINATION_MAX_PAGES) : null;
+        if (value == null) {
+            return OptionalInt.empty();
+        }
+        try {
+            return OptionalInt.of(value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString()));
+        }
+        catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_PAGES, value), e);
+        }
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)
