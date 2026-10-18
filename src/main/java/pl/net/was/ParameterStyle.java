@@ -74,34 +74,60 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
      */
     public List<String> serializeQueryParameter(String name, JsonNode value)
     {
+        String encodedName = UNRESERVED_ESCAPER.escape(name);
+        if (style == Parameter.StyleEnum.DEEPOBJECT) {
+            checkSupported(value.isObject(), "Parameter %s uses the deepObject style, which only supports object values", name);
+            // brackets are delimiters, so they're not encoded, same as in the OpenAPI specification examples
+            return fields(value).stream()
+                    .map(field -> encodedName + "[" + UNRESERVED_ESCAPER.escape(field.getKey()) + "]=" + UNRESERVED_ESCAPER.escape(field.getValue()))
+                    .toList();
+        }
         String delimiter = switch (style) {
             case FORM -> ",";
             case SPACEDELIMITED -> "%20";
             case PIPEDELIMITED -> "%7C";
             default -> throw unsupportedStyle(name, ParameterLocation.QUERY);
         };
-        String encodedName = UNRESERVED_ESCAPER.escape(name);
-        List<String> values = elements(value).stream()
-                .map(UNRESERVED_ESCAPER::escape)
-                .toList();
-        if (explode) {
-            return values.stream()
-                    .map(element -> encodedName + "=" + element)
+        if (explode && value.isArray()) {
+            return elements(value).stream()
+                    .map(element -> encodedName + "=" + UNRESERVED_ESCAPER.escape(element))
                     .toList();
         }
-        return List.of(encodedName + "=" + String.join(delimiter, values));
+        if (explode && value.isObject()) {
+            return fields(value).stream()
+                    .map(field -> UNRESERVED_ESCAPER.escape(field.getKey()) + "=" + UNRESERVED_ESCAPER.escape(field.getValue()))
+                    .toList();
+        }
+        return List.of(flatten(value).stream()
+                .map(UNRESERVED_ESCAPER::escape)
+                .collect(joining(delimiter, encodedName + "=", "")));
     }
 
-    public String serializeHeaderValue(JsonNode value)
+    public String serializeHeaderValue(String name, JsonNode value)
     {
-        // header parameters only support the simple style, which delimits array elements with commas
-        return String.join(",", elements(value));
+        if (style != Parameter.StyleEnum.SIMPLE) {
+            throw unsupportedStyle(name, ParameterLocation.HEADER);
+        }
+        if (explode && value.isObject()) {
+            return fields(value).stream()
+                    .map(field -> field.getKey() + "=" + field.getValue())
+                    .collect(joining(","));
+        }
+        return String.join(",", flatten(value));
     }
 
-    public String serializeCookieValue(JsonNode value)
+    /**
+     * Serializes a cookie parameter value, returning a percent-encoded cookie value.
+     */
+    public String serializeCookieValue(String name, JsonNode value)
     {
-        // cookie parameters only support the form style, which delimits array elements with commas
-        return String.join(",", elements(value));
+        if (style != Parameter.StyleEnum.FORM) {
+            throw unsupportedStyle(name, ParameterLocation.COOKIE);
+        }
+        // exploded objects would have to be sent as separate cookies, named after object properties
+        checkSupported(!explode || !value.isObject(), "Parameter %s is an exploded object cookie, which is not supported", name);
+        // arrays are always delimited with commas, because exploding them would require repeating the cookie name
+        return UNRESERVED_ESCAPER.escape(String.join(",", flatten(value)));
     }
 
     private String expand(String name, JsonNode value, String prefix, String explodedSeparator, boolean named)
@@ -136,6 +162,13 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
     private TrinoException unsupportedStyle(String name, ParameterLocation location)
     {
         return new TrinoException(NOT_SUPPORTED, format("Parameter %s uses the %s style, which is not supported for %s parameters", name, style, location.name().toLowerCase(ENGLISH)));
+    }
+
+    private static void checkSupported(boolean condition, String message, String name)
+    {
+        if (!condition) {
+            throw new TrinoException(NOT_SUPPORTED, format(message, name));
+        }
     }
 
     /**

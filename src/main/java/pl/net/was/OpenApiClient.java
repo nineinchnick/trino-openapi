@@ -61,7 +61,6 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -300,11 +299,10 @@ public class OpenApiClient
         getFilterColumnValues(table, httpPath, ParameterLocation.HEADER, valueProvider)
                 .forEach((column, value) -> builder.addHeader(
                         column.getSourceName(),
-                        getParameterStyle(column, httpPath, ParameterLocation.HEADER).serializeHeaderValue(toJsonNode(column, value))));
+                        getParameterStyle(column, httpPath, ParameterLocation.HEADER).serializeHeaderValue(column.getSourceName(), toJsonNode(column, value))));
         String cookies = getFilterColumnValues(table, httpPath, ParameterLocation.COOKIE, valueProvider).entrySet().stream()
-                .map(entry -> entry.getKey().getSourceName() + "=" + URLEncoder.encode(
-                        getParameterStyle(entry.getKey(), httpPath, ParameterLocation.COOKIE).serializeCookieValue(toJsonNode(entry.getKey(), entry.getValue())),
-                        UTF_8))
+                .map(entry -> entry.getKey().getSourceName() + "=" + getParameterStyle(entry.getKey(), httpPath, ParameterLocation.COOKIE)
+                        .serializeCookieValue(entry.getKey().getSourceName(), toJsonNode(entry.getKey(), entry.getValue())))
                 .collect(joining("; "));
         if (!cookies.isEmpty()) {
             builder.addHeader(COOKIE, cookies);

@@ -88,6 +88,50 @@ paths:
       responses:
         "200":
           $ref: '#/components/responses/Echo'
+  /echo/query_object:
+    get:
+      parameters:
+        - in: query
+          name: color
+          schema:
+            $ref: '#/components/schemas/Color'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/deep_object:
+    get:
+      parameters:
+        - in: query
+          name: color
+          style: deepObject
+          explode: true
+          schema:
+            $ref: '#/components/schemas/Color'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/header_object:
+    get:
+      parameters:
+        - in: header
+          name: x-color
+          explode: true
+          schema:
+            $ref: '#/components/schemas/Color'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/cookie_object:
+    get:
+      parameters:
+        - in: cookie
+          name: color
+          explode: false
+          schema:
+            $ref: '#/components/schemas/Color'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
 components:
   responses:
     Echo:
