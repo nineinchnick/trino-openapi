@@ -47,7 +47,6 @@ import io.trino.spi.type.RealType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.SmallintType;
 import io.trino.spi.type.TimestampType;
-import io.trino.spi.type.Timestamps;
 import io.trino.spi.type.TinyintType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
@@ -70,13 +69,11 @@ import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.type.Decimals.encodeScaledValue;
 import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
-import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
-import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 import static java.math.RoundingMode.HALF_UP;
 
@@ -135,26 +132,10 @@ public class JsonTrinoConverter
             }
         }
         if (type instanceof DateType) {
-            String format = schemaType.getFormat();
-            if (format.equals("date")) {
-                format = "yyyy-MM-dd";
-            }
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
-            return toIntExact(dateFormatter.parse(jsonNode.asText(), LocalDate::from).toEpochDay());
+            return DateTimeConverter.parseDate(jsonNode.asText(), schemaType);
         }
         if (type instanceof TimestampType timestampType) {
-            String format = schemaType.getFormat();
-            DateTimeFormatter dateFormatter;
-            if (format.equals("date-time")) {
-                dateFormatter = DateTimeFormatter.ISO_DATE_TIME;
-            }
-            else {
-                dateFormatter = DateTimeFormatter.ofPattern(format);
-            }
-
-            Instant instant = dateFormatter.parse(jsonNode.asText(), Instant::from);
-            long epochMicros = instant.toEpochMilli() * MICROSECONDS_PER_MILLISECOND;
-            return Timestamps.round(epochMicros, 6 - timestampType.getPrecision());
+            return DateTimeConverter.parseTimestamp(jsonNode.asText(), timestampType, schemaType);
         }
         if (type instanceof BooleanType) {
             return jsonNode.asBoolean();
