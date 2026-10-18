@@ -103,6 +103,12 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
 * All request parameters are mapped to columns, including path, query, header,
   and cookie parameters, and parameters shared by all operations of a path.
 * Fields of the HTTP OK (200) response type are mapped to columns.
+* If the response type, or the type of its array items, is a union (`oneOf`,
+  `anyOf`, or `allOf`), fields of all of its alternatives are mapped to
+  columns. Fields of `oneOf` and `anyOf` alternatives are nullable, since a
+  response matches only some of them, like a success or an error object.
+  A field defined in multiple alternatives with different types is mapped to a
+  single `VARCHAR` column with the raw JSON value.
 * Fields of the request body are also mapped to columns, if a POST request is
   used for SELECT.
 * All columns are disambiguated - if a field with the same name but a different

@@ -208,6 +208,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnionValueEcho'
+  /user_views/{username}:
+    get:
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Views of the user or an error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserViewsResponseOrError'
 components:
   responses:
     Echo:
@@ -265,3 +280,26 @@ components:
             - type: object
               additionalProperties:
                 type: integer
+    UserViewsResponseOrError:
+      oneOf:
+        - $ref: '#/components/schemas/UserViewsResponse'
+        - $ref: '#/components/schemas/Error'
+    UserViewsResponse:
+      type: object
+      required:
+        - views
+      properties:
+        views:
+          type: array
+          items:
+            type: string
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+        message:
+          type: string

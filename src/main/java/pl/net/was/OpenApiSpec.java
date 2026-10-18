@@ -21,6 +21,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.MultimapBuilder;
 import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.Components;
@@ -28,6 +29,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -51,6 +53,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.regex.Matcher;
@@ -412,7 +415,7 @@ public class OpenApiSpec
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
             List<String> requiredProperties = getRequiredProperties(schema);
-            getSchemaProperties(schema)
+            getResponseProperties(schema)
                     .entrySet().stream()
                     .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
                     .map(propEntry -> getResultColumn(
@@ -424,7 +427,7 @@ public class OpenApiSpec
                     .forEach(column -> result.add(column.get()));
             Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
             List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
-            getSchemaProperties(resultsSchema)
+            getResponseProperties(resultsSchema)
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
@@ -627,7 +630,15 @@ public class OpenApiSpec
                 .collect(toImmutableList());
     }
 
-    private static Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
+    private Map<String, Schema> getResponseProperties(Schema<?> schema)
+    {
+        if (schema instanceof ArraySchema || schema.getItems() != null) {
+            return getAlternativesProperties(schema.getItems());
+        }
+        return getAlternativesProperties(schema);
+    }
+
+    private Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
     {
         while (resultsPointer != JsonPointer.empty()) {
             if (resultsPointer.getMatchingIndex() != -1) {
@@ -636,7 +647,7 @@ public class OpenApiSpec
                 continue;
             }
             String name = resultsPointer.getMatchingProperty();
-            schema = getSchemaProperties(schema).get(name);
+            schema = getResponseProperties(schema).get(name);
             if (schema == null) {
                 throw new IllegalArgumentException("Invalid value of %s: unknown field %s".formatted(JSON_POINTER_PATTERN, resultsPointer));
             }
@@ -644,6 +655,55 @@ public class OpenApiSpec
             resultsPointer = resultsPointer.tail();
         }
         return schema;
+    }
+
+    private Map<String, Schema> getAlternativesProperties(Schema<?> schema)
+    {
+        // properties of a union, like a oneOf with a success and an error object, are defined in its alternatives,
+        // and a response can match any of them, so all of their properties are included
+        ListMultimap<String, Schema> alternatives = MultimapBuilder.linkedHashKeys().arrayListValues().build();
+        collectProperties(schema, alternatives);
+        return alternatives.asMap().entrySet().stream()
+                .collect(toMap(
+                        Map.Entry::getKey,
+                        entry -> mergeAlternatives(ImmutableList.copyOf(entry.getValue())),
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+    }
+
+    private static void collectProperties(Schema<?> schema, ListMultimap<String, Schema> properties)
+    {
+        if (schema.getProperties() != null) {
+            schema.getProperties().forEach(properties::put);
+        }
+        Stream.of(schema.getAllOf(), schema.getOneOf(), schema.getAnyOf())
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .forEach(alternative -> collectProperties(alternative, properties));
+    }
+
+    private Schema<?> mergeAlternatives(List<Schema> schemas)
+    {
+        if (schemas.size() == 1) {
+            return schemas.getFirst();
+        }
+        long typesCount = schemas.stream()
+                .map(schema -> convertType(schema).map(TypeTuple::type))
+                .distinct()
+                .count();
+        if (typesCount == 1) {
+            return schemas.getFirst();
+        }
+        // a property can't be decoded as different types from a single field, so treat it as a union of its alternatives,
+        // which maps it to VARCHAR with the raw JSON value
+        ComposedSchema union = new ComposedSchema();
+        union.setOneOf(schemas);
+        union.setDescription(schemas.stream()
+                .map(Schema::getDescription)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null));
+        return union;
     }
 
     private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)

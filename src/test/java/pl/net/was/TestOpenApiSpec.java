@@ -2475,6 +2475,237 @@ class TestOpenApiSpec
                         Assertions.tuple("value", true, Map.of(), bulkValuesBody));
     }
 
+    @Test
+    public void testUnionResponses()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /one_of:
+                    get:
+                      responses:
+                        "200":
+                          description: Views or an error
+                          content:
+                            application/json:
+                              schema:
+                                oneOf:
+                                - $ref: "#/components/schemas/Views"
+                                - $ref: "#/components/schemas/Error"
+                  /one_of_list:
+                    get:
+                      responses:
+                        "200":
+                          description: Views or errors
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  oneOf:
+                                  - $ref: "#/components/schemas/Views"
+                                  - $ref: "#/components/schemas/Error"
+                  /any_of:
+                    get:
+                      responses:
+                        "200":
+                          description: Views or an error
+                          content:
+                            application/json:
+                              schema:
+                                anyOf:
+                                - $ref: "#/components/schemas/Views"
+                                - $ref: "#/components/schemas/Error"
+                  /any_of_list:
+                    get:
+                      responses:
+                        "200":
+                          description: Views or errors
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  anyOf:
+                                  - $ref: "#/components/schemas/Views"
+                                  - $ref: "#/components/schemas/Error"
+                  /all_of:
+                    get:
+                      responses:
+                        "200":
+                          description: Views with an error
+                          content:
+                            application/json:
+                              schema:
+                                allOf:
+                                - $ref: "#/components/schemas/Views"
+                                - $ref: "#/components/schemas/Error"
+                  /all_of_list:
+                    get:
+                      responses:
+                        "200":
+                          description: Views with errors
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  allOf:
+                                  - $ref: "#/components/schemas/Views"
+                                  - $ref: "#/components/schemas/Error"
+                components:
+                  schemas:
+                    Views:
+                      type: object
+                      required:
+                      - views
+                      properties:
+                        views:
+                          type: array
+                          items:
+                            type: string
+                        total:
+                          type: integer
+                          description: Number of views
+                    Error:
+                      type: object
+                      required:
+                      - code
+                      properties:
+                        code:
+                          type: integer
+                        message:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        for (String table : List.of("one_of", "one_of_list", "any_of", "any_of_list")) {
+            Assertions.assertThat(spec.getTables().get(table))
+                    .as(table)
+                    .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), column -> column.getMetadata().getComment())
+                    .containsExactly(
+                            Assertions.tuple("views", new ArrayType(VARCHAR), true, Optional.empty()),
+                            Assertions.tuple("total", BIGINT, true, Optional.of("Number of views")),
+                            Assertions.tuple("code", BIGINT, true, Optional.empty()),
+                            Assertions.tuple("message", VARCHAR, true, Optional.empty()));
+        }
+        // properties of all allOf parts are always present, so they keep being required
+        for (String table : List.of("all_of", "all_of_list")) {
+            Assertions.assertThat(spec.getTables().get(table))
+                    .as(table)
+                    .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                    .containsExactly(
+                            Assertions.tuple("views", new ArrayType(VARCHAR), false),
+                            Assertions.tuple("total", BIGINT, true),
+                            Assertions.tuple("code", BIGINT, false),
+                            Assertions.tuple("message", VARCHAR, true));
+        }
+    }
+
+    @Test
+    public void testUnionResponseWithResultsPath()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/results
+                        errorPath: $response.body#/message
+                      responses:
+                        "200":
+                          description: Items or an error
+                          content:
+                            application/json:
+                              schema:
+                                oneOf:
+                                - type: object
+                                  properties:
+                                    results:
+                                      type: array
+                                      items:
+                                        oneOf:
+                                        - type: object
+                                          properties:
+                                            name:
+                                              type: string
+                                        - type: object
+                                          properties:
+                                            id:
+                                              type: integer
+                                - type: object
+                                  properties:
+                                    message:
+                                      type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("message", VARCHAR),
+                        Assertions.tuple("name", VARCHAR),
+                        Assertions.tuple("id", BIGINT));
+    }
+
+    @Test
+    public void testUnionResponseWithConflictingPropertyTypes()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /status:
+                    get:
+                      responses:
+                        "200":
+                          description: Status or an error
+                          content:
+                            application/json:
+                              schema:
+                                oneOf:
+                                - type: object
+                                  properties:
+                                    code:
+                                      type: string
+                                      description: Status code
+                                    state:
+                                      type: string
+                                - type: object
+                                  properties:
+                                    code:
+                                      type: integer
+                                      description: Error code
+                                    state:
+                                      type: string
+                                      description: Error state
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        List<OpenApiColumn> columns = spec.getTables().get("status");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().getComment())
+                .containsExactly(
+                        Assertions.tuple("code", VARCHAR, Optional.of("Status code")),
+                        Assertions.tuple("state", VARCHAR, Optional.empty()));
+        Assertions.assertThat(columns.getFirst().getSourceType())
+                .matches(JsonTrinoConverter::isUnion);
+        Assertions.assertThat(columns.getLast().getSourceType())
+                .matches(schema -> !JsonTrinoConverter.isUnion(schema));
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();

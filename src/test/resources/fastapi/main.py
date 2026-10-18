@@ -164,6 +164,15 @@ class Gadget(BaseModel):
     dimensions: Dimensions
 
 
+class UserViews(BaseModel):
+    views: list[str]
+
+
+class UserViewsError(BaseModel):
+    code: int
+    message: str
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -466,6 +475,19 @@ def echo_union_value(body: UnionValueEcho) -> UnionValueEcho:
 @router.post("/echo_gadget")
 def echo_gadget(body: Gadget) -> Gadget:
     return body
+
+
+# some APIs respond with an error object and a 200 status, so the response schema is a union of both
+@router.get("/user_views/{username}")
+def user_views(username: str) -> UserViews | UserViewsError:
+    if username == "unknown":
+        return UserViewsError(code=404, message="Unknown user")
+    return UserViews(views=["home", "settings"])
+
+
+@router.get("/user_views_list")
+def user_views_list() -> list[UserViews | UserViewsError]:
+    return [UserViews(views=["home"]), UserViewsError(code=404, message="Unknown user")]
 
 
 @router.get("/decimal_parameters")
