@@ -1,0 +1,64 @@
+{
+  "paths": {
+    "/orgs/{org}/members": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/runs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "workflow_runs"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/runs/{run_id}/jobs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "jobs"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/workflows": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "workflows"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "workflow_runs"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/repos": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    }
+  }
+}

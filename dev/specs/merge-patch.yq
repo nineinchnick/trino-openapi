@@ -1,0 +1,3 @@
+(select(fileIndex == 1) | [.. | select(tag == "!!null") | path | select(all_c(tag == "!!str"))]) as $removed |
+select(fileIndex == 0) * (select(fileIndex == 1) | ... style="") |
+delpaths($removed)
