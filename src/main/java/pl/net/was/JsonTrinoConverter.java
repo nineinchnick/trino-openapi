@@ -336,9 +336,7 @@ public class JsonTrinoConverter
         if (block.isNull(position)) {
             return null;
         }
-        if (schemaType.getOneOf() != null
-                || schemaType.getAnyOf() != null
-                || schemaType.getAllOf() != null) {
+        if (isUnion(schemaType)) {
             verify(type instanceof VarcharType, "OpenAPI union types must map to Trino VARCHAR");
             return new RawValue(type.getSlice(block, position).toStringUtf8());
         }
@@ -503,5 +501,15 @@ public class JsonTrinoConverter
         else {
             throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
         }
+    }
+
+    /**
+     * Union schemas are mapped to VARCHAR columns holding raw JSON.
+     */
+    public static boolean isUnion(Schema<?> schema)
+    {
+        return schema.getOneOf() != null
+                || schema.getAnyOf() != null
+                || schema.getAllOf() != null;
     }
 }
