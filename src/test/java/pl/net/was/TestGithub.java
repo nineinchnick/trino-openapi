@@ -650,10 +650,11 @@ public class TestGithub
     @Test
     public void selectTopNSortedByApi()
     {
-        // filtering on state would prevent the pushdown, because the path to get a single pull request can't send it,
-        // and with the default state, there might be no open pull requests, so compare with the results sorted by Trino
-        String pulls = "SELECT number FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'";
+        // the path to get a single pull request can't filter by state, but the connector would filter its rows, so the filter doesn't prevent the pushdown
+        String pulls = "SELECT number FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'all'";
         MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(getSession(), pulls + " ORDER BY updated_at DESC LIMIT 1");
+        assertThat(result.result().getRowCount()).isEqualTo(1);
+        // sorting by two columns is not pushed down
         assertThat(result.result().getOnlyColumnAsSet())
                 .isEqualTo(computeActual(pulls + " ORDER BY updated_at DESC, number LIMIT 1").getOnlyColumnAsSet());
         // the table has an INSERT operation, so updated_at allows nulls, but every response includes it, so the API sorts the rows

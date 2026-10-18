@@ -882,7 +882,22 @@ public class TestOpenApiQueries
     public void limitWithRemainingFilterRequestsAllPages()
     {
         // the matching row is on the last page, so stopping after reading enough rows would return no rows
-        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE name = 'Plumbus' LIMIT 1", 2, "Plumbus");
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE price < 40 LIMIT 1", 2, "Plumbus");
+    }
+
+    @Test
+    public void filterSentByOnlySomePathsAllowsPushdown()
+    {
+        // getting a single item can't filter by name, but the connector applies the filter if that path is used
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE name = 'Plumbus' LIMIT 1", 1, "Plumbus"))
+                .contains("name=Plumbus");
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE name = 'Plumbus' ORDER BY price DESC LIMIT 1", 1, "Plumbus"))
+                .contains("name=Plumbus", "sort=price", "direction=desc");
+        // the item IDs select the path getting a single item, which doesn't send the name, so the connector filters the rows
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE item_id IN (1, 2) AND name = 'Plumbus'", 2, "Plumbus");
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE item_id IN (1, 2) AND name = 'Squanchy'", 2);
+        // dynamic filters select the same path
+        assertCountedItems("SELECT c.name FROM fastapi.default.counted_items c JOIN (VALUES 1, 2) t(id) ON c.item_id = t.id WHERE c.name = 'Plumbus'", 2, "Plumbus");
     }
 
     @Test

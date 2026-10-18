@@ -246,7 +246,6 @@ public class OpenApiTableHandle
                 continue;
             }
             Domain domain = newConstraint.getDomains().get().get(column.getHandle());
-            boolean isAlwaysSent = isSentByAllSelectPaths(column);
             // splits are generated for every value of a pushed down domain, so it's only useful if some path can send it,
             // and splits for paths that ignore it are merged, so they don't return the same rows
             if (!domain.isSingleValue() && !isSentBySomeSelectPath(column)) {
@@ -275,11 +274,7 @@ public class OpenApiTableHandle
                 currentConstraint = TupleDomain.withColumnDomains(domains);
             }
             found = true;
-            if (!isAlwaysSent) {
-                // the path selected for a split might not send this predicate, so Trino still has to apply it
-                continue;
-            }
-            // remove from remaining constraints
+            // if the path selected for a split doesn't send this filter, the connector applies it to the returned rows
             summary = summary.filter(
                     (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
         }
@@ -321,12 +316,6 @@ public class OpenApiTableHandle
     private static boolean isParameter(OpenApiColumn column)
     {
         return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
-    }
-
-    private boolean isSentByAllSelectPaths(OpenApiColumn column)
-    {
-        return selectPaths.stream()
-                .allMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
     }
 
     private boolean isSentBySomeSelectPath(OpenApiColumn column)
