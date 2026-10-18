@@ -217,6 +217,30 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsByDelimitedArrayQueryParameter()
+    {
+        assertQuery(
+                "SELECT name FROM fastapi.default.items_by_delimited_ids WHERE item_ids = ARRAY[1, 2]",
+                "VALUES ('Portal Gun'), ('Plumbus')");
+    }
+
+    @Test
+    public void itemsByArrayHeader()
+    {
+        assertQuery(
+                "SELECT name FROM fastapi.default.items_by_header WHERE x_item_ids = ARRAY[1, 2]",
+                "VALUES ('Portal Gun'), ('Plumbus')");
+    }
+
+    @Test
+    public void itemsByCookie()
+    {
+        assertQuery(
+                "SELECT name FROM fastapi.default.items_by_cookie WHERE item_id = 2",
+                "VALUES ('Plumbus')");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();

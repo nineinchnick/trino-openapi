@@ -35,6 +35,7 @@ public class OpenApiColumn
     private final Schema<?> sourceType;
     private final Map<HttpPath, ParameterLocation> requiresPredicate;
     private final Map<HttpPath, ParameterLocation> optionalPredicate;
+    private final Map<HttpPath, ParameterStyle> parameterStyles;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
     private final OpenApiColumnHandle handle;
@@ -46,6 +47,7 @@ public class OpenApiColumn
             Schema<?> sourceType,
             Map<HttpPath, ParameterLocation> requiresPredicate,
             Map<HttpPath, ParameterLocation> optionalPredicate,
+            Map<HttpPath, ParameterStyle> parameterStyles,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
@@ -57,6 +59,7 @@ public class OpenApiColumn
         this.sourceType = sourceType;
         this.requiresPredicate = ImmutableMap.copyOf(requiresPredicate);
         this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
+        this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
         this.metadata = ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
@@ -98,6 +101,11 @@ public class OpenApiColumn
         return optionalPredicate;
     }
 
+    public Map<HttpPath, ParameterStyle> getParameterStyles()
+    {
+        return parameterStyles;
+    }
+
     public ColumnMetadata getMetadata()
     {
         return metadata;
@@ -135,6 +143,7 @@ public class OpenApiColumn
                 && Objects.equals(sourceType, that.sourceType)
                 && Objects.equals(requiresPredicate, that.requiresPredicate)
                 && Objects.equals(optionalPredicate, that.optionalPredicate)
+                && Objects.equals(parameterStyles, that.parameterStyles)
                 && Objects.equals(metadata, that.metadata)
                 && isPageNumber == that.isPageNumber;
     }
@@ -149,6 +158,7 @@ public class OpenApiColumn
                 ", sourceType=" + sourceType.getType() +
                 ", requiresPredicate=" + requiresPredicate +
                 ", optionalPredicate=" + optionalPredicate +
+                ", parameterStyles=" + parameterStyles +
                 ", metadata=" + metadata +
                 ", isPageNumber=" + isPageNumber +
                 '}';
@@ -156,7 +166,7 @@ public class OpenApiColumn
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, metadata, isPageNumber);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -177,6 +187,7 @@ public class OpenApiColumn
         private Schema<?> sourceType;
         private final SortedMap<HttpPath, ParameterLocation> requiresPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterLocation> optionalPredicate = new TreeMap<>();
+        private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
@@ -192,6 +203,7 @@ public class OpenApiColumn
             this.sourceType = handle.getSourceType();
             this.requiresPredicate.putAll(handle.getRequiresPredicate());
             this.optionalPredicate.putAll(handle.getOptionalPredicate());
+            this.parameterStyles.putAll(handle.getParameterStyles());
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
@@ -234,6 +246,12 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setParameterStyles(Map<HttpPath, ParameterStyle> parameterStyles)
+        {
+            this.parameterStyles.putAll(requireNonNull(parameterStyles, "parameterStyles is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setIsNullable(boolean isNullable)
         {
             this.isNullable = isNullable;
@@ -269,6 +287,7 @@ public class OpenApiColumn
                     sourceType,
                     requiresPredicate,
                     optionalPredicate,
+                    parameterStyles,
                     isNullable,
                     isHidden,
                     isPageNumber,

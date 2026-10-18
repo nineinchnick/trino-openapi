@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime
 from typing import Annotated, Callable
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -152,6 +152,21 @@ def items_by_ids(item_ids: Annotated[list[int], Query()]) -> list[Item]:
     return [items[item_id] for item_id in item_ids if item_id in items]
 
 
+@router.get("/items_by_delimited_ids")
+def items_by_delimited_ids(item_ids: str) -> list[Item]:
+    return [items[int(item_id)] for item_id in item_ids.split(",") if int(item_id) in items]
+
+
+@router.get("/items_by_header")
+def items_by_header(x_item_ids: Annotated[str, Header()]) -> list[Item]:
+    return [items[int(item_id)] for item_id in x_item_ids.split(",") if int(item_id) in items]
+
+
+@router.get("/items_by_cookie")
+def items_by_cookie(item_id: Annotated[int, Cookie()]) -> list[Item]:
+    return [items[item_id]] if item_id in items else []
+
+
 @router.get("/items/{item_id}")
 def get_item(item_id: int) -> Item:
     if item_id not in items:
@@ -202,6 +217,15 @@ def custom_openapi():
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
     }
+    # FastAPI can't parse delimited arrays, so declare them only in the spec
+    delimited_ids = openapi_schema["paths"]["/items_by_delimited_ids"]["get"]["parameters"][0]
+    delimited_ids["schema"] = {"type": "array", "items": {"type": "integer"}}
+    delimited_ids["explode"] = False
+    header_ids = openapi_schema["paths"]["/items_by_header"]["get"]["parameters"][0]
+    header_ids["schema"] = {"type": "array", "items": {"type": "integer"}}
+    # FastAPI never generates path item parameters
+    item_path = openapi_schema["paths"]["/items/{item_id}"]
+    item_path["parameters"] = item_path["get"].pop("parameters")
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

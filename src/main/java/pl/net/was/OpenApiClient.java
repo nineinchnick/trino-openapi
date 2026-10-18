@@ -59,6 +59,7 @@ import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -78,6 +79,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.net.HttpHeaders.ACCEPT;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.google.common.net.HttpHeaders.COOKIE;
 import static com.google.common.net.HttpHeaders.USER_AGENT;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
@@ -93,6 +95,7 @@ import static java.util.AbstractMap.SimpleEntry;
 import static java.util.Comparator.comparing;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 
@@ -289,8 +292,14 @@ public class OpenApiClient
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader("X-Trino-OpenAPI-Path", httpPath.path());
-        getFilterValues(table, httpPath, ParameterLocation.HEADER)
-                .forEach((key, value) -> builder.addHeader(key, value.toString()));
+        getFilterColumnValues(table, httpPath, ParameterLocation.HEADER)
+                .forEach((column, value) -> builder.addHeader(column.getSourceName(), encodeParamValue(column, value)));
+        String cookies = getFilterColumnValues(table, httpPath, ParameterLocation.COOKIE).entrySet().stream()
+                .map(entry -> entry.getKey().getSourceName() + "=" + URLEncoder.encode(encodeParamValue(entry.getKey(), entry.getValue()), UTF_8))
+                .collect(joining("; "));
+        if (!cookies.isEmpty()) {
+            builder.addHeader(COOKIE, cookies);
+        }
 
         Request request = builder.build();
         log.debug(request.toString());
@@ -353,10 +362,26 @@ public class OpenApiClient
     private Map<String, Iterable<String>> getQueryParams(OpenApiTableHandle table, HttpPath httpPath)
     {
         return getFilterColumnValues(table, httpPath, ParameterLocation.QUERY).entrySet().stream()
-                .collect(toMap(entry -> entry.getKey().getSourceName(), entry -> encodeQueryParamValue(entry.getKey(), entry.getValue())));
+                .collect(toMap(entry -> entry.getKey().getSourceName(), entry -> encodeQueryParamValue(entry.getKey(), httpPath, entry.getValue())));
     }
 
-    private static Iterable<String> encodeQueryParamValue(OpenApiColumn column, Object value)
+    private static Iterable<String> encodeQueryParamValue(OpenApiColumn column, HttpPath httpPath, Object value)
+    {
+        List<String> values = encodeValues(column, value);
+        ParameterStyle style = column.getParameterStyles().getOrDefault(httpPath, ParameterStyle.defaultFor(ParameterLocation.QUERY));
+        if (style.explode()) {
+            return values;
+        }
+        return List.of(String.join(style.arrayDelimiter(), values));
+    }
+
+    private static String encodeParamValue(OpenApiColumn column, Object value)
+    {
+        // header and cookie parameters only support the simple and form styles, which both delimit array elements with commas
+        return String.join(",", encodeValues(column, value));
+    }
+
+    private static List<String> encodeValues(OpenApiColumn column, Object value)
     {
         if (!(value instanceof Block block)) {
             return List.of(value.toString());

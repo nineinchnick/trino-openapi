@@ -93,8 +93,8 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
   * INSERT uses POST or PUT;
   * UPDATE uses PATCH or POST;
   * DELETE uses DELETE.
-* All request parameters are mapped to columns, including path, query, and
-  header parameters.
+* All request parameters are mapped to columns, including path, query, header,
+  and cookie parameters, and parameters shared by all operations of a path.
 * Fields of the HTTP OK (200) response type are mapped to columns.
 * Fields of the request body are also mapped to columns, if a POST request is
   used for SELECT.
