@@ -1779,6 +1779,60 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testArrayReferencedInAllOf()
+    {
+        // the parser merges allOf alternatives into a single schema, but drops the items of arrays, like in the Cloudflare spec
+        OpenApiSpec spec = parseSpec("""
+                openapi: 3.0.3
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      responses:
+                        '200':
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/Item'
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              $ref: '#/components/schemas/Item'
+                      responses:
+                        '200':
+                          description: OK
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        tags:
+                          allOf:
+                            - $ref: '#/components/schemas/Tags'
+                    Tags:
+                      type: array
+                      items:
+                        type: string
+                """);
+
+        Assertions.assertThat(spec.getTables().get("items"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("name", VARCHAR),
+                        Assertions.tuple("tags", VARCHAR));
+    }
+
+    @Test
     public void testOpenApi31TypesMatchOpenApi30()
     {
         RowType objectType = RowType.from(List.of(
