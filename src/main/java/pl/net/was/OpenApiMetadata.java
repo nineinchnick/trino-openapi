@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.airlift.slice.Slice;
@@ -224,6 +225,11 @@ public class OpenApiMetadata
             ConnectorTableHandle tableHandle)
     {
         OpenApiTableHandle table = (OpenApiTableHandle) tableHandle;
+        // tables have the row ID column only when they have operations for UPDATE or DELETE
+        table.checkHasPaths("UPDATE or DELETE", ImmutableList.<HttpPath>builder()
+                .addAll(table.getUpdatePaths())
+                .addAll(table.getDeletePaths())
+                .build());
         Map<String, OpenApiColumnHandle> columns = getColumnHandles(table);
         return columns.values().stream()
                 .filter(column -> column.getName().equals(ROW_ID))

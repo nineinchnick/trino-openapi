@@ -52,6 +52,7 @@ import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.util.Objects.requireNonNull;
+import static pl.net.was.OpenApiSpec.ROW_ID;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 class TestOpenApiSpec
@@ -715,11 +716,6 @@ class TestOpenApiSpec
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
-                        OpenApiColumn.builder()
                                 .setName("expand").setSourceName("expand")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
@@ -1113,11 +1109,6 @@ class TestOpenApiSpec
                 RowType.field("type", VARCHAR)));
         Assertions.assertThat(columns)
                 .containsExactly(
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
                         OpenApiColumn.builder()
                                 .setName("data").setSourceName("data")
                                 .setType(dataType).setSourceType(objectSchema)
@@ -1679,11 +1670,6 @@ class TestOpenApiSpec
                 .toList();
         Assertions.assertThat(columns)
                 .containsExactly(
-                        OpenApiColumn.builder()
-                                .setName("__trino_row_id")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setIsHidden(true)
-                                .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
                                 .setType(BIGINT).setSourceType(intSchema)
@@ -2416,6 +2402,11 @@ class TestOpenApiSpec
         Assertions.assertThat(tags.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/tags"));
         Assertions.assertThat(tags.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/tags"));
         Assertions.assertThat(tags.getDeletePaths()).isEmpty();
+
+        // the row ID is needed only by UPDATE and DELETE
+        Assertions.assertThat(spec.getTables().get("search")).extracting(OpenApiColumn::getName).doesNotContain(ROW_ID);
+        Assertions.assertThat(spec.getTables().get("items")).extracting(OpenApiColumn::getName).startsWith(ROW_ID);
+        Assertions.assertThat(spec.getTables().get("tags")).extracting(OpenApiColumn::getName).startsWith(ROW_ID);
     }
 
     @Test

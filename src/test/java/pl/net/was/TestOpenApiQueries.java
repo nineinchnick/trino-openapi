@@ -656,6 +656,17 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void updateTableWithoutUpdateOperation()
+    {
+        assertQueryFails(
+                "UPDATE fastapi.default.search SET name = 'x' WHERE item_ids = ARRAY['1']",
+                "Table search has no operation for UPDATE or DELETE. Set sqlOperation in the x-trino extension of an operation to use it for UPDATE or DELETE");
+        assertQueryFails(
+                "DELETE FROM fastapi.default.search WHERE item_ids = ARRAY['1']",
+                "Table search has no operation for UPDATE or DELETE. Set sqlOperation in the x-trino extension of an operation to use it for UPDATE or DELETE");
+    }
+
+    @Test
     public void queryParameterWithReservedCharacters()
     {
         assertQuery(

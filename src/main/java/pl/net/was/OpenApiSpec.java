@@ -221,7 +221,9 @@ public class OpenApiSpec
         }
         this.handles = handles.buildOrThrow();
         this.tables = tables.buildOrThrow().entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> allowInsertsWithoutResponseColumns(entry.getValue(), this.handles.get(entry.getKey()))));
+                .collect(toImmutableMap(Map.Entry::getKey, entry -> addRowIdColumn(
+                        allowInsertsWithoutResponseColumns(entry.getValue(), this.handles.get(entry.getKey())),
+                        this.handles.get(entry.getKey()))));
         this.errorPointers = errorPointers.buildOrThrow();
         this.resultsPointers = resultsPointers.buildOrThrow();
         this.paginations = paginations.buildOrThrow();
@@ -381,22 +383,10 @@ public class OpenApiSpec
 
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
-        Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
+        return pathItem.readOperationsMap().entrySet().stream()
                 .flatMap(entry -> getColumn(path, pathItem.getParameters(), entry))
-                .distinct();
-        if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getPatch() != null || pathItem.getDelete() != null) {
-            // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
-            return Stream.concat(
-                            Stream.of(OpenApiColumn.builder()
-                                    .setName(ROW_ID)
-                                    .setType(VARCHAR)
-                                    .setSourceType(new StringSchema())
-                                    .setIsHidden(true)
-                                    .build()),
-                            columns)
-                    .toList();
-        }
-        return columns.toList();
+                .distinct()
+                .toList();
     }
 
     private Stream<OpenApiColumn> getColumn(String path, List<Parameter> pathParameters, Map.Entry<PathItem.HttpMethod, Operation> entry)
@@ -1183,6 +1173,23 @@ public class OpenApiSpec
                         .mapToObj(i -> OpenApiColumn.builderFrom(sameColumns.get(i))
                                 .setName(sameColumns.get(i).getName() + (i > 0 ? "_" + (i + 1) : ""))
                                 .build()))
+                .toList();
+    }
+
+    private static List<OpenApiColumn> addRowIdColumn(List<OpenApiColumn> columns, OpenApiTableHandle tableHandle)
+    {
+        if (tableHandle.getUpdatePaths().isEmpty() && tableHandle.getDeletePaths().isEmpty()) {
+            return columns;
+        }
+        // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
+        return Stream.concat(
+                        Stream.of(OpenApiColumn.builder()
+                                .setName(ROW_ID)
+                                .setType(VARCHAR)
+                                .setSourceType(new StringSchema())
+                                .setIsHidden(true)
+                                .build()),
+                        columns.stream())
                 .toList();
     }
 
