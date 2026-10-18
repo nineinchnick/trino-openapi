@@ -44,6 +44,19 @@ jobs:
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
         run: ./mvnw -B package
 
+      # tests run the plugin on the same classpath as Trino, so also check that it works in a Trino server,
+      # using the automatic token, which is also available in pull requests from forks
+      - name: Test the Docker image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./docker-build.sh
+          VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          docker run -d --name trino-openapi -e GITHUB_TOKEN "nineinchnick/trino-openapi:$VERSION"
+          timeout 300 sh -c 'until docker logs trino-openapi 2>&1 | grep -q "SERVER STARTED"; do sleep 5; done'
+          docker exec trino-openapi trino --execute "SELECT login FROM github.default.orgs WHERE org = 'trinodb'" | tee result.txt
+          grep -qx '"trinodb"' result.txt || { docker logs trino-openapi; exit 1; }
+
       - name: Annotate run
         uses: trinodb/github-actions/action-surefire-report@b63800bedfbc7ab1ff2e5fe7eaecf5ab82ce6a70
         if: always()
