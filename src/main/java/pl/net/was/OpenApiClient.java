@@ -111,6 +111,7 @@ import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.AbstractMap.SimpleEntry;
+import static java.util.Collections.emptyIterator;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.function.Function.identity;
@@ -269,6 +270,20 @@ public class OpenApiClient
         }
         TupleDomain<ColumnHandle> constraint = TupleDomain.fromFixedValues(sortConstraint);
         return Optional.of(table.cloneWithConstraint(table.getConstraint().isNone() ? constraint : table.getConstraint().intersect(constraint)));
+    }
+
+    public boolean canReadPagesWithStride(OpenApiTableHandle table)
+    {
+        HttpPath httpPath = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint())).getKey();
+        if (getUnfilteredPageColumn(table, httpPath).isEmpty()) {
+            return false;
+        }
+        // without a signal of the last page, splits reading pages past it would never end, or return the last page again
+        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
+        return !JsonPointer.empty().equals(pagination.totalResultsPointer())
+                || !JsonPointer.empty().equals(pagination.totalPagesPointer())
+                || !JsonPointer.empty().equals(pagination.hasMorePointer())
+                || getPageSize(table, httpPath).isPresent();
     }
 
     public Optional<OpenApiTableHandle> getFirstPageWithTotals(OpenApiTableHandle table)
@@ -1171,6 +1186,7 @@ public class OpenApiClient
             long rowCount;
             int page = offset + 1;
             boolean isLastPage;
+            OptionalLong lastPageSize = OptionalLong.empty();
             Iterator<List<?>> rows;
 
             @Override
@@ -1196,18 +1212,30 @@ public class OpenApiClient
             private void fetchPage()
             {
                 ResultsPage resultsPage = getter.apply(page);
+                int fetchedPage = page;
                 page += pageIncrement;
+                int pageResults = Iterables.size(resultsPage.rows());
+                if (lastPageSize.isEmpty()) {
+                    // the first page read by a split is full, unless it's the last one
+                    lastPageSize = pageSize.isPresent() ? pageSize : OptionalLong.of(pageResults);
+                }
+                // splits reading every few pages can start past the last page,
+                // and servers might return the last page for every page number past it
+                if (isPastLastPage(resultsPage, fetchedPage, lastPageSize.getAsLong(), maxResults)) {
+                    isLastPage = true;
+                    rows = emptyIterator();
+                    return;
+                }
+                if (isPastLastPage(resultsPage, page, lastPageSize.getAsLong(), maxResults)) {
+                    isLastPage = true;
+                }
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
-                int pageResults = Iterables.size(resultsPage.rows());
                 resultSize += pageResults;
                 if (pageResults == 0) {
                     isLastPage = true;
                 }
                 if (pageSize.isPresent() && pageResults < pageSize.getAsLong()) {
-                    isLastPage = true;
-                }
-                if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().getAsLong()) {
                     isLastPage = true;
                 }
                 if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {
@@ -1219,5 +1247,17 @@ public class OpenApiClient
                 rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);
             }
         };
+    }
+
+    private static boolean isPastLastPage(ResultsPage resultsPage, int page, long pageSize, long maxResults)
+    {
+        if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().getAsLong()) {
+            return true;
+        }
+        if (pageSize <= 0) {
+            return false;
+        }
+        long firstResult = (page - 1) * pageSize;
+        return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().getAsLong());
     }
 }

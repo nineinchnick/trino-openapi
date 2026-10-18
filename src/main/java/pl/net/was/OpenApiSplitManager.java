@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
+import io.trino.spi.NodeManager;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
@@ -48,6 +49,7 @@ import java.util.function.Supplier;
 
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.function.UnaryOperator.identity;
@@ -62,6 +64,7 @@ public class OpenApiSplitManager
 
     private final OpenApiSpec spec;
     private final OpenApiClient client;
+    private final NodeManager nodeManager;
     private final double maxSplitsPerSecond;
     private final int domainExpansionLimit;
     private final SplitStrategy splitStrategy;
@@ -69,10 +72,11 @@ public class OpenApiSplitManager
     private final ExecutorService executor = newCachedThreadPool(daemonThreadsNamed(OpenApiSplitManager.class.getName() + "-%d"));
 
     @Inject
-    public OpenApiSplitManager(OpenApiSpec spec, OpenApiClient client, OpenApiConfig config)
+    public OpenApiSplitManager(OpenApiSpec spec, OpenApiClient client, NodeManager nodeManager, OpenApiConfig config)
     {
         this.spec = requireNonNull(spec, "spec is null");
         this.client = requireNonNull(client, "client is null");
+        this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.maxSplitsPerSecond = config.getMaxSplitsPerSecond();
         this.domainExpansionLimit = config.getDomainExpansionLimit();
         this.splitStrategy = config.getSplitStrategy();
@@ -251,7 +255,16 @@ public class OpenApiSplitManager
         // with a limit, reading pages one after another stops once it's reached
         boolean canProbe = splitTables.size() == 1 && table.getLimit().isEmpty();
         for (SplitTable splitTable : splitTables.values()) {
-            Optional<OpenApiTableHandle> firstPage = canProbe && getSplitStrategy(table, splitTable.httpPath()) == SplitStrategy.PROBE
+            Pagination pagination = spec.getPaginations(table.getSchemaTableName()).getOrDefault(splitTable.httpPath(), Pagination.none());
+            SplitStrategy splitStrategy = pagination.splitStrategy().orElse(this.splitStrategy);
+            if (splitStrategy == SplitStrategy.STRIDE && table.getLimit().isEmpty() && client.canReadPagesWithStride(splitTable.table())) {
+                int strideSplits = getStrideSplits(pagination);
+                for (int firstPage = 1; firstPage <= strideSplits; firstPage++) {
+                    splits.add(new OpenApiSplit(splitTable.table(), firstPage, strideSplits));
+                }
+                continue;
+            }
+            Optional<OpenApiTableHandle> firstPage = canProbe && splitStrategy == SplitStrategy.PROBE
                     ? client.getFirstPageWithTotals(splitTable.table())
                     : Optional.empty();
             if (firstPage.isEmpty()) {
@@ -268,11 +281,13 @@ public class OpenApiSplitManager
 
     private record SplitTable(OpenApiTableHandle table, HttpPath httpPath) {}
 
-    private SplitStrategy getSplitStrategy(OpenApiTableHandle table, HttpPath httpPath)
+    private int getStrideSplits(Pagination pagination)
     {
-        return spec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none())
-                .splitStrategy()
-                .orElse(splitStrategy);
+        int strideSplits = pagination.strideSplits().orElseGet(() -> nodeManager.getRequiredWorkerNodes().size());
+        if (pagination.maxPages().isPresent()) {
+            return min(strideSplits, pagination.maxPages().getAsInt());
+        }
+        return strideSplits;
     }
 
     private HttpPath selectPath(

@@ -2532,6 +2532,7 @@ class TestOpenApiSpec
                         maxPages: 10
                         maxResults: 1000
                         splitStrategy: off
+                        strideSplits: 4
                       responses:
                         "200":
                           description: Items
@@ -2561,6 +2562,7 @@ class TestOpenApiSpec
                                 .setMaxPages(OptionalInt.of(10))
                                 .setMaxResults(OptionalLong.of(1000))
                                 .setSplitStrategy(Optional.of(SplitStrategy.OFF))
+                                .setStrideSplits(OptionalInt.of(4))
                                 .build()));
         Assertions.assertThat(spec.getResultsPointers(schemaTableName(SCHEMA_NAME, "items")))
                 .containsExactly(Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/results")));
@@ -2575,7 +2577,9 @@ class TestOpenApiSpec
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: 0")))
                 .hasMessage("maxResults must be positive");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("splitStrategy: off", "splitStrategy: sometimes")))
-                .hasMessage("Invalid value of splitStrategy: 'sometimes', must be one of: probe, off");
+                .hasMessage("Invalid value of splitStrategy: 'sometimes', must be one of: probe, stride, off");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("strideSplits: 4", "strideSplits: 0")))
+                .hasMessage("strideSplits must be positive");
     }
 
     @Test

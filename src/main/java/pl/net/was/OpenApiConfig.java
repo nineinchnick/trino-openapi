@@ -403,7 +403,7 @@ public class OpenApiConfig
     }
 
     @Config("split-strategy")
-    @ConfigDescription("How to read pages of results in separate splits: probe or off")
+    @ConfigDescription("How to read pages of results in separate splits: probe, stride, or off")
     public OpenApiConfig setSplitStrategy(SplitStrategy splitStrategy)
     {
         this.splitStrategy = splitStrategy;
