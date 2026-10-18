@@ -106,6 +106,10 @@ class NotePatch(BaseModel):
     priority: int | None = None
 
 
+class Bookmark(BaseModel):
+    url: str
+
+
 class HasMoreResults(BaseModel):
     results: list[Item]
     has_more: bool
@@ -247,6 +251,8 @@ items = {
 
 
 notes: dict[int, Note] = {}
+
+bookmarks = [Bookmark(url="https://trino.io"), Bookmark(url="https://example.com")]
 
 stations = {
     1: Station(station_id=1, name="Alpha", temperature=20.0),
@@ -440,6 +446,20 @@ def delete_note(note_id: int):
     if note_id not in notes:
         raise HTTPException(status_code=404, detail="Note not found")
     del notes[note_id]
+
+
+@router.get("/bookmarks")
+def list_bookmarks() -> list[Bookmark]:
+    return bookmarks
+
+
+# some APIs delete resources using POST, with filters in the request body
+@router.post("/bookmarks")
+def delete_bookmarks(body: Bookmark) -> list[Bookmark]:
+    global bookmarks
+    deleted = [bookmark for bookmark in bookmarks if bookmark.url == body.url]
+    bookmarks = [bookmark for bookmark in bookmarks if bookmark.url != body.url]
+    return deleted
 
 
 @router.get("/stations")
@@ -698,6 +718,7 @@ def custom_openapi():
     # these POST operations only read data, but POST operations are used for INSERT, unless marked otherwise
     for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_gadget", "/echo_event"]:
         openapi_schema["paths"][path]["post"].setdefault("x-trino", {})["sqlOperation"] = "select"
+    openapi_schema["paths"]["/bookmarks"]["post"]["x-trino"] = {"sqlOperation": "delete"}
     # pydantic describes optional values as unions with null, which are mapped to VARCHAR
     for schema in ["Note", "NotePatch"]:
         openapi_schema["components"]["schemas"][schema]["properties"]["priority"] = {"type": ["integer", "null"]}

@@ -180,6 +180,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void deleteUsingPost()
+    {
+        // the POST operation marked for DELETE requires the URL in the request body
+        assertQuery("SELECT url FROM fastapi.default.bookmarks", "VALUES 'https://trino.io', 'https://example.com'");
+        assertUpdate("DELETE FROM fastapi.default.bookmarks WHERE url = 'https://example.com'", 1);
+        assertQuery("SELECT url FROM fastapi.default.bookmarks", "VALUES 'https://trino.io'");
+    }
+
+    @Test
     public void selectFromForecastTable()
     {
         assertQuery(

@@ -242,7 +242,8 @@ public class OpenApiClient
                 table.getTableHandle(),
                 httpPath,
                 pathWithParams.getValue(),
-                null,
+                // operations marked for DELETE, like a POST, can require filters in the request body
+                getBodyGenerator(table.getTableHandle(), httpPath),
                 new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
     }
 
