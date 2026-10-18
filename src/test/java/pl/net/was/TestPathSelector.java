@@ -15,14 +15,17 @@
 package pl.net.was;
 
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import static io.swagger.v3.oas.models.PathItem.HttpMethod.GET;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,10 +34,20 @@ class TestPathSelector
     private static final String PROJECT_COLUMNS = "/projects/{project_id}/columns";
     private static final String COLUMNS = "/projects/columns/{column_id}";
     private static final String CARDS = "/projects/cards/{column_id}";
+    private static final String PROJECT_CARDS = "/projects/{project_id}/cards";
+    private static final String PROJECT_CARD = "/projects/{project_id}/cards/{card_id}";
 
-    private final OpenApiColumn projectId = pathParameter("project_id", PROJECT_COLUMNS);
+    private final OpenApiColumn projectId = pathParameter("project_id", PROJECT_COLUMNS, PROJECT_CARDS, PROJECT_CARD);
     private final OpenApiColumn columnId = pathParameter("column_id", COLUMNS, CARDS);
-    private final List<OpenApiColumn> columns = List.of(projectId, columnId);
+    private final OpenApiColumn cardId = pathParameter("card_id", PROJECT_CARD);
+    private final OpenApiColumn state = OpenApiColumn.builder()
+            .setName("state")
+            .setSourceName("state")
+            .setType(VARCHAR)
+            .setSourceType(new StringSchema())
+            .setOptionalPredicate(Map.of(new HttpPath(GET, PROJECT_CARDS), ParameterLocation.QUERY))
+            .build();
+    private final List<OpenApiColumn> columns = List.of(projectId, columnId, cardId, state);
 
     @Test
     void selectPathWithAvailablePredicates()
@@ -43,6 +56,16 @@ class TestPathSelector
         assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId)::contains)).hasValue(PROJECT_COLUMNS);
         assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(columnId)::contains)).hasValue(COLUMNS);
         assertThat(PathSelector.selectPath(columns, GET, paths, Set.of()::contains)).isEmpty();
+    }
+
+    @Test
+    void selectPathWithMostPathParameters()
+    {
+        List<String> paths = List.of(PROJECT_CARDS, PROJECT_CARD);
+        // both paths use two predicates, but rows from the shorter path wouldn't have values of the card ID
+        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId, cardId, state)::contains)).hasValue(PROJECT_CARD);
+        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId, state)::contains)).hasValue(PROJECT_CARDS);
+        assertThat(PathSelector.selectPath(columns, GET, paths, Set.of(projectId)::contains)).hasValue(PROJECT_CARDS);
     }
 
     @Test

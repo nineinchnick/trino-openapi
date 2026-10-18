@@ -155,6 +155,12 @@ class Comment(BaseModel):
     text: str
 
 
+class Review(BaseModel):
+    id: int
+    rating: int
+    text: str
+
+
 items = {
     1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=[date.fromisoformat("2007-10-10"), date.fromisoformat("2022-12-08")], categories=[Category(id="1", name="main")]),
     2: Item(id="2", name="Plumbus", price=32.0, validUntil=date.fromisoformat("2999-01-01"), properties={"feeble": "schleem"}),
@@ -172,6 +178,14 @@ comments = {
     1: Comment(comment_id=1, author="alice", text="First"),
     2: Comment(comment_id=2, author="bob", text="Second"),
     3: Comment(comment_id=3, author="alice", text="Third"),
+}
+
+product_reviews = {
+    1: {
+        1: Review(id=1, rating=5, text="Great"),
+        2: Review(id=2, rating=5, text="Good"),
+        3: Review(id=3, rating=1, text="Bad"),
+    },
 }
 
 # kept as raw JSON, because Python floats can't hold all decimal values exactly
@@ -361,6 +375,20 @@ def get_station(station_id: int, units: str) -> Station:
 def list_comments(author: str) -> list[Comment]:
     # listing comments requires an author, so reading all comments requires their IDs
     return [comment for comment in comments.values() if comment.author == author]
+
+
+@router.get("/products/{product_id}/reviews")
+def list_reviews(product_id: int, rating: int = None) -> list[Review]:
+    reviews = product_reviews.get(product_id, {}).values()
+    return [review for review in reviews if rating is None or review.rating == rating]
+
+
+@router.get("/products/{product_id}/reviews/{review_id}")
+def get_review(product_id: int, review_id: int) -> Review:
+    # reviews don't include their ID under the name of this parameter, so it's only known from the path
+    if review_id not in product_reviews.get(product_id, {}):
+        raise HTTPException(status_code=404, detail="Review not found")
+    return product_reviews[product_id][review_id]
 
 
 @router.get("/comments/{comment_id}")
