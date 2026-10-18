@@ -193,6 +193,20 @@ class Event(BaseModel):
     actor: Bot | Person
 
 
+class File(BaseModel):
+    name: str
+    content: str
+
+
+class Entry(BaseModel):
+    name: str
+    size: int
+
+
+class ContentsResults(BaseModel):
+    results: File | list[Entry]
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -523,6 +537,23 @@ def echo_event(body: Event) -> Event:
     return body
 
 
+def get_contents(path: str) -> File | list[Entry]:
+    if path == "readme":
+        return File(name="readme", content="Hello")
+    return [Entry(name="a", size=1), Entry(name="b", size=2)]
+
+
+# like GitHub's contents endpoint, files are single objects, and directories are arrays of entries
+@router.get("/contents/{path}")
+def contents(path: str) -> File | list[Entry]:
+    return get_contents(path)
+
+
+@router.get("/contents_results/{path}")
+def contents_results(path: str) -> ContentsResults:
+    return ContentsResults(results=get_contents(path))
+
+
 @router.get("/decimal_parameters")
 def decimal_parameters(decimal_value: str) -> DecimalText:
     # returns the exact text of the parameter, to check how it was formatted
@@ -636,6 +667,9 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "maxPages": len(items),
+    }
+    openapi_schema["paths"]["/contents_results/{path}"]["get"]["x-trino"] = {
+        "resultsPath": "$response.body#/results",
     }
     openapi_schema["paths"]["/paged_search"]["post"]["x-trino"] = {
         "pageParam": "page",

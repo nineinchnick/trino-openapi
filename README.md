@@ -108,7 +108,10 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
   columns. Fields of `oneOf` and `anyOf` alternatives are nullable, since a
   response matches only some of them, like a success or an error object.
   A field defined in multiple alternatives with different types is mapped to a
-  single `VARCHAR` column with the raw JSON value.
+  single `VARCHAR` column with the raw JSON value. If some alternatives are
+  arrays of objects, like a single file or a directory listing, every array
+  element of a response is a row, and fields of the array items are mapped to
+  the same columns. This also applies to the node selected by `resultsPath`.
 * A field that is a union of only objects is mapped to a `ROW` with the fields
   of all alternatives, using the same rules. Fields of other alternatives are
   NULL when reading, and they're not sent in request bodies. Other unions are

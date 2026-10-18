@@ -418,7 +418,7 @@ public class OpenApiSpec
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
             List<String> requiredProperties = getRequiredProperties(schema);
-            getResponseProperties(schema)
+            getAlternativesProperties(schema)
                     .entrySet().stream()
                     .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
                     .map(propEntry -> getResultColumn(
@@ -430,7 +430,7 @@ public class OpenApiSpec
                     .forEach(column -> result.add(column.get()));
             Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
             List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
-            getResponseProperties(resultsSchema)
+            getAlternativesProperties(resultsSchema)
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
@@ -633,14 +633,6 @@ public class OpenApiSpec
                 .collect(toImmutableList());
     }
 
-    private Map<String, Schema> getResponseProperties(Schema<?> schema)
-    {
-        if (schema instanceof ArraySchema || schema.getItems() != null) {
-            return getAlternativesProperties(schema.getItems());
-        }
-        return getAlternativesProperties(schema);
-    }
-
     private Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
     {
         while (resultsPointer != JsonPointer.empty()) {
@@ -650,7 +642,7 @@ public class OpenApiSpec
                 continue;
             }
             String name = resultsPointer.getMatchingProperty();
-            schema = getResponseProperties(schema).get(name);
+            schema = getAlternativesProperties(schema).get(name);
             if (schema == null) {
                 throw new IllegalArgumentException("Invalid value of %s: unknown field %s".formatted(JSON_POINTER_PATTERN, resultsPointer));
             }
@@ -676,10 +668,24 @@ public class OpenApiSpec
 
     private static void collectProperties(Schema<?> schema, ListMultimap<String, Schema> properties)
     {
+        if (isArray(schema)) {
+            // a response can be either a single object or an array of objects, like a file or a directory listing,
+            // and every array element becomes a row, so the item properties are merged with the object properties;
+            // arrays of arrays are not expanded into rows
+            if (schema.getItems() != null && !isArray(schema.getItems())) {
+                collectProperties(schema.getItems(), properties);
+            }
+            return;
+        }
         if (schema.getProperties() != null) {
             schema.getProperties().forEach(properties::put);
         }
         getAlternatives(schema).forEach(alternative -> collectProperties(alternative, properties));
+    }
+
+    private static boolean isArray(Schema<?> schema)
+    {
+        return schema instanceof ArraySchema || schema.getItems() != null;
     }
 
     private static List<Schema> getAlternatives(Schema<?> schema)

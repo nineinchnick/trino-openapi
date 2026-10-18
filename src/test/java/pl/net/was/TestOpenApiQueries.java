@@ -338,6 +338,19 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectFromUnionOfObjectAndArray()
+    {
+        for (String table : List.of("contents", "contents_results")) {
+            assertQuery(
+                    "SELECT name, content, size FROM fastapi.default.%s WHERE path = 'readme'".formatted(table),
+                    "VALUES ('readme', 'Hello', NULL)");
+            assertQuery(
+                    "SELECT name, content, size FROM fastapi.default.%s WHERE path = 'docs'".formatted(table),
+                    "VALUES ('a', NULL, 1), ('b', NULL, 2)");
+        }
+    }
+
+    @Test
     public void selectNestedObjectUnion()
     {
         // the id is defined as a string and an integer, so it's raw JSON
