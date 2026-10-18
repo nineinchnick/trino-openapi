@@ -48,7 +48,7 @@ public class OpenApiPageSink
 
     protected void insertedPage(Page page, int position)
     {
-        PathItem.HttpMethod method = this.table.getTableHandle().getUpdateMethod();
+        PathItem.HttpMethod method = this.table.getTableHandle().getInsertMethod();
         if (method == PathItem.HttpMethod.POST) {
             client.postRows(table, page, position);
         }
