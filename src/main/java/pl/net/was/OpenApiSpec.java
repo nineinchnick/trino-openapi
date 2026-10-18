@@ -439,6 +439,7 @@ public class OpenApiSpec
             // add required parameters as columns, so they can be set as predicates;
             // predicate values will be saved in the table handle and copied to result rows
             parameters.stream()
+                    .filter(parameter -> hasSchema(parameter, method, path))
                     .map(parameter -> {
                         ParameterLocation parameterLocation = parameter.getIn() == null ? ParameterLocation.NONE : ParameterLocation.valueOf(parameter.getIn().toUpperCase(Locale.ENGLISH));
                         boolean isRequired = TRUE.equals(parameter.getRequired());
@@ -487,6 +488,16 @@ public class OpenApiSpec
                         Optional.ofNullable(op.getParameters()).stream().flatMap(List::stream))
                 .forEach(parameter -> parameters.put(new ParameterKey(parameter.getName(), parameter.getIn()), parameter));
         return ImmutableList.copyOf(parameters.values());
+    }
+
+    private static boolean hasSchema(Parameter parameter, PathItem.HttpMethod method, String path)
+    {
+        if (parameter.getSchema() != null) {
+            return true;
+        }
+        // parameters serialized using a media type, defined in `content` instead of `schema`, are not supported
+        log.warn("Ignoring parameter %s in %s of %s %s, because it has no schema", parameter.getName(), parameter.getIn(), method, path);
+        return false;
     }
 
     private record ParameterKey(String name, String in) {}

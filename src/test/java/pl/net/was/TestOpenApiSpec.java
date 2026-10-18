@@ -1700,6 +1700,54 @@ class TestOpenApiSpec
                         Assertions.tuple("tag", Map.of()));
     }
 
+    @Test
+    public void testContentParametersAreIgnored()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: filter
+                        content:
+                          application/json:
+                            schema:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                      - in: query
+                        name: limit
+                        schema:
+                          type: integer
+                      responses:
+                        "200":
+                          description: Item
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Item'
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("name", "limit");
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
