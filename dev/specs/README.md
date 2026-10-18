@@ -77,8 +77,9 @@ example:
 curl -fsSL https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json | jq --indent 2 . > src/test/resources/jira.json
 ```
 
-| Output                             | Upstream                                                               |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| `src/test/resources/jira.json`     | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
-| `src/test/resources/galaxy.json`   | https://galaxy.starburst.io/public/openapi/v1/json                     |
-| `src/test/resources/petstore.yaml` | https://petstore3.swagger.io/api/v3/openapi.yaml                       |
+| Output                             | Upstream                                                                          |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `src/test/resources/jira.json`     | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json            |
+| `src/test/resources/galaxy.json`   | https://galaxy.starburst.io/public/openapi/v1/json                                |
+| `src/test/resources/petstore.yaml` | https://petstore3.swagger.io/api/v3/openapi.yaml                                  |
+| `src/test/resources/openmeteo.yml` | https://raw.githubusercontent.com/open-meteo/open-meteo/main/openapi/forecast.yml |
