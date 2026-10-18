@@ -1631,6 +1631,75 @@ class TestOpenApiSpec
                         Assertions.tuple("tags", Map.of(), Map.of(httpPath, ParameterLocation.QUERY), Map.of(httpPath, new ParameterStyle(Parameter.StyleEnum.PIPEDELIMITED, false))));
     }
 
+    @Test
+    public void testParameterStyles()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items/{id}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: id
+                        required: true
+                        style: matrix
+                        explode: true
+                        schema:
+                          type: array
+                          items:
+                            type: string
+                      - in: query
+                        name: filter
+                        allowReserved: true
+                        schema:
+                          type: string
+                      - in: query
+                        name: color
+                        style: deepObject
+                        explode: true
+                        schema:
+                          type: object
+                          properties:
+                            r:
+                              type: integer
+                      - in: header
+                        name: tag
+                        allowReserved: true
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Item
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Item'
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        HttpPath httpPath = new HttpPath(PathItem.HttpMethod.GET, "/items/{id}");
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getParameterStyles)
+                .containsExactly(
+                        Assertions.tuple("name", Map.of()),
+                        Assertions.tuple("id", Map.of(httpPath, new ParameterStyle(Parameter.StyleEnum.MATRIX, true))),
+                        Assertions.tuple("filter", Map.of(httpPath, new ParameterStyle(Parameter.StyleEnum.FORM, true, true))),
+                        Assertions.tuple("color", Map.of(httpPath, new ParameterStyle(Parameter.StyleEnum.DEEPOBJECT, true))),
+                        Assertions.tuple("tag", Map.of()));
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();

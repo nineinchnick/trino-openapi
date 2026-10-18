@@ -23,6 +23,8 @@ import io.trino.spi.TrinoException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
@@ -31,14 +33,22 @@ import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 
-public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
+public record ParameterStyle(Parameter.StyleEnum style, boolean explode, boolean allowReserved)
 {
     // RFC 3986 unreserved characters, which never have to be percent-encoded
     private static final Escaper UNRESERVED_ESCAPER = new PercentEscaper("-._~", false);
+    // RFC 3986 unreserved and reserved characters allowed in a query, so without `#`, `[`, and `]`
+    private static final Escaper QUERY_RESERVED_ESCAPER = new PercentEscaper("-._~!$&'()*+,;=:@/?", false);
+    private static final Pattern PERCENT_ENCODED_OCTET = Pattern.compile("%[0-9A-Fa-f]{2}");
 
     public ParameterStyle
     {
         requireNonNull(style, "style is null");
+    }
+
+    public ParameterStyle(Parameter.StyleEnum style, boolean explode)
+    {
+        this(style, explode, false);
     }
 
     public static ParameterStyle defaultFor(ParameterLocation location)
@@ -49,10 +59,14 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
         };
     }
 
-    public static ParameterStyle of(Parameter.StyleEnum style, Boolean explode, ParameterLocation location)
+    public static ParameterStyle of(Parameter.StyleEnum style, Boolean explode, Boolean allowReserved, ParameterLocation location)
     {
         Parameter.StyleEnum resolvedStyle = style == null ? defaultFor(location).style() : style;
-        return new ParameterStyle(resolvedStyle, explode == null ? resolvedStyle == Parameter.StyleEnum.FORM : explode);
+        return new ParameterStyle(
+                resolvedStyle,
+                explode == null ? resolvedStyle == Parameter.StyleEnum.FORM : explode,
+                // allowReserved only applies to query parameters
+                location == ParameterLocation.QUERY && Boolean.TRUE.equals(allowReserved));
     }
 
     /**
@@ -79,7 +93,7 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
             checkSupported(value.isObject(), "Parameter %s uses the deepObject style, which only supports object values", name);
             // brackets are delimiters, so they're not encoded, same as in the OpenAPI specification examples
             return fields(value).stream()
-                    .map(field -> encodedName + "[" + UNRESERVED_ESCAPER.escape(field.getKey()) + "]=" + UNRESERVED_ESCAPER.escape(field.getValue()))
+                    .map(field -> encodedName + "[" + UNRESERVED_ESCAPER.escape(field.getKey()) + "]=" + escapeQueryValue(field.getValue()))
                     .toList();
         }
         String delimiter = switch (style) {
@@ -90,16 +104,16 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
         };
         if (explode && value.isArray()) {
             return elements(value).stream()
-                    .map(element -> encodedName + "=" + UNRESERVED_ESCAPER.escape(element))
+                    .map(element -> encodedName + "=" + escapeQueryValue(element))
                     .toList();
         }
         if (explode && value.isObject()) {
             return fields(value).stream()
-                    .map(field -> UNRESERVED_ESCAPER.escape(field.getKey()) + "=" + UNRESERVED_ESCAPER.escape(field.getValue()))
+                    .map(field -> UNRESERVED_ESCAPER.escape(field.getKey()) + "=" + escapeQueryValue(field.getValue()))
                     .toList();
         }
         return List.of(flatten(value).stream()
-                .map(UNRESERVED_ESCAPER::escape)
+                .map(this::escapeQueryValue)
                 .collect(joining(delimiter, encodedName + "=", "")));
     }
 
@@ -157,6 +171,23 @@ public record ParameterStyle(Parameter.StyleEnum style, boolean explode)
             return prefix + encodedName;
         }
         return prefix + encodedName + "=" + values;
+    }
+
+    private String escapeQueryValue(String value)
+    {
+        if (!allowReserved) {
+            return UNRESERVED_ESCAPER.escape(value);
+        }
+        // RFC 6570 reserved expansion also passes percent-encoded octets through unchanged
+        StringBuilder result = new StringBuilder();
+        Matcher matcher = PERCENT_ENCODED_OCTET.matcher(value);
+        int start = 0;
+        while (matcher.find()) {
+            result.append(QUERY_RESERVED_ESCAPER.escape(value.substring(start, matcher.start())))
+                    .append(matcher.group());
+            start = matcher.end();
+        }
+        return result.append(QUERY_RESERVED_ESCAPER.escape(value.substring(start))).toString();
     }
 
     private TrinoException unsupportedStyle(String name, ParameterLocation location)
