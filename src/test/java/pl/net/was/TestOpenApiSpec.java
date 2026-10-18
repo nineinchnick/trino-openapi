@@ -2275,6 +2275,10 @@ class TestOpenApiSpec
                                 .setHasMorePointer(JsonPointer.compile("/has_more"))
                                 .setMaxPages(OptionalInt.of(10))
                                 .build()));
+        Assertions.assertThat(spec.getResultsPointers(schemaTableName(SCHEMA_NAME, "items")))
+                .containsExactly(Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/results")));
+        // without errorPath, error messages must not include the response body
+        Assertions.assertThat(spec.getErrorPointers(schemaTableName(SCHEMA_NAME, "items"))).isEmpty();
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: many")))
                 .hasMessage("Invalid value of maxPages: many");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: 0")))
