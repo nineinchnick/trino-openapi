@@ -1034,6 +1034,11 @@ public class OpenApiSpec
 
     private Optional<TypeTuple> convertArray(Schema<?> array)
     {
+        if (array.getItems() == null) {
+            // the parser drops items when it merges allOf alternatives referencing an array schema,
+            // so elements of an unknown type can only be kept as serialized JSON
+            return Optional.of(FALLBACK_TYPE);
+        }
         return convertType(array.getItems()).map(elementType -> new TypeTuple(
                 new ArrayType(elementType.type()),
                 array.items(elementType.schema())));
