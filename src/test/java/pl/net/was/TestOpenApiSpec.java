@@ -1085,9 +1085,13 @@ class TestOpenApiSpec
         // request bodies don't include the default rule ID, so they're a different type
         RowType queryReqType = RowType.from(List.of(
                 RowType.field("aggregation", VARCHAR),
+                RowType.field("customQueryExtension", VARCHAR),
+                RowType.field("dataSource", VARCHAR),
                 RowType.field("distinctFields", new ArrayType(VARCHAR)),
                 RowType.field("groupByFields", new ArrayType(VARCHAR)),
                 RowType.field("hasOptionalGroupByFields", BOOLEAN),
+                RowType.field("index", VARCHAR),
+                RowType.field("indexes", new ArrayType(VARCHAR)),
                 RowType.field("metric", VARCHAR),
                 RowType.field("metrics", new ArrayType(VARCHAR)),
                 RowType.field("name", VARCHAR),
@@ -1097,9 +1101,13 @@ class TestOpenApiSpec
                 RowType.field("ruleId", VARCHAR)));
         RowType queryType = RowType.from(List.of(
                 RowType.field("aggregation", VARCHAR),
+                RowType.field("customQueryExtension", VARCHAR),
+                RowType.field("dataSource", VARCHAR),
                 RowType.field("distinctFields", new ArrayType(VARCHAR)),
                 RowType.field("groupByFields", new ArrayType(VARCHAR)),
                 RowType.field("hasOptionalGroupByFields", BOOLEAN),
+                RowType.field("index", VARCHAR),
+                RowType.field("indexes", new ArrayType(VARCHAR)),
                 RowType.field("metric", VARCHAR),
                 RowType.field("metrics", new ArrayType(VARCHAR)),
                 RowType.field("name", VARCHAR),
@@ -1116,12 +1124,20 @@ class TestOpenApiSpec
                         Assertions.tuple("meta", true),
                         Assertions.tuple("page[size]", true),
                         Assertions.tuple("page[number]", true),
+                        Assertions.tuple("query", true),
+                        Assertions.tuple("sort", true),
+                        Assertions.tuple("calculated_fields", true),
                         Assertions.tuple("cases", true),
+                        Assertions.tuple("compatible_version", true),
                         Assertions.tuple("compliance_signal_options", true),
                         Assertions.tuple("created_at", true),
                         Assertions.tuple("creation_author_id", true),
+                        Assertions.tuple("custom_message", true),
+                        Assertions.tuple("custom_name", true),
+                        Assertions.tuple("default_tags", true),
                         Assertions.tuple("deprecation_date", true),
                         Assertions.tuple("filters", true),
+                        Assertions.tuple("group_signals_by", true),
                         Assertions.tuple("has_extended_title", true),
                         Assertions.tuple("id", true),
                         Assertions.tuple("is_default", true),
@@ -1131,9 +1147,13 @@ class TestOpenApiSpec
                         Assertions.tuple("name", true),
                         Assertions.tuple("options", true),
                         Assertions.tuple("queries", true),
+                        Assertions.tuple("reference_tables", true),
+                        Assertions.tuple("scheduling_options", true),
                         Assertions.tuple("tags", true),
+                        Assertions.tuple("third_party_cases", true),
                         Assertions.tuple("type", true),
                         Assertions.tuple("update_author_id", true),
+                        Assertions.tuple("updated_at", true),
                         Assertions.tuple("version", true),
                         Assertions.tuple("rule_id", true),
                         Assertions.tuple("queries_req", true),
@@ -1146,6 +1166,36 @@ class TestOpenApiSpec
                         Assertions.tuple("version", BIGINT),
                         Assertions.tuple("queries_req", new ArrayType(queryReqType)),
                         Assertions.tuple("version_req", INTEGER));
+    }
+
+    @Test
+    public void getDatadogPaginatedTables()
+    {
+        OpenApiSpec spec = loadSpec("datadog.yaml");
+
+        // dev/specs/datadog.patch.json renames x-pagination to x-trino, so rows are read from the results path, like data
+        HttpPath auditPath = new HttpPath(PathItem.HttpMethod.GET, "/api/v2/audit/events");
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "api_v2_audit_events")).get(auditPath))
+                .isNotNull()
+                .extracting(Pagination::limitParam)
+                .isEqualTo(Optional.of("page[limit]"));
+        Assertions.assertThat(spec.getTables().get("api_v2_audit_events"))
+                .extracting(OpenApiColumn::getName)
+                .contains("id", "type", "attributes")
+                .doesNotContain("data");
+        // paginated POST operations are searches, so the patch marks them for SELECT instead of INSERT
+        HttpPath auditSearchPath = new HttpPath(PathItem.HttpMethod.POST, "/api/v2/audit/events/search");
+        OpenApiTableHandle auditSearchHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "api_v2_audit_events_search"));
+        Assertions.assertThat(auditSearchHandle.getSelectPaths()).containsExactly(auditSearchPath);
+        Assertions.assertThat(auditSearchHandle.getInsertPaths()).isEmpty();
+        // only page numbers starting from 1 are supported, so the patch keeps pageParam only where pageStart is 1
+        Assertions.assertThat(spec.getTables().get("api_v2_cases"))
+                .filteredOn(OpenApiColumn::isPageNumber)
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("page[number]");
+        Assertions.assertThat(spec.getTables().get("api_v2_team"))
+                .filteredOn(OpenApiColumn::isPageNumber)
+                .isEmpty();
     }
 
     @Test
@@ -1200,8 +1250,10 @@ class TestOpenApiSpec
                                         RowType.field("order", VARCHAR)))))))),
                         RowType.field("from", BIGINT),
                         RowType.field("interval", BIGINT),
-                        // queries are a oneOf of metrics and events queries, which are merged into a single row
+                        // queries are a oneOf of metrics, events, APM, SLO, and other queries, which are merged into a single row;
+                        // group_by is an array of objects in events queries, and an array of strings in other ones, so it's serialized JSON
                         RowType.field("queries", new ArrayType(RowType.from(List.of(
+                                RowType.field("cross_org_uuids", new ArrayType(VARCHAR)),
                                 RowType.field("data_source", VARCHAR),
                                 RowType.field("name", VARCHAR),
                                 RowType.field("query", VARCHAR),
@@ -1209,17 +1261,34 @@ class TestOpenApiSpec
                                         RowType.field("aggregation", VARCHAR),
                                         RowType.field("interval", BIGINT),
                                         RowType.field("metric", VARCHAR)))),
-                                RowType.field("group_by", new ArrayType(RowType.from(List.of(
-                                        RowType.field("facet", VARCHAR),
-                                        RowType.field("limit", INTEGER),
-                                        RowType.field("sort", RowType.from(List.of(
-                                                RowType.field("aggregation", VARCHAR),
-                                                RowType.field("metric", VARCHAR),
-                                                RowType.field("order", VARCHAR),
-                                                RowType.field("type", VARCHAR)))))))),
+                                RowType.field("group_by", VARCHAR),
                                 RowType.field("indexes", new ArrayType(VARCHAR)),
                                 RowType.field("search", RowType.from(List.of(
-                                        RowType.field("query", VARCHAR)))))))),
+                                        RowType.field("query", VARCHAR)))),
+                                RowType.field("env", VARCHAR),
+                                RowType.field("operation_name", VARCHAR),
+                                RowType.field("primary_tag_name", VARCHAR),
+                                RowType.field("primary_tag_value", VARCHAR),
+                                RowType.field("resource_name", VARCHAR),
+                                RowType.field("service", VARCHAR),
+                                RowType.field("stat", VARCHAR),
+                                RowType.field("operation_mode", VARCHAR),
+                                RowType.field("peer_tags", new ArrayType(VARCHAR)),
+                                RowType.field("query_filter", VARCHAR),
+                                RowType.field("resource_hash", VARCHAR),
+                                RowType.field("span_kind", VARCHAR),
+                                RowType.field("is_upstream", BOOLEAN),
+                                RowType.field("additional_query_filters", VARCHAR),
+                                RowType.field("group_mode", VARCHAR),
+                                RowType.field("measure", VARCHAR),
+                                RowType.field("slo_id", VARCHAR),
+                                RowType.field("slo_query_type", VARCHAR),
+                                RowType.field("is_normalized_cpu", BOOLEAN),
+                                RowType.field("limit", BIGINT),
+                                RowType.field("metric", VARCHAR),
+                                RowType.field("sort", VARCHAR),
+                                RowType.field("tag_filters", new ArrayType(VARCHAR)),
+                                RowType.field("text_filter", VARCHAR))))),
                         RowType.field("to", BIGINT)))),
                 RowType.field("type", VARCHAR)));
         Assertions.assertThat(columns)

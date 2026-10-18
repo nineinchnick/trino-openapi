@@ -1,0 +1,619 @@
+{
+  "paths": {
+    "/api/v2/audit/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/audit/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/bits-ai/investigations": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/cases": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "pageParam": "page[number]",
+          "pageStart": 1,
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/catalog/entity": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/catalog/kind": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/catalog/relation": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/ci/pipelines/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/ci/pipelines/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/ci/tests/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/ci/tests/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/container_images": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.pagination.next_cursor",
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/containers": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.pagination.next_cursor",
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/dashboards/usage": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/deployment_gates/evaluations": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.next_cursor",
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/deployment_gates/evaluations/rules": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.next_cursor",
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/downtime": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/global_orgs": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.next_cursor",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/identity_providers/{idp_id}/users": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/incidents": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/incidents/search": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data.attributes.incidents"
+        }
+      }
+    },
+    "/api/v2/llm-obs/v1/annotation-queues/{queue_id}/annotated-interactions/{interaction_id}": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "cursor",
+          "cursorPath": "data.attributes.next_cursor",
+          "limitParam": "limit",
+          "resultsPath": "data.attributes.events"
+        }
+      }
+    },
+    "/api/v2/logs/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/logs/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/metrics": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.pagination.next_cursor",
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/monitor/{monitor_id}/downtime_matches": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/ndm/devices": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/on-call/schedules": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/on-call/schedules/{schedule_id}/overrides": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/org_authorized_clients": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/org_authorized_clients/{org_authorized_client_id}/user_authorized_clients": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/posture_management/findings": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.cursor",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/powerpacks": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/processes": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/rum/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/rum/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/scorecard/outcomes": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/scorecard/rules": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/security/findings": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/security/findings/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.data.attributes.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.data.attributes.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/security_monitoring/signals": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/security_monitoring/signals/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/services/definitions": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/spans/events": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.after",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/spans/events/search": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.data.attributes.page.cursor",
+          "cursorPath": "meta.page.after",
+          "limitParam": "body.data.attributes.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/static-analysis/ai/rulesets/{ruleset_name}/rules/{rule_name}/revisions": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/static-analysis/custom/rulesets/{ruleset_name}/rules/{rule_name}/revisions": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[limit]",
+          "pageOffsetParam": "page[offset]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/team": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/team-hierarchy-links": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/team/connections": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/team/{super_team_id}/member_teams": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/team/{team_id}/memberships": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/test/flaky-test-management/tests": {
+      "post": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "body.data.attributes.page.cursor",
+          "cursorPath": "meta.pagination.next_page",
+          "limitParam": "body.data.attributes.page.limit",
+          "resultsPath": "data",
+          "sqlOperation": "select"
+        }
+      }
+    },
+    "/api/v2/usage/quotas/{quota_namespace}": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "cursorParam": "page[cursor]",
+          "cursorPath": "meta.page.next_cursor",
+          "limitParam": "page[limit]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/user_authorized_clients": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/users": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "page[size]",
+          "resultsPath": "data"
+        }
+      }
+    },
+    "/api/v2/workflows": {
+      "get": {
+        "x-pagination": null,
+        "x-trino": {
+          "limitParam": "limit",
+          "resultsPath": "data"
+        }
+      }
+    }
+  }
+}

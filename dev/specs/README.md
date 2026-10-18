@@ -31,6 +31,25 @@ jq --indent 2 . /tmp/github.json > src/test/resources/github.json
 jq --indent 2 --slurpfile patch dev/specs/github.patch.json -f dev/specs/merge-patch.jq /tmp/github.json > specs/github.json
 ```
 
+## Datadog
+
+* Upstream: https://raw.githubusercontent.com/DataDog/datadog-api-client-java/master/.generator/schemas/v2/openapi.yaml
+* Patch: [`datadog.patch.json`](datadog.patch.json)
+* Output: `src/test/resources/datadog.yaml`
+
+The upstream spec describes pagination in `x-pagination` extensions, which the
+patch replaces with `x-trino`, so the connector reads rows from `resultsPath`.
+Datadog numbers pages from 0, unless `pageStart` is set, and the connector
+numbers pages from 1, so the patch keeps `pageParam` only where `pageStart`
+is 1. Paginated `POST` operations are searches, so the patch marks them with
+`sqlOperation: select`. `yq` changes the formatting of some values, like quoting and emoji
+escapes, without changing them.
+
+```shell
+curl -fsSL -o /tmp/datadog.yaml https://raw.githubusercontent.com/DataDog/datadog-api-client-java/master/.generator/schemas/v2/openapi.yaml
+yq eval-all --from-file dev/specs/merge-patch.yq /tmp/datadog.yaml dev/specs/datadog.patch.json > src/test/resources/datadog.yaml
+```
+
 ## Unpatched copies
 
 These test resources are upstream specs without changes, formatted like the
