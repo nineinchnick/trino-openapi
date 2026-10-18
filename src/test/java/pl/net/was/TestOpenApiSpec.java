@@ -85,6 +85,75 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void getGithubUnionTables()
+    {
+        OpenApiSpec spec = loadSpec("github.json");
+        Map<String, List<OpenApiColumn>> tables = spec.getTables();
+
+        // GET /repos/{owner}/{repo}/contents/{path} returns a file, a symlink, a submodule, or an array of directory entries,
+        // and the content of PUT responses is a different type than the file content
+        RowType linksType = RowType.from(List.of(
+                RowType.field("git", VARCHAR),
+                RowType.field("html", VARCHAR),
+                RowType.field("self", VARCHAR)));
+        Assertions.assertThat(tables.get("repos_contents"))
+                // the commit is only included in responses of writes
+                .filteredOn(column -> column.getRequiresPredicate().isEmpty() && column.getOptionalPredicate().isEmpty() && !column.getMetadata().isHidden() && !column.getName().equals("commit"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("type", VARCHAR, true),
+                        Assertions.tuple("size", BIGINT, true),
+                        Assertions.tuple("name", VARCHAR, true),
+                        Assertions.tuple("content", VARCHAR, true),
+                        Assertions.tuple("content_2", RowType.from(List.of(
+                                RowType.field("name", VARCHAR),
+                                RowType.field("path", VARCHAR),
+                                RowType.field("sha", VARCHAR),
+                                RowType.field("size", BIGINT),
+                                RowType.field("url", VARCHAR),
+                                RowType.field("html_url", VARCHAR),
+                                RowType.field("git_url", VARCHAR),
+                                RowType.field("download_url", VARCHAR),
+                                RowType.field("type", VARCHAR),
+                                RowType.field("_links", RowType.from(List.of(
+                                        RowType.field("self", VARCHAR),
+                                        RowType.field("git", VARCHAR),
+                                        RowType.field("html", VARCHAR)))))), true),
+                        Assertions.tuple("url", VARCHAR, true),
+                        Assertions.tuple("git_url", VARCHAR, true),
+                        Assertions.tuple("html_url", VARCHAR, true),
+                        Assertions.tuple("download_url", VARCHAR, true),
+                        Assertions.tuple("_links", linksType, true),
+                        Assertions.tuple("encoding", VARCHAR, true),
+                        Assertions.tuple("target", VARCHAR, true),
+                        Assertions.tuple("submodule_git_url", VARCHAR, true));
+
+        // GET /user returns either a private or a public user, so all of their fields are nullable
+        Assertions.assertThat(tables.get("user"))
+                .filteredOn(column -> column.getOptionalPredicate().isEmpty())
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .contains(
+                        Assertions.tuple("login", VARCHAR, true),
+                        Assertions.tuple("id", BIGINT, true),
+                        Assertions.tuple("public_repos", BIGINT, true),
+                        Assertions.tuple("private_gists", BIGINT, true),
+                        Assertions.tuple("two_factor_authentication", BOOLEAN, true),
+                        Assertions.tuple("plan", RowType.from(List.of(
+                                RowType.field("collaborators", BIGINT),
+                                RowType.field("name", VARCHAR),
+                                RowType.field("space", BIGINT),
+                                RowType.field("private_repos", BIGINT))), true),
+                        Assertions.tuple("ldap_dn", VARCHAR, true));
+
+        // timeline events are a oneOf of many event types, which define actors with different fields, so they're merged into a single row
+        Assertions.assertThat(tables.get("repos_issues_timeline"))
+                .filteredOn(column -> column.getName().equals("actor"))
+                .singleElement()
+                .extracting(OpenApiColumn::getType)
+                .isInstanceOf(RowType.class);
+    }
+
+    @Test
     public void getGithubExtensionTables()
     {
         OpenApiSpec spec = loadSpec("github-patched.json");
@@ -892,6 +961,78 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.HEADER))
                                 .setIsNullable(true)
                                 .build());
+    }
+
+    @Test
+    public void getDatadogUnionTables()
+    {
+        OpenApiSpec spec = loadSpec("datadog.yaml");
+
+        // rules are a oneOf of standard and signal rules, which define queries as arrays of different objects;
+        // request bodies don't include the default rule ID, so they're a different type
+        RowType queryReqType = RowType.from(List.of(
+                RowType.field("aggregation", VARCHAR),
+                RowType.field("distinctFields", new ArrayType(VARCHAR)),
+                RowType.field("groupByFields", new ArrayType(VARCHAR)),
+                RowType.field("hasOptionalGroupByFields", BOOLEAN),
+                RowType.field("metric", VARCHAR),
+                RowType.field("metrics", new ArrayType(VARCHAR)),
+                RowType.field("name", VARCHAR),
+                RowType.field("query", VARCHAR),
+                RowType.field("correlatedByFields", new ArrayType(VARCHAR)),
+                RowType.field("correlatedQueryIndex", INTEGER),
+                RowType.field("ruleId", VARCHAR)));
+        RowType queryType = RowType.from(List.of(
+                RowType.field("aggregation", VARCHAR),
+                RowType.field("distinctFields", new ArrayType(VARCHAR)),
+                RowType.field("groupByFields", new ArrayType(VARCHAR)),
+                RowType.field("hasOptionalGroupByFields", BOOLEAN),
+                RowType.field("metric", VARCHAR),
+                RowType.field("metrics", new ArrayType(VARCHAR)),
+                RowType.field("name", VARCHAR),
+                RowType.field("query", VARCHAR),
+                RowType.field("correlatedByFields", new ArrayType(VARCHAR)),
+                RowType.field("correlatedQueryIndex", INTEGER),
+                RowType.field("defaultRuleId", VARCHAR),
+                RowType.field("ruleId", VARCHAR)));
+        Assertions.assertThat(spec.getTables().get("api_v2_security_monitoring_rules"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("data", true),
+                        Assertions.tuple("meta", true),
+                        Assertions.tuple("page[size]", true),
+                        Assertions.tuple("page[number]", true),
+                        Assertions.tuple("cases", true),
+                        Assertions.tuple("compliance_signal_options", true),
+                        Assertions.tuple("created_at", true),
+                        Assertions.tuple("creation_author_id", true),
+                        Assertions.tuple("deprecation_date", true),
+                        Assertions.tuple("filters", true),
+                        Assertions.tuple("has_extended_title", true),
+                        Assertions.tuple("id", true),
+                        Assertions.tuple("is_default", true),
+                        Assertions.tuple("is_deleted", true),
+                        Assertions.tuple("is_enabled", true),
+                        Assertions.tuple("message", true),
+                        Assertions.tuple("name", true),
+                        Assertions.tuple("options", true),
+                        Assertions.tuple("queries", true),
+                        Assertions.tuple("tags", true),
+                        Assertions.tuple("type", true),
+                        Assertions.tuple("update_author_id", true),
+                        Assertions.tuple("version", true),
+                        Assertions.tuple("rule_id", true),
+                        Assertions.tuple("queries_req", true),
+                        Assertions.tuple("version_req", true));
+        Assertions.assertThat(spec.getTables().get("api_v2_security_monitoring_rules"))
+                .filteredOn(column -> column.getName().startsWith("queries") || column.getName().startsWith("version"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("queries", new ArrayType(queryType)),
+                        Assertions.tuple("version", BIGINT),
+                        Assertions.tuple("queries_req", new ArrayType(queryReqType)),
+                        Assertions.tuple("version_req", INTEGER));
     }
 
     @Test
