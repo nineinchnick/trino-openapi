@@ -300,6 +300,26 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithDateTimeParameters()
+    {
+        // the server returns the parsed value both in UTC and with a -05:30 offset
+        assertQuery(
+                "SELECT at, at_text, received_at, shifted_at FROM fastapi.default.datetime_parameters WHERE at = TIMESTAMP '2025-04-18 12:30:45.123'",
+                "VALUES (TIMESTAMP '2025-04-18 12:30:45.123', '2025-04-18T12:30:45.123Z', TIMESTAMP '2025-04-18 12:30:45.123', TIMESTAMP '2025-04-18 12:30:45.123')");
+        assertQuery(
+                "SELECT at_text, received_at, shifted_at FROM fastapi.default.datetime_parameters WHERE at = TIMESTAMP '1969-12-31 23:59:59.999'",
+                "VALUES ('1969-12-31T23:59:59.999Z', TIMESTAMP '1969-12-31 23:59:59.999', TIMESTAMP '1969-12-31 23:59:59.999')");
+    }
+
+    @Test
+    public void selectWithDateParameters()
+    {
+        assertQuery(
+                "SELECT day, day_text, next_day FROM fastapi.default.date_parameters WHERE day = DATE '2025-04-18'",
+                "VALUES (DATE '2025-04-18', '2025-04-18', DATE '2025-04-19')");
+    }
+
+    @Test
     public void searchItemsWithInPhrase()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (ARRAY['2'])").getMaterializedRows();

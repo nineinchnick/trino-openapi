@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Callable
 
 from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Request, Response
@@ -112,6 +112,17 @@ class PageFilter(BaseModel):
 
 class DecimalText(BaseModel):
     decimal_text: str
+
+
+class DateTimeText(BaseModel):
+    at_text: str
+    received_at: datetime
+    shifted_at: datetime
+
+
+class DateText(BaseModel):
+    day_text: str
+    next_day: date
 
 
 class Echo(BaseModel):
@@ -362,6 +373,21 @@ def echo_union_value(body: UnionValueEcho) -> UnionValueEcho:
 def decimal_parameters(decimal_value: str) -> DecimalText:
     # returns the exact text of the parameter, to check how it was formatted
     return DecimalText(decimal_text=decimal_value)
+
+
+@router.get("/datetime_parameters")
+def datetime_parameters(request: Request, at: datetime) -> DateTimeText:
+    # returns the exact text of the parameter, to check how it was formatted,
+    # and the parsed value with different offsets, to check how they're read
+    return DateTimeText(
+        at_text=request.query_params["at"],
+        received_at=at,
+        shifted_at=at.astimezone(timezone(-timedelta(hours=5, minutes=30))))
+
+
+@router.get("/date_parameters")
+def date_parameters(request: Request, day: date) -> DateText:
+    return DateText(day_text=request.query_params["day"], next_day=day + timedelta(days=1))
 
 
 # parameter serialization is described only in echo.yml, since FastAPI can't parse most parameter styles;
