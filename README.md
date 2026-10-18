@@ -139,7 +139,7 @@ Restart Trino. Every catalog can point to a different API.
 | `http-cache.directory`         | `OPENAPI_HTTP_CACHE_DIRECTORY`      |           | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
 | `http-cache.max-size`          | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog; the least recently used responses are removed above it                  |
 | `http-cache.max-entry-size`    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
-| `split-strategy`               | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe` or `off`; see [Pagination](#pagination)                           |
+| `split-strategy`               | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
 
 ## Authentication
 
@@ -521,6 +521,7 @@ paths:
 | `maxPages`          | Maximum number of pages to request                                                                                                                  |
 | `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `splitStrategy`     | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
+| `strideSplits`      | Number of splits reading pages with the `stride` strategy, instead of the number of worker nodes                                                    |
 | `errorPath`         | JSON pointer to a human-readable message in error responses                                                                                         |
 | `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
@@ -593,13 +594,26 @@ separate splits:
   the page size. When the page size isn't known, it's the number of results on
   the first page. If the first page has no total, the remaining pages are read
   in a single split. Results with a single page are requested twice.
+* `stride` - create a split for every worker node, or as many as set in
+  `strideSplits`, without requesting any page on the coordinator. With N
+  splits, the first split reads pages 1, N+1, 2N+1, and so on, the second
+  split reads pages 2, N+2, 2N+2, and so on. Every split stops at the last page
+  like a single split would, and skips pages past the last one, using
+  `totalResultsPath` or `totalPagesPath`. The strategy is used only when one of
+  `totalResultsPath`, `totalPagesPath`, `hasMorePath`, or the page size is known,
+  otherwise pages are read in a single split. Results with fewer pages than
+  splits make extra requests for pages past the last one. If the server returns
+  the last page for every page number past it, also set `totalPagesPath`, or
+  `totalResultsPath` with a known page size, otherwise such pages are returned
+  more than once.
 * `off` - read all pages in a single split.
 
 Pages are read one after another when the query has a `LIMIT`, so pagination
-can stop once it's reached, and when filters on multiple values, like `IN`
-lists, already read every value in a separate split. Splits are still limited by
-`maxPages`, `max-requests-per-second`, and `max-splits-per-second`. Rows from
-different pages can be returned in any order.
+can stop once it's reached. The `probe` strategy is not used when filters on
+multiple values, like `IN` lists, already read every value in a separate split.
+Splits are still limited by `maxPages`, `maxResults`, `max-requests-per-second`,
+and `max-splits-per-second`. Rows from different pages can be returned in any
+order.
 
 ## Range filters
 

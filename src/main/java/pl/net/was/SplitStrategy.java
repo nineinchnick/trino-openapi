@@ -17,5 +17,6 @@ package pl.net.was;
 public enum SplitStrategy
 {
     PROBE,
+    STRIDE,
     OFF
 }

@@ -110,6 +110,10 @@ public class TestOpenApiQueries
                         .putAll(fastApiProperties.buildOrThrow())
                         .put("split-strategy", "probe")
                         .buildOrThrow(),
+                "fastapi_stride", ImmutableMap.<String, String>builder()
+                        .putAll(fastApiProperties.buildOrThrow())
+                        .put("split-strategy", "stride")
+                        .buildOrThrow(),
                 "echo", Map.of(
                         "spec-location", "src/test/resources/echo.yml",
                         "base-uri", fastApiServer.getApiUrl())));
@@ -1052,6 +1056,20 @@ public class TestOpenApiQueries
         assertSplits("SELECT name FROM fastapi_probe.default.items LIMIT 5", 1);
         // pages are not split by default
         assertSplits("SELECT name FROM fastapi.default.items", 1);
+    }
+
+    @Test
+    public void itemsWithStrideSplits()
+    {
+        assertSplits("SELECT name FROM fastapi_stride.default.items", 3);
+        // the server returns the last page for every page number past it, which must be skipped
+        assertSplits("SELECT name FROM fastapi_stride.default.clamped_items", 3);
+        assertSplits("SELECT name FROM fastapi_stride.default.has_more_items", getQueryRunner().getNodeCount());
+        assertSplits("SELECT name FROM fastapi_stride.default.clamped_sized_items", getQueryRunner().getNodeCount());
+        // without a signal of the last page, pages are read in a single split
+        assertSplits("SELECT name FROM fastapi_stride.default.max_pages_items", 1);
+        // pagination stops once the limit is reached
+        assertSplits("SELECT name FROM fastapi_stride.default.items LIMIT 5", 1);
     }
 
     @Test

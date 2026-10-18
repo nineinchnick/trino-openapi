@@ -869,11 +869,13 @@ def custom_openapi():
     openapi_schema["paths"]["/item_categories"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results/0/categories"
     }
+    # more stride splits than pages, to read pages past the last one
     openapi_schema["paths"]["/items"]["get"]["x-trino"] = {
         "pageParam": "page",
         "limitParam": "per_page",
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
+        "strideSplits": 3,
     }
     openapi_schema["paths"]["/writable_items"]["get"]["x-trino"] = {
         "pageParam": "page",
@@ -888,6 +890,7 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
+        "strideSplits": 3,
     }
     openapi_schema["paths"]["/clamped_sized_items"]["get"]["x-trino"] = {
         "pageParam": "page",

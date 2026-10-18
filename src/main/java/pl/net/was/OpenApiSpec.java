@@ -119,6 +119,7 @@ public class OpenApiSpec
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
+    private static final String PAGINATION_STRIDE_SPLITS = "strideSplits";
     private static final String SPLIT_STRATEGIES = Arrays.stream(SplitStrategy.values())
             .map(splitStrategy -> splitStrategy.name().toLowerCase(Locale.ENGLISH))
             .collect(joining(", "));
@@ -1133,18 +1134,19 @@ public class OpenApiSpec
                                     .setTotalResultsPointer(pointer(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
                                     .setTotalPagesPointer(pointer(specExtension, PAGINATION_TOTAL_PAGES_PATH))
                                     .setHasMorePointer(pointer(specExtension, PAGINATION_HAS_MORE_PATH))
-                                    .setMaxPages(getMaxPages(rawExtension))
+                                    .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
                                     .setSplitStrategy(getSplitStrategy(rawExtension))
+                                    .setStrideSplits(getOptionalInt(rawExtension, PAGINATION_STRIDE_SPLITS))
                                     .build();
                         }));
     }
 
-    private static OptionalInt getMaxPages(Object specExtension)
+    private static OptionalInt getOptionalInt(Object specExtension, String extensionName)
     {
         // YAML and JSON specs can have the number either as a number or a string
-        Object value = specExtension instanceof Map<?, ?> map ? map.get(PAGINATION_MAX_PAGES) : null;
+        Object value = specExtension instanceof Map<?, ?> map ? map.get(extensionName) : null;
         if (value == null) {
             return OptionalInt.empty();
         }
@@ -1152,7 +1154,7 @@ public class OpenApiSpec
             return OptionalInt.of(value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString()));
         }
         catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_PAGES, value), e);
+            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(extensionName, value), e);
         }
     }
 
