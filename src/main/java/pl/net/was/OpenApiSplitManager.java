@@ -55,6 +55,8 @@ import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiSessionProperties.getProbeLimit;
+import static pl.net.was.OpenApiSessionProperties.getSplitStrategy;
 import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
 
 public class OpenApiSplitManager
@@ -258,7 +260,9 @@ public class OpenApiSplitManager
         boolean canProbe = splitTables.size() == 1 && table.getLimit().isEmpty();
         for (SplitTable splitTable : splitTables.values()) {
             Pagination pagination = spec.getPaginations(table.getSchemaTableName()).getOrDefault(splitTable.httpPath(), Pagination.none());
-            SplitStrategy splitStrategy = pagination.splitStrategy().orElse(this.splitStrategy);
+            SplitStrategy splitStrategy = getSplitStrategy(session)
+                    .or(pagination::splitStrategy)
+                    .orElse(this.splitStrategy);
             if (splitStrategy == SplitStrategy.STRIDE && table.getLimit().isEmpty() && client.canReadPagesWithStride(splitTable.table())) {
                 int strideSplits = getStrideSplits(pagination);
                 for (int firstPage = 1; firstPage <= strideSplits; firstPage++) {
@@ -275,7 +279,9 @@ public class OpenApiSplitManager
             }
             // the first page tells how many pages there are, but its split doesn't wait for it to be requested
             splits.add(new OpenApiSplit(firstPage.get()));
-            ProbeLimit probeLimit = pagination.probeLimit().orElse(this.probeLimit);
+            ProbeLimit probeLimit = getProbeLimit(session)
+                    .or(pagination::probeLimit)
+                    .orElse(this.probeLimit);
             splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
         }
         // TODO when implementing limits, this is where we'd break down splits more

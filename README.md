@@ -623,6 +623,15 @@ Splits are still limited by `maxPages`, `maxResults`, `max-requests-per-second`,
 and `max-splits-per-second`. Rows from different pages can be returned in any
 order.
 
+The `split_strategy` and `probe_limit` catalog session properties override both
+the spec and the catalog properties for a single query, for all its tables in
+the catalog:
+
+```sql
+SET SESSION openapi.split_strategy = 'probe';
+SET SESSION openapi.probe_limit = '0';
+```
+
 ## Range filters
 
 Many APIs accept parameters that limit the values of a response field, like
