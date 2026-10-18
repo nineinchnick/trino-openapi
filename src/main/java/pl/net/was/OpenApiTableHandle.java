@@ -24,6 +24,7 @@ import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.connector.SortItem;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 
@@ -50,6 +51,7 @@ public class OpenApiTableHandle
     private final List<HttpPath> deletePaths;
     private final TupleDomain<ColumnHandle> constraint;
     private final OptionalLong limit;
+    private final Optional<SortItem> sortItem;
 
     private OpenApiTableHandle(
             SchemaTableName schemaTableName,
@@ -58,7 +60,8 @@ public class OpenApiTableHandle
             List<HttpPath> updatePaths,
             List<HttpPath> deletePaths,
             TupleDomain<ColumnHandle> constraint,
-            OptionalLong limit)
+            OptionalLong limit,
+            Optional<SortItem> sortItem)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
         this.selectPaths = ImmutableList.copyOf(requireNonNull(selectPaths, "selectPaths is null"));
@@ -67,6 +70,7 @@ public class OpenApiTableHandle
         this.deletePaths = ImmutableList.copyOf(requireNonNull(deletePaths, "deletePaths is null"));
         this.constraint = requireNonNull(constraint, "constraint is null");
         this.limit = requireNonNull(limit, "limit is null");
+        this.sortItem = requireNonNull(sortItem, "sortItem is null");
     }
 
     // Trino only shares jackson-annotations with plugins, so handles can't be deserialized through a builder;
@@ -79,9 +83,10 @@ public class OpenApiTableHandle
             @JsonProperty("updatePaths") List<HttpPath> updatePaths,
             @JsonProperty("deletePaths") List<HttpPath> deletePaths,
             @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint,
-            @JsonProperty("limit") OptionalLong limit)
+            @JsonProperty("limit") OptionalLong limit,
+            @JsonProperty("sortItem") Optional<SortItem> sortItem)
     {
-        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit);
+        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem);
     }
 
     public static Builder builder(SchemaTableName schemaTableName)
@@ -97,7 +102,8 @@ public class OpenApiTableHandle
                 .setUpdatePaths(updatePaths)
                 .setDeletePaths(deletePaths)
                 .setConstraint(constraint)
-                .setLimit(limit);
+                .setLimit(limit)
+                .setSortItem(sortItem);
     }
 
     @JsonProperty
@@ -153,6 +159,15 @@ public class OpenApiTableHandle
                 statement));
     }
 
+    /**
+     * The order of rows requested from the server, with the name of the column instead of the name of a symbol in the query plan.
+     */
+    @JsonProperty
+    public Optional<SortItem> getSortItem()
+    {
+        return sortItem;
+    }
+
     @Override
     public String toString()
     {
@@ -168,7 +183,8 @@ public class OpenApiTableHandle
                 + SizeOf.estimatedSizeOf(updatePaths, HttpPath::getRetainedSizeInBytes)
                 + SizeOf.estimatedSizeOf(deletePaths, HttpPath::getRetainedSizeInBytes)
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
-                + SizeOf.sizeOf(limit);
+                + SizeOf.sizeOf(limit)
+                + SizeOf.sizeOf(sortItem, item -> SizeOf.estimatedSizeOf(item.getName()));
     }
 
     public OpenApiTableHandle cloneWithConstraint(TupleDomain<ColumnHandle> constraint)
@@ -182,6 +198,14 @@ public class OpenApiTableHandle
     {
         return toBuilder()
                 .setLimit(OptionalLong.of(limit))
+                .build();
+    }
+
+    public OpenApiTableHandle cloneWithTopN(SortItem sortItem, long limit)
+    {
+        return toBuilder()
+                .setLimit(OptionalLong.of(limit))
+                .setSortItem(Optional.of(sortItem))
                 .build();
     }
 
@@ -304,6 +328,7 @@ public class OpenApiTableHandle
         private List<HttpPath> deletePaths = ImmutableList.of();
         private TupleDomain<ColumnHandle> constraint = TupleDomain.none();
         private OptionalLong limit = OptionalLong.empty();
+        private Optional<SortItem> sortItem = Optional.empty();
 
         private Builder(SchemaTableName schemaTableName)
         {
@@ -346,9 +371,15 @@ public class OpenApiTableHandle
             return this;
         }
 
+        public Builder setSortItem(Optional<SortItem> sortItem)
+        {
+            this.sortItem = requireNonNull(sortItem, "sortItem is null");
+            return this;
+        }
+
         public OpenApiTableHandle build()
         {
-            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit);
+            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem);
         }
     }
 }

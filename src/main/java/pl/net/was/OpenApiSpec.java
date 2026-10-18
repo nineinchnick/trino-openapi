@@ -112,6 +112,11 @@ public class OpenApiSpec
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String SQL_OPERATION = "sqlOperation";
+    private static final String SORT_PARAM = "sortParam";
+    private static final String SORT_VALUES = "sortValues";
+    private static final String SORT_DIRECTION_PARAM = "directionParam";
+    private static final String SORT_ASCENDING_VALUE = "ascendingValue";
+    private static final String SORT_DESCENDING_VALUE = "descendingValue";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -875,6 +880,7 @@ public class OpenApiSpec
                                     .setTotalPagesPointer(pointer(specExtension, PAGINATION_TOTAL_PAGES_PATH))
                                     .setHasMorePointer(pointer(specExtension, PAGINATION_HAS_MORE_PATH))
                                     .setMaxPages(getMaxPages(rawExtension))
+                                    .setSorting(getSorting(specExtension, rawExtension))
                                     .build();
                         }));
     }
@@ -892,6 +898,22 @@ public class OpenApiSpec
         catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_PAGES, value), e);
         }
+    }
+
+    private static Optional<Sorting> getSorting(Map<String, String> specExtension, Object rawExtension)
+    {
+        String sortParam = specExtension.get(SORT_PARAM);
+        if (sortParam == null) {
+            return Optional.empty();
+        }
+        Object sortValues = rawExtension instanceof Map<?, ?> map ? map.get(SORT_VALUES) : null;
+        return Optional.of(Sorting.builder()
+                .setSortParam(sortParam)
+                .setSortValues(getMapOfStrings(sortValues))
+                .setDirectionParam(specExtension.get(SORT_DIRECTION_PARAM))
+                .setAscendingValue(specExtension.get(SORT_ASCENDING_VALUE))
+                .setDescendingValue(specExtension.get(SORT_DESCENDING_VALUE))
+                .build());
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)

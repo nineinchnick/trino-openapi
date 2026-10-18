@@ -48,6 +48,7 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.ColumnHandle;
+import io.trino.spi.connector.SortItem;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
@@ -57,6 +58,7 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.VarcharType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -66,6 +68,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +88,7 @@ import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.HeaderNames.USER_AGENT;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
@@ -151,6 +155,10 @@ public class OpenApiClient
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
             return makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows();
         }
+        Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
+        OpenApiTableHandle pagedTable = sortedTable.orElse(table);
+        // without the sort parameters, the first rows are not the top ones, so all pages must be read
+        long limit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? Long.MAX_VALUE : table.getLimit().orElse(Long.MAX_VALUE);
         return pageIterator(
                 page -> {
                     TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
@@ -158,16 +166,53 @@ public class OpenApiClient
                             NullableValue.of(
                                     pageColumn.get().getType(),
                                     pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
-                    OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
+                    OpenApiTableHandle pageTable = pagedTable.cloneWithConstraint(pagedTable.getConstraint().isNone() ? pageConstraint : pagedTable.getConstraint().intersect(pageConstraint));
                     // the body must be serialized for every page, since it can contain the page number,
                     // and the response handler copies the page number to every row
                     return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
                 },
                 0,
-                table.getLimit().orElse(Long.MAX_VALUE),
+                limit,
                 1,
                 getPageSize(table, httpPath),
                 openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).maxPages());
+    }
+
+    private Optional<OpenApiTableHandle> getSortedTable(OpenApiTableHandle table, HttpPath httpPath, SortItem sortItem)
+    {
+        Optional<Sorting> sorting = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).sorting();
+        if (sorting.isEmpty()) {
+            return Optional.empty();
+        }
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        String sortValue = columns.stream()
+                .filter(column -> column.getName().equals(sortItem.getName()))
+                .findFirst()
+                .map(column -> sorting.get().sortValues().get(column.getSourceName()))
+                .orElse(null);
+        if (sortValue == null) {
+            return Optional.empty();
+        }
+        Map<String, String> paramValues = Map.of(
+                sorting.get().sortParam(), sortValue,
+                sorting.get().directionParam(), sorting.get().directionValue(sortItem.getSortOrder().isAscending()));
+        Map<ColumnHandle, NullableValue> sortConstraint = new HashMap<>();
+        for (Map.Entry<String, String> paramValue : paramValues.entrySet()) {
+            Optional<OpenApiColumn> paramColumn = columns.stream()
+                    .filter(column -> column.getSourceName().equals(paramValue.getKey()) && isPredicate(column, httpPath, null))
+                    .findFirst();
+            if (paramColumn.isEmpty() || !(paramColumn.get().getType() instanceof VarcharType)) {
+                return Optional.empty();
+            }
+            Object filter = getFilter(paramColumn.get(), table.getConstraint());
+            // a filter on a sort parameter is sent as is, so the server sorts the rows as the filter says
+            if (filter != null && !filter.equals(paramValue.getValue())) {
+                return Optional.empty();
+            }
+            sortConstraint.put(paramColumn.get().getHandle(), NullableValue.of(paramColumn.get().getType(), utf8Slice(paramValue.getValue())));
+        }
+        TupleDomain<ColumnHandle> constraint = TupleDomain.fromFixedValues(sortConstraint);
+        return Optional.of(table.cloneWithConstraint(table.getConstraint().isNone() ? constraint : table.getConstraint().intersect(constraint)));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
