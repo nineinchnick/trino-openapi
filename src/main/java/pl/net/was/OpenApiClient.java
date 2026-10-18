@@ -156,7 +156,7 @@ public class OpenApiClient
         else {
             rateLimiter = null;
         }
-        this.retryPolicy = RetryPolicy.fromConfig(config);
+        this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
     }
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table, boolean revalidateCachedResponses)

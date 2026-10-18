@@ -39,6 +39,7 @@ import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -110,6 +111,15 @@ class TestOpenApiClientRequests
                     sqlOperation: select
             %s
             """.formatted(OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES);
+
+    // like GitHub, which sends the reset time with every response, including ones that fail because of missing permissions
+    private static final String RATE_LIMITED_SPEC = SPEC.replace("paths:\n", """
+            x-trino:
+              rateLimitResetHeader: x-ratelimit-reset
+              rateLimitResetFormat: epochSeconds
+              rateLimitRemainingHeader: x-ratelimit-remaining
+            paths:
+            """);
 
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
@@ -292,6 +302,100 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testWaitsForRateLimitReset()
+            throws IOException
+    {
+        // the reset time has a precision of seconds, so the next one is at least a second later
+        String reset = String.valueOf(Instant.now().getEpochSecond() + 2);
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", reset));
+        responses.add(respond(429, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", reset));
+        Stopwatch stopwatch = Stopwatch.createStarted();
+
+        assertThat(getRows(newConfig(RATE_LIMITED_SPEC).setRetryMaxDelay(new Duration(1, MINUTES)), "items", null)).isEmpty();
+        assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofSeconds(1));
+        assertThat(requestCount).hasValue(3);
+    }
+
+    @Test
+    void testWaitsForRateLimitResetDelay()
+            throws IOException
+    {
+        String spec = RATE_LIMITED_SPEC
+                .replace("x-ratelimit-reset\n", "x-ratelimit-reset-after\n")
+                .replace("epochSeconds", "delaySeconds")
+                .replace("  rateLimitRemainingHeader: x-ratelimit-remaining\n", "");
+        responses.add(respond(429, "", "X-RateLimit-Reset-After", "1"));
+        Stopwatch stopwatch = Stopwatch.createStarted();
+
+        assertThat(getRows(newConfig(spec).setRetryMaxDelay(new Duration(1, MINUTES)), "items", null)).isEmpty();
+        assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofSeconds(1));
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testDoesNotRetryForbiddenWithRemainingRateLimit()
+            throws IOException
+    {
+        String reset = String.valueOf(Instant.now().getEpochSecond());
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "4999", "X-RateLimit-Reset", reset));
+
+        assertThatThrownBy(() -> getRows(newConfig(RATE_LIMITED_SPEC), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 403", baseUri);
+        assertThat(requestCount).hasValue(1);
+
+        requestCount.set(0);
+        responses.add(respond(403, ""));
+
+        assertThatThrownBy(() -> getRows(newConfig(RATE_LIMITED_SPEC), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 403", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testFailsFastWhenRateLimitResetExceedsMaxDelay()
+            throws IOException
+    {
+        String reset = String.valueOf(Instant.now().getEpochSecond() + 3600);
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", reset));
+
+        assertThatThrownBy(() -> getRows(newConfig(RATE_LIMITED_SPEC), "items", null))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageStartingWith("Request GET %s/items for operation listItems failed with HTTP 403; the rate limit resets in 35", baseUri)
+                .hasMessageEndingWith(" seconds, which is longer than retry-max-delay (10.00ms)");
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testRateLimitResetCountsAgainstMaxRetries()
+            throws IOException
+    {
+        String reset = String.valueOf(Instant.now().getEpochSecond());
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", reset));
+        responses.add(respond(403, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", reset));
+
+        assertThatThrownBy(() -> getRows(newConfig(RATE_LIMITED_SPEC).setMaxRetries(1).setRetryMaxDelay(new Duration(1, MINUTES)), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 403 after 2 attempts", baseUri);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testWaitsForRateLimitResetWithHttpCache()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(RATE_LIMITED_SPEC)
+                .setRetryMaxDelay(new Duration(1, MINUTES))
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(respond(429, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", String.valueOf(Instant.now().getEpochSecond())));
+        responses.add(respond(200, "[{\"id\": 1}]", "Cache-Control", "max-age=60"));
+
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(2);
+        // only the successful response is cached, so it's reused without a request
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
     void testRetriesCountAgainstRateLimit()
             throws IOException
     {
@@ -400,7 +504,13 @@ class TestOpenApiClientRequests
     private OpenApiConfig newConfig()
             throws IOException
     {
-        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), SPEC);
+        return newConfig(SPEC);
+    }
+
+    private OpenApiConfig newConfig(String spec)
+            throws IOException
+    {
+        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), spec);
         return new OpenApiConfig()
                 .setSpecLocation(specFile.toString())
                 .setBaseUri(baseUri)

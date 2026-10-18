@@ -22,6 +22,7 @@ import javax.net.ssl.SSLHandshakeException;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -44,12 +45,16 @@ final class RetryPolicy
     private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "OPTIONS", "PUT", "DELETE");
     private static final Set<Integer> TRANSIENT_STATUS_CODES = Set.of(429, 502, 503, 504);
     private static final int FORBIDDEN = 403;
+    private static final int TOO_MANY_REQUESTS = 429;
+    // requests waiting for the same rate limit reset shouldn't all be sent at the same time
+    private static final Duration RATE_LIMIT_RESET_JITTER = Duration.ofSeconds(1);
 
     private final int maxRetries;
     private final Duration initialDelay;
     private final Duration maxDelay;
+    private final Optional<RateLimitHeaders> rateLimitHeaders;
 
-    RetryPolicy(int maxRetries, Duration initialDelay, Duration maxDelay)
+    private RetryPolicy(int maxRetries, Duration initialDelay, Duration maxDelay, Optional<RateLimitHeaders> rateLimitHeaders)
     {
         checkArgument(maxRetries >= 0, "maxRetries is negative");
         this.maxRetries = maxRetries;
@@ -57,14 +62,16 @@ final class RetryPolicy
         this.maxDelay = requireNonNull(maxDelay, "maxDelay is null");
         checkArgument(!initialDelay.isNegative(), "initialDelay is negative");
         checkArgument(maxDelay.compareTo(initialDelay) >= 0, "maxDelay is less than initialDelay");
+        this.rateLimitHeaders = requireNonNull(rateLimitHeaders, "rateLimitHeaders is null");
     }
 
-    static RetryPolicy fromConfig(OpenApiConfig config)
+    static RetryPolicy fromConfig(OpenApiConfig config, Optional<RateLimitHeaders> rateLimitHeaders)
     {
         return new RetryPolicy(
                 config.getMaxRetries(),
                 config.getRetryInitialDelay().toJavaTime(),
-                config.getRetryMaxDelay().toJavaTime());
+                config.getRetryMaxDelay().toJavaTime(),
+                rateLimitHeaders);
     }
 
     /**
@@ -93,7 +100,16 @@ final class RetryPolicy
                             retryAfter.get().toSeconds(),
                             succinctNanos(maxDelay.toNanos()))));
                 }
-                Duration delay = retryAfter.orElseGet(() -> getBackoffDelay(retry));
+                Optional<Duration> rateLimitReset = retryAfter.isPresent() ? Optional.empty() : getRateLimitReset(failure);
+                if (rateLimitReset.isPresent() && rateLimitReset.get().compareTo(maxDelay) > 0) {
+                    throw failureMapper.map(failure, attempts, Optional.of(format(
+                            "the rate limit resets in %d seconds, which is longer than retry-max-delay (%s)",
+                            rateLimitReset.get().toSeconds(),
+                            succinctNanos(maxDelay.toNanos()))));
+                }
+                Duration delay = retryAfter
+                        .or(() -> rateLimitReset.map(reset -> reset.plusNanos(ThreadLocalRandom.current().nextLong(RATE_LIMIT_RESET_JITTER.toNanos() + 1))))
+                        .orElseGet(() -> getBackoffDelay(retry));
                 log.info("Retrying %s %s after %s in %s ms, attempt %d of %d",
                         request.getMethod(),
                         OpenApiClient.withoutQuery(request.getUri()),
@@ -118,13 +134,14 @@ final class RetryPolicy
         RuntimeException map(HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason);
     }
 
-    private static boolean isTransient(HttpRequestFailure failure)
+    private boolean isTransient(HttpRequestFailure failure)
     {
         return switch (failure) {
             case HttpRequestFailure.TransportError error -> isNetworkError(error.getCause());
-            // some servers, like GitHub, respond to exceeded rate limits with 403, so only a server asking to retry explicitly can tell it apart from missing permissions
+            // some servers, like GitHub, respond to exceeded rate limits with 403, so only a server asking to retry explicitly,
+            // or saying when the rate limit resets, as the spec declares, can tell it apart from missing permissions
             case HttpRequestFailure.ErrorResponse error -> TRANSIENT_STATUS_CODES.contains(error.getStatusCode())
-                    || (error.getStatusCode() == FORBIDDEN && error.getRetryAfter().isPresent());
+                    || (error.getStatusCode() == FORBIDDEN && (error.getRetryAfter().isPresent() || getRateLimitReset(error).isPresent()));
         };
     }
 
@@ -143,6 +160,17 @@ final class RetryPolicy
             return error.getRetryAfter();
         }
         return Optional.empty();
+    }
+
+    private Optional<Duration> getRateLimitReset(HttpRequestFailure failure)
+    {
+        // other errors, like 503 Service Unavailable, are not caused by the rate limit, even if the response says when it resets
+        if (rateLimitHeaders.isEmpty()
+                || !(failure instanceof HttpRequestFailure.ErrorResponse error)
+                || (error.getStatusCode() != FORBIDDEN && error.getStatusCode() != TOO_MANY_REQUESTS)) {
+            return Optional.empty();
+        }
+        return rateLimitHeaders.get().getResetDelay(error, Instant.now());
     }
 
     /**

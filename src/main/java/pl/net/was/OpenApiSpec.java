@@ -91,6 +91,7 @@ import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -129,6 +130,10 @@ public class OpenApiSpec
     private static final String RANGE_UPPER_INCLUSIVE = "upperInclusive";
     private static final String RANGE_EXACT = "exact";
     private static final String PARAMETER_DEFAULTS = "parameterDefaults";
+    private static final String RATE_LIMIT_RESET_HEADER = "rateLimitResetHeader";
+    private static final String RATE_LIMIT_RESET_FORMAT = "rateLimitResetFormat";
+    private static final String RATE_LIMIT_REMAINING_HEADER = "rateLimitRemainingHeader";
+    private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -142,6 +147,7 @@ public class OpenApiSpec
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
+    private final Optional<RateLimitHeaders> rateLimitHeaders;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config)
@@ -275,6 +281,42 @@ public class OpenApiSpec
                 .map(Components::getSecuritySchemes)
                 .orElse(ImmutableMap.of());
         this.securityRequirements = openApi.getSecurity();
+        this.rateLimitHeaders = getRateLimitHeaders(getDocumentExtension(openApi));
+    }
+
+    private static Map<String, String> getDocumentExtension(OpenAPI openApi)
+    {
+        Object extension = openApi.getExtensions() == null ? null : openApi.getExtensions().get(SPEC_EXTENSION);
+        if (extension == null) {
+            return ImmutableMap.of();
+        }
+        checkArgument(extension instanceof Map<?, ?>, "Invalid value of the document-level %s extension: expected an object", SPEC_EXTENSION);
+        // properties of operations set for the whole document would change every operation, which is likely a mistake
+        ((Map<?, ?>) extension).forEach((key, value) -> {
+            checkArgument(DOCUMENT_EXTENSION_PROPERTIES.contains(key), "Invalid property of the document-level %s extension: %s, must be one of: %s", SPEC_EXTENSION, key, String.join(", ", DOCUMENT_EXTENSION_PROPERTIES));
+            checkArgument(value instanceof String, "Invalid value of %s: expected a string", key);
+        });
+        return getMapOfStrings(extension);
+    }
+
+    private static Optional<RateLimitHeaders> getRateLimitHeaders(Map<String, String> documentExtension)
+    {
+        String resetHeader = documentExtension.get(RATE_LIMIT_RESET_HEADER);
+        if (resetHeader == null) {
+            checkArgument(!documentExtension.containsKey(RATE_LIMIT_RESET_FORMAT), "%s requires %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
+            checkArgument(!documentExtension.containsKey(RATE_LIMIT_REMAINING_HEADER), "%s requires %s", RATE_LIMIT_REMAINING_HEADER, RATE_LIMIT_RESET_HEADER);
+            return Optional.empty();
+        }
+        // a reset time read in the wrong format would make requests wait too long, or retry too early, so it must be declared
+        String resetFormat = documentExtension.get(RATE_LIMIT_RESET_FORMAT);
+        checkArgument(resetFormat != null, "%s is required with %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
+        Optional<RateLimitHeaders.ResetFormat> format = Stream.of(RateLimitHeaders.ResetFormat.values())
+                .filter(value -> value.getSpecValue().equals(resetFormat))
+                .findFirst();
+        checkArgument(format.isPresent(), "Invalid value of %s: %s, must be one of: %s", RATE_LIMIT_RESET_FORMAT, resetFormat, Stream.of(RateLimitHeaders.ResetFormat.values())
+                .map(RateLimitHeaders.ResetFormat::getSpecValue)
+                .collect(joining(", ")));
+        return Optional.of(new RateLimitHeaders(resetHeader, format.get(), Optional.ofNullable(documentExtension.get(RATE_LIMIT_REMAINING_HEADER))));
     }
 
     private static String pathsToString(List<HttpPath> paths)
@@ -1496,5 +1538,10 @@ public class OpenApiSpec
     public List<SecurityRequirement> getSecurityRequirements()
     {
         return securityRequirements;
+    }
+
+    public Optional<RateLimitHeaders> getRateLimitHeaders()
+    {
+        return rateLimitHeaders;
     }
 }
