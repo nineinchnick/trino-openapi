@@ -76,6 +76,7 @@ GitHub one, for example:
 curl -fsSL https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json | jq --indent 2 . > src/test/resources/jira.json
 ```
 
-| Output                         | Upstream                                                               |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `src/test/resources/jira.json` | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
+| Output                           | Upstream                                                               |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `src/test/resources/jira.json`   | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
+| `src/test/resources/galaxy.json` | https://galaxy.starburst.io/public/openapi/v1/json                     |
