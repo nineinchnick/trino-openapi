@@ -610,6 +610,11 @@ public class OpenApiClient
         if (value == null) {
             return null;
         }
+        return toParameterValue(column, value);
+    }
+
+    private static Object toParameterValue(OpenApiColumn column, Object value)
+    {
         return switch (column.getType().getBaseName()) {
             case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> value;
             case StandardTypes.REAL -> intBitsToFloat(((Long) value).intValue());
