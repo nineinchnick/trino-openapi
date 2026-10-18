@@ -55,7 +55,6 @@ import io.trino.spi.connector.SortItem;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
-import io.trino.spi.type.BigintType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -165,12 +164,9 @@ public class OpenApiClient
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
-        Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
-                .filter(OpenApiColumn::isPageNumber)
-                .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
-                .findFirst();
+        Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
-        if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
+        if (pageColumn.isEmpty()) {
             return Iterables.filter(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows(), rowFilter::test);
         }
         Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
@@ -179,17 +175,7 @@ public class OpenApiClient
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         return pageIterator(
-                page -> {
-                    TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
-                            pageColumn.get().getHandle(),
-                            NullableValue.of(
-                                    pageColumn.get().getType(),
-                                    pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
-                    OpenApiTableHandle pageTable = pagedTable.cloneWithConstraint(pagedTable.getConstraint().isNone() ? pageConstraint : pagedTable.getConstraint().intersect(pageConstraint));
-                    // the body must be serialized for every page, since it can contain the page number,
-                    // and the response handler copies the page number to every row
-                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
-                },
+                page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), revalidateCachedResponses),
                 0,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
@@ -279,6 +265,30 @@ public class OpenApiClient
         }
         TupleDomain<ColumnHandle> constraint = TupleDomain.fromFixedValues(sortConstraint);
         return Optional.of(table.cloneWithConstraint(table.getConstraint().isNone() ? constraint : table.getConstraint().intersect(constraint)));
+    }
+
+    private Optional<OpenApiColumn> getUnfilteredPageColumn(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(OpenApiColumn::isPageNumber)
+                .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
+                .findFirst()
+                .filter(column -> getFilter(column, table.getConstraint()) == null);
+    }
+
+    private static OpenApiTableHandle withPage(OpenApiTableHandle table, OpenApiColumn pageColumn, long page)
+    {
+        TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
+                pageColumn.getHandle(),
+                NullableValue.of(pageColumn.getType(), page)));
+        return table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
+    }
+
+    private ResultsPage getPage(OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean revalidateCachedResponses)
+    {
+        // the body must be serialized for every page, since it can contain the page number,
+        // and the response handler copies the page number to every row
+        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
