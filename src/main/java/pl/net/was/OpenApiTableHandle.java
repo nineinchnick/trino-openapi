@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
@@ -48,6 +49,7 @@ public class OpenApiTableHandle
     private final List<HttpPath> updatePaths;
     private final List<HttpPath> deletePaths;
     private final TupleDomain<ColumnHandle> constraint;
+    private final OptionalLong limit;
 
     private OpenApiTableHandle(
             SchemaTableName schemaTableName,
@@ -55,7 +57,8 @@ public class OpenApiTableHandle
             List<HttpPath> insertPaths,
             List<HttpPath> updatePaths,
             List<HttpPath> deletePaths,
-            TupleDomain<ColumnHandle> constraint)
+            TupleDomain<ColumnHandle> constraint,
+            OptionalLong limit)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
         this.selectPaths = ImmutableList.copyOf(requireNonNull(selectPaths, "selectPaths is null"));
@@ -63,6 +66,7 @@ public class OpenApiTableHandle
         this.updatePaths = ImmutableList.copyOf(requireNonNull(updatePaths, "updatePaths is null"));
         this.deletePaths = ImmutableList.copyOf(requireNonNull(deletePaths, "deletePaths is null"));
         this.constraint = requireNonNull(constraint, "constraint is null");
+        this.limit = requireNonNull(limit, "limit is null");
     }
 
     // Trino only shares jackson-annotations with plugins, so handles can't be deserialized through a builder;
@@ -74,9 +78,10 @@ public class OpenApiTableHandle
             @JsonProperty("insertPaths") List<HttpPath> insertPaths,
             @JsonProperty("updatePaths") List<HttpPath> updatePaths,
             @JsonProperty("deletePaths") List<HttpPath> deletePaths,
-            @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint)
+            @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint,
+            @JsonProperty("limit") OptionalLong limit)
     {
-        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint);
+        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit);
     }
 
     public static Builder builder(SchemaTableName schemaTableName)
@@ -91,7 +96,8 @@ public class OpenApiTableHandle
                 .setInsertPaths(insertPaths)
                 .setUpdatePaths(updatePaths)
                 .setDeletePaths(deletePaths)
-                .setConstraint(constraint);
+                .setConstraint(constraint)
+                .setLimit(limit);
     }
 
     @JsonProperty
@@ -130,6 +136,12 @@ public class OpenApiTableHandle
         return constraint;
     }
 
+    @JsonProperty
+    public OptionalLong getLimit()
+    {
+        return limit;
+    }
+
     public void checkHasPaths(String statement, List<HttpPath> paths)
     {
         if (!paths.isEmpty()) {
@@ -155,13 +167,21 @@ public class OpenApiTableHandle
                 + SizeOf.estimatedSizeOf(insertPaths, HttpPath::getRetainedSizeInBytes)
                 + SizeOf.estimatedSizeOf(updatePaths, HttpPath::getRetainedSizeInBytes)
                 + SizeOf.estimatedSizeOf(deletePaths, HttpPath::getRetainedSizeInBytes)
-                + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes());
+                + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
+                + SizeOf.sizeOf(limit);
     }
 
     public OpenApiTableHandle cloneWithConstraint(TupleDomain<ColumnHandle> constraint)
     {
         return toBuilder()
                 .setConstraint(constraint)
+                .build();
+    }
+
+    public OpenApiTableHandle cloneWithLimit(long limit)
+    {
+        return toBuilder()
+                .setLimit(OptionalLong.of(limit))
                 .build();
     }
 
@@ -283,6 +303,7 @@ public class OpenApiTableHandle
         private List<HttpPath> updatePaths = ImmutableList.of();
         private List<HttpPath> deletePaths = ImmutableList.of();
         private TupleDomain<ColumnHandle> constraint = TupleDomain.none();
+        private OptionalLong limit = OptionalLong.empty();
 
         private Builder(SchemaTableName schemaTableName)
         {
@@ -319,9 +340,15 @@ public class OpenApiTableHandle
             return this;
         }
 
+        public Builder setLimit(OptionalLong limit)
+        {
+            this.limit = requireNonNull(limit, "limit is null");
+            return this;
+        }
+
         public OpenApiTableHandle build()
         {
-            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint);
+            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit);
         }
     }
 }

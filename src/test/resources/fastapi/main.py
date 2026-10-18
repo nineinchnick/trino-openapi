@@ -120,6 +120,10 @@ class TotalPagesResults(BaseModel):
     total_pages: int
 
 
+class RequestCount(BaseModel):
+    requests: int
+
+
 class PageFilter(BaseModel):
     page: int = 1
 
@@ -375,6 +379,24 @@ def list_max_pages_items(page: int = 1) -> Results:
     return Results(
         results=list(items.values())[page - 1:page],
         total_results=len(items))
+
+
+counted_items_requests = 0
+
+
+@router.get("/counted_items")
+def list_counted_items(page: int = 1) -> Results:
+    # count requests, so tests can check how many pages were requested using /counted_items_requests
+    global counted_items_requests
+    counted_items_requests += 1
+    return Results(
+        results=list(items.values())[page - 1:page],
+        total_results=len(items))
+
+
+@router.get("/counted_items_requests")
+def get_counted_items_requests() -> RequestCount:
+    return RequestCount(requests=counted_items_requests)
 
 
 @router.post("/paged_search")
@@ -706,6 +728,11 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "maxPages": len(items),
+    }
+    openapi_schema["paths"]["/counted_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
     }
     openapi_schema["paths"]["/contents_results/{path}"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results",
