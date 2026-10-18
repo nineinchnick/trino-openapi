@@ -42,6 +42,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.MoreCollectors.onlyElement;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -55,6 +56,7 @@ import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.util.Objects.requireNonNull;
+import static java.util.function.Function.identity;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
@@ -2559,6 +2561,88 @@ class TestOpenApiSpec
                 .hasMessage("directionParam is required with sortParam");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("descendingValue: desc", "")))
                 .hasMessage("descendingValue is required with sortParam");
+    }
+
+    @Test
+    public void testRangeFilterExtensions()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /changes:
+                    get:
+                      parameters:
+                      - in: query
+                        name: since
+                        schema:
+                          type: string
+                          format: date-time
+                      - in: query
+                        name: until
+                        schema:
+                          type: string
+                          format: date-time
+                      - in: query
+                        name: limit
+                        schema:
+                          type: integer
+                      x-trino:
+                        rangeFilters:
+                          updated_at:
+                            lowerParam: since
+                            lowerInclusive: true
+                            upperParam: until
+                            upperInclusive: false
+                            exact: true
+                      responses:
+                        "200":
+                          description: Changes
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: integer
+                                    updated_at:
+                                      type: string
+                                      format: date-time
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Map<String, OpenApiColumn> columns = spec.getTables().get("changes").stream()
+                .collect(toImmutableMap(OpenApiColumn::getName, identity()));
+        Assertions.assertThat(columns.get("updated_at").getRangeFilters())
+                .containsExactly(Map.entry(
+                        new HttpPath(PathItem.HttpMethod.GET, "/changes"),
+                        new RangeFilter(Optional.of(new RangeFilter.Bound("since", true)), Optional.of(new RangeFilter.Bound("until", false)), true)));
+        // bound parameters are still visible, so they can be filtered on directly
+        Assertions.assertThat(columns.get("since").getMetadata().isHidden()).isFalse();
+        Assertions.assertThat(columns.get("since").getRangeFilters()).isEmpty();
+        Assertions.assertThat(parseSpec(specContents.replace("exact: true", "exact: \"false\"")).getTables().get("changes").stream()
+                        .filter(column -> column.getName().equals("updated_at"))
+                        .flatMap(column -> column.getRangeFilters().values().stream())
+                        .map(RangeFilter::exact))
+                .containsExactly(false);
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("updated_at:\n            lowerParam", "created_at:\n            lowerParam")))
+                .hasMessage("Invalid value of rangeFilters: created_at is not a response field of GET /changes");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("upperParam: until", "upperParam: before")))
+                .hasMessage("Invalid value of rangeFilters: before is not a query, header, cookie, or body parameter of GET /changes");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("upperParam: until", "upperParam: limit")))
+                .hasMessage("Invalid value of rangeFilters: parameter limit has type bigint, but field updated_at has type timestamp(3)");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("upperParam: until", "upperParam: since")))
+                .hasMessage("Invalid value of rangeFilters: parameter since is used more than once in GET /changes");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("            lowerInclusive: true\n", "")))
+                .hasMessage("Invalid value of rangeFilters for updated_at: lowerInclusive is required with lowerParam");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("exact: true", "exact: yes please")))
+                .hasMessage("Invalid value of rangeFilters for updated_at: exact must be true or false, got yes please");
     }
 
     @Test

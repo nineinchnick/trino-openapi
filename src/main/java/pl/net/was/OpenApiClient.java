@@ -332,7 +332,22 @@ public class OpenApiClient
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
-        return makeRequest(table, httpPath, pathParameters, column -> getFilter(column, table.getConstraint()), bodyGenerator, responseHandler);
+        return makeRequest(table, httpPath, pathParameters, getParameterValues(table, httpPath), bodyGenerator, responseHandler);
+    }
+
+    private Function<OpenApiColumn, Object> getParameterValues(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        Map<OpenApiColumn, Object> boundValues = RangePushdown.getBoundValues(
+                openApiSpec.getTables().get(table.getSchemaTableName().getTableName()),
+                httpPath,
+                table.getConstraint());
+        return column -> {
+            Object value = getFilter(column, table.getConstraint());
+            if (value != null || !boundValues.containsKey(column)) {
+                return value;
+            }
+            return toParameterValue(column, boundValues.get(column));
+        };
     }
 
     private <T> T makeRequest(
@@ -721,12 +736,13 @@ public class OpenApiClient
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
 
+        Function<OpenApiColumn, Object> parameterValues = getParameterValues(table, httpPath);
         ObjectNode node = OBJECT_MAPPER.createObjectNode();
         for (OpenApiColumn column : columns) {
             if (!isPredicate(column, httpPath, ParameterLocation.BODY)) {
                 continue;
             }
-            Object value = getFilter(column, table.getConstraint());
+            Object value = parameterValues.apply(column);
             if (value == null) {
                 if (isRequiredPredicate(column, httpPath, ParameterLocation.BODY)) {
                     throw new TrinoException(INVALID_ROW_FILTER, "Missing required constraint for " + column.getName());
