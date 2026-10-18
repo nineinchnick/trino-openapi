@@ -30,15 +30,37 @@ endpoint becomes a table. That lets you:
   requests.
 
 All of this without writing a custom connector, or a script that copies the data
-into a database:
+into a database.
+
+For example, to count failed GitHub Actions runs of a repository by workflow
+using `curl` and `jq`, you have to know how the endpoint pages its results, that
+the runs are wrapped in a `workflow_runs` field, and then filter and group them
+yourself:
+
+```bash
+page=1
+while :; do
+  runs=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+    "https://api.github.com/repos/nineinchnick/trino-openapi/actions/runs?per_page=100&page=$page" \
+    | jq '.workflow_runs')
+  [ "$(jq length <<< "$runs")" -eq 0 ] && break
+  echo "$runs"
+  page=$((page + 1))
+done | jq -s 'add
+  | map(select(.conclusion == "failure"))
+  | group_by(.name)
+  | map({name: .[0].name, failures: length})
+  | sort_by(-.failures)'
+```
+
+With the bundled GitHub catalog, it's a single query, which reads all pages:
 
 ```sql
--- issues from the GitHub API, joined with a table from a PostgreSQL catalog;
--- owner and repo are sent to the API, and Trino filters the titles
-SELECT i.number, i.title, t.assignee
-FROM github.default.repos_issues i
-JOIN postgresql.public.triage t ON t.issue_number = i.number
-WHERE i.owner = 'trinodb' AND i.repo = 'trino' AND i.title LIKE '%Iceberg%';
+SELECT name, count(*) AS failures
+FROM github.default.repos_actions_runs
+WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND conclusion = 'failure'
+GROUP BY name
+ORDER BY failures DESC;
 ```
 
 The connector reads the specification when the catalog starts, maps paths to
