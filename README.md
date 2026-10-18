@@ -3,252 +3,442 @@ Trino OpenAPI
 
 [![Build Status](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml/badge.svg)](https://github.com/nineinchnick/trino-openapi/actions/workflows/release.yaml)
 
-This is a [Trino](http://trino.io/) plugin that provides a connector to read
-from and write to HTTP APIs given an OpenAPI specification.
+A [Trino](https://trino.io/) connector that lets you query and modify data in
+HTTP APIs with SQL, using only the API's OpenAPI specification.
 
-# Quick Start
+Most services expose their data through REST APIs. Getting that data into SQL
+usually means writing a custom connector, or a script that copies the data into
+a database. With this connector, you point Trino at an OpenAPI specification,
+and every API endpoint becomes a table you can query, filter, and join with
+data from any other Trino catalog, without writing code:
 
-To run a Docker container with the connector, run the following:
+```sql
+-- issues from the GitHub API, joined with a table from a PostgreSQL catalog
+SELECT i.number, i.title, t.assignee
+FROM github.default.repos_issues i
+JOIN postgresql.public.triage t ON t.issue_number = i.number
+WHERE i.owner = 'trinodb' AND i.repo = 'trino';
+```
+
+The connector reads the specification when the catalog starts, maps paths to
+tables and request parameters and response fields to columns, and translates
+every query into HTTP requests.
+
+# Quick start
+
+Run a Trino server with the connector in a Docker container:
+
 ```bash
 docker run \
   -d \
   --name trino-openapi \
-  -e OPENAPI_SPEC_LOCATION=http://api.example/api/spec.yaml \
-  -e OPENAPI_BASE_URI=http://api.example/api/v1 \
+  -e OPENAPI_SPEC_LOCATION=https://api.example.com/openapi.yaml \
+  -e OPENAPI_BASE_URI=https://api.example.com/v1 \
   -p 8080:8080 \
-  nineinchnick/trino-openapi:1.66
+  nineinchnick/trino-openapi:1.86
 ```
 
-Then use your favourite SQL client to connect to Trino running at
-http://localhost:8080
+Then connect to Trino at http://localhost:8080 with any SQL client, and list
+the tables of the `openapi` catalog:
 
-## Usage
-
-Download one of the ZIP packages, unzip it and copy the `trino-openapi-1.66`
-directory to the plugin directory on every node in your Trino cluster. Create a
-`openapi.properties` file in your Trino catalog directory and set all the
-required properties.
-
+```sql
+SHOW TABLES FROM openapi.default;
 ```
+
+The image also includes ready-made catalogs for some public APIs; see
+[Bundled catalogs](#bundled-catalogs).
+
+# Installation
+
+Download the ZIP package of a [release](https://github.com/nineinchnick/trino-openapi/releases),
+and extract it into the plugin directory on every node of your Trino cluster:
+
+```bash
+unzip trino-openapi-*.zip -d ${PLUGIN_DIRECTORY}/
+mv ${PLUGIN_DIRECTORY}/trino-openapi-* ${PLUGIN_DIRECTORY}/openapi
+```
+
+Then create a catalog file, like `etc/catalog/openapi.properties`:
+
+```properties
 connector.name=openapi
-spec-location=http://api.example/api/spec.yaml
-base-uri=http://api.example/api/v1
+spec-location=https://api.example.com/openapi.yaml
+base-uri=https://api.example.com/v1
 authentication.type=http
 authentication.username=${ENV:OPENAPI_USERNAME}
 authentication.password=${ENV:OPENAPI_PASSWORD}
 ```
 
-After reloading Trino, you should be able to connect to the `openapi` catalog.
+Restart Trino. Every catalog can point to a different API.
 
-## Configuration
+# Configuration
 
-| Configuration property        | Container environmental variable | Description                                                                                              |
-|-------------------------------|----------------------------------|----------------------------------------------------------------------------------------------------------|
-| spec-location                 | `OPENAPI_SPEC_LOCATION`          | URL or filename containing the OpenAPI specification, either JSON or YAML                                |
-| base-uri                      | `OPENAPI_BASE_URI`               | Base URL for the API, often includes API version                                                         |
-| authentication.type           | `OPENAPI_AUTH_TYPE`              | Default authentication type if not set in the specification. One of: `none`, `http`, `api_key`, `oauth`. |
-| authentication.scheme         | `OPENAPI_AUTH_SCHEME`            | Authentication scheme for the `http` authentication type. One of: `basic`, `bearer`.                     |
-| authentication.client-id      | `OPENAPI_CLIENT_ID`              | OAuth Client ID                                                                                          |
-| authentication.client-secret  | `OPENAPI_CLIENT_SECRET`          | OAuth Client secret                                                                                      |
-| authentication.username       | `OPENAPI_USERNAME`               | Username used for the `http` and `oauth` authentication types                                            |
-| authentication.password       | `OPENAPI_PASSWORD`               | Password used for the `http` and `oauth` authentication types                                            |
-| authentication.bearer-token   | `OPENAPI_BEARER_TOKEN`           | Bearer token for `http` authentication                                                                   |
-| authentication.api-key-name   | `OPENAPI_API_KEY_NAME`           | API key name                                                                                             |
-| authentication.api-key-value  | `OPENAPI_API_KEY_VALUE`          | API key value                                                                                            |
-| max-requests-per-second       | `OPENAPI_MAX_REQUESTS_PER_SECOND`| Maximum HTTP requests per second executed from a single Trino node                                       |
-| max-splits-per-second         | `OPENAPI_MAX_SPLITS_PER_SECOND`  | Maximum number of splits per second generated when executing a query                                     |
-| domain-expansion-limit        | `OPENAPI_DOMAIN_EXPANSION_LIMIT` | Maximum number of discrete domain values generated from range predicates, which correlates with the number of HTTP requests executed |
+| Property                       | Container environment variable    | Default   | Description                                                                                                 |
+| ------------------------------ | --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `spec-location`                | `OPENAPI_SPEC_LOCATION`           |           | URL or file path of the OpenAPI specification, in JSON or YAML                                              |
+| `base-uri`                     | `OPENAPI_BASE_URI`                |           | Base URL of the API, often including the API version                                                        |
+| `authentication.type`          | `OPENAPI_AUTH_TYPE`               | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, `api_key`, or `oauth`  |
+| `authentication.scheme`        | `OPENAPI_AUTH_SCHEME`             | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                             |
+| `authentication.username`      | `OPENAPI_USERNAME`                |           | Username for `http` basic authentication and the OAuth `password` flow                                      |
+| `authentication.password`      | `OPENAPI_PASSWORD`                |           | Password for `http` basic authentication and the OAuth `password` flow                                      |
+| `authentication.bearer-token`  | `OPENAPI_BEARER_TOKEN`            |           | Token for `http` bearer authentication                                                                      |
+| `authentication.api-key-name`  | `OPENAPI_API_KEY_NAME`            |           | Name of the API key, when the specification doesn't declare it                                              |
+| `authentication.api-key-value` | `OPENAPI_API_KEY_VALUE`           |           | Value of the API key                                                                                        |
+| `authentication.api-keys`      | `OPENAPI_API_KEYS`                |           | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above |
+| `authentication.client-id`     | `OPENAPI_CLIENT_ID`               |           | OAuth client ID                                                                                             |
+| `authentication.client-secret` | `OPENAPI_CLIENT_SECRET`           |           | OAuth client secret                                                                                         |
+| `max-requests-per-second`      | `OPENAPI_MAX_REQUESTS_PER_SECOND` | unlimited | Maximum number of HTTP requests per second from a single Trino node                                         |
+| `max-splits-per-second`        | `OPENAPI_MAX_SPLITS_PER_SECOND`   | unlimited | Maximum number of splits per second generated for a query                                                   |
+| `domain-expansion-limit`       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`  | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause |
 
-For OAuth security schemes, the connector requests access tokens from the
-`tokenUrl` of a flow that doesn't require a user to log in using a browser. If
-the scheme declares the `password` flow, and `authentication.username` and
-`authentication.password` are set, the connector uses the `password` flow.
-Otherwise, it uses the `clientCredentials` flow. The `authorizationCode` and
-`implicit` flows are not supported.
+## Authentication
 
-The connector is using the Airlift HTTP client, which can be configured with
-[additional
-properties](https://github.com/airlift/airlift/blob/master/http-client/src/main/java/io/airlift/http/client/HttpClientConfig.java)
-prefixed with `openApi`, like so:
+If the specification declares security schemes and requirements, the connector
+uses them for every operation, with credentials from the catalog properties:
 
-```
+* `http` schemes use `authentication.username` and `authentication.password`
+  for `basic`, or `authentication.bearer-token` for `bearer`;
+* `apiKey` schemes send the key in a header, query parameter, or cookie, as the
+  scheme declares, using `authentication.api-key-value`, or the matching key
+  from `authentication.api-keys`;
+* `oauth2` schemes request an access token from the `tokenUrl` of a flow that
+  doesn't need a user to log in using a browser: the `password` flow, if the
+  scheme declares it and `authentication.username` and `authentication.password`
+  are set, otherwise the `clientCredentials` flow, using
+  `authentication.client-id` and `authentication.client-secret`. Tokens are
+  reused until shortly before they expire. The `authorizationCode` and `implicit`
+  flows are not supported.
+
+Operations with `security: []`, or specs with an empty top-level `security`
+list, are called without credentials. If the specification doesn't declare any
+security requirements, the connector uses `authentication.type`.
+
+## HTTP client
+
+The connector uses the Airlift HTTP client, which can be configured with
+[its properties](https://github.com/airlift/airlift/blob/master/http-client/src/main/java/io/airlift/http/client/HttpClientConfig.java),
+prefixed with `openApi`, for example:
+
+```properties
+openApi.http-client.request-timeout=30s
 openApi.http-client.log.enabled=true
 openApi.http-client.log.path=logs
 ```
 
-## Known APIs
+# Usage
 
-This connector has been tested with the following APIs. The Docker image
-includes additional catalog files that will be used if the first of their
-environmental variable is set.
+## Tables and columns
 
-| Name                                                                                              | Environmental variables      |
-|---------------------------------------------------------------------------------------------------|------------------------------|
-| [OpenAPI Petstore](https://github.com/OpenAPITools/openapi-petstore)                              | `PETSTORE_URL`               |
-| [Starburst Galaxy](https://galaxy.starburst.io/public-api)                                        | `GALAXY_URL`, `GALAXY_TOKEN` |
-| [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version) | `JIRA_URL`                   |
-| [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`               |
-| [DataDog API](https://docs.datadoghq.com/api/latest/)                                             | `DATADOG_URL`                |
+All tables are in the `default` schema. Use `SHOW TABLES` and `DESCRIBE` to see
+how an API was mapped:
 
-## Schema mapping
-
-The following rules are used to map the OpenAPI schema to SQL tables and columns:
-* Paths are mapped to tables; table names are paths, with `camelCase` converted
-  to `snake_case` and special characters (like `/`) converted to underscores.
-* SQL operations are mapped to HTTP methods:
-  * SELECT uses GET or POST, if no GET is available;
-  * INSERT uses POST or PUT;
-  * UPDATE uses PATCH or POST;
-  * DELETE uses DELETE.
-* All request parameters are mapped to columns, including path, query, header,
-  and cookie parameters, and parameters shared by all operations of a path.
-* Fields of the HTTP OK (200) response type are mapped to columns.
-* If the response type, or the type of its array items, is a union (`oneOf`,
-  `anyOf`, or `allOf`), fields of all of its alternatives are mapped to
-  columns. Fields of `oneOf` and `anyOf` alternatives are nullable, since a
-  response matches only some of them, like a success or an error object.
-  A field defined in multiple alternatives with different types is mapped to a
-  single `VARCHAR` column with the raw JSON value. If some alternatives are
-  arrays of objects, like a single file or a directory listing, every array
-  element of a response is a row, and fields of the array items are mapped to
-  the same columns. This also applies to the node selected by `resultsPath`.
-* A field that is a union of only objects is mapped to a `ROW` with the fields
-  of all alternatives, using the same rules, and a union of only arrays of
-  objects is mapped to an `ARRAY` of such rows. Fields of other alternatives
-  are NULL when reading, and they're not sent in request bodies. Other unions
-  are mapped to `VARCHAR` with the raw JSON value.
-* Fields of the request body are also mapped to columns, if a POST request is
-  used for SELECT.
-* All columns are disambiguated - if a field with the same name but a different
-  data type appears in the response and parameters, or fields with different
-  names, like `fooBar` and `foo_bar`, map to the same column name, it'll be
-  mapped to multiple columns, with numeric suffixes (`_2`, `_3`, etc.). Request
-  body fields have a `_req` suffix.
-
-## OpenAPI Extensions
-
-OpenAPI allows using custom extensions - adding custom fields anywhere in the
-schema as long as they're prefixed with an `X`. Such custom extensions are used
-to fine-tune this connector.
-
-If the original service cannot be modified to include an extension in a
-generated OpenAPI schema, save it locally and modify as needed.
-
-### Pagination
-
-APIs can use 4 different types of pagination:
-* Offset - every response can include an offset parameter, telling how many
-  results to skip.
-* Page - every response can include a page parameter; the number of results per
-  page can be configurable with another parameter.
-* Cursor/token - the response includes the value of a cursor or token,
-  that needs to be included in the next request.
-* Next page URL - the response includes an URL of the next set of results.
-
-The connector currently supports only the `Page` pagination.
-
-To enable pagination, add a `x-trino` section in the path's operation section:
-
+```sql
+SHOW TABLES FROM openapi.default;
+DESCRIBE openapi.default.pet;
 ```
+
+A table has columns for:
+
+* the fields of the `200` JSON response, or of the items selected by
+  `resultsPath`;
+* the request parameters (path, query, header, and cookie), including the ones
+  shared by all operations of a path;
+* the fields of the JSON request body, if the table can use a `POST` request.
+
+Request parameters are filters. Their values are copied from the query into
+every returned row, because most APIs don't repeat them in responses.
+
+## Queries
+
+Filters on request parameter columns are sent in requests. If an operation
+requires a parameter, the query must filter on its column:
+
+```sql
+SELECT name, status FROM petstore.default.pet WHERE pet_id = 1;
+SELECT name FROM petstore.default.pet_find_by_status WHERE status = 'available';
+```
+
+Without the filter, the query fails with `Missing required constraint`.
+
+* An equality filter sends a single value.
+* An `IN` list makes one request per value, so it should stay short.
+* A range, like `BETWEEN 1 AND 10`, is expanded into separate values when the
+  column type allows it, up to `domain-expansion-limit`.
+* Filters on other columns, and filters the selected request can't send, are
+  applied by Trino to the returned rows.
+
+Joins work too. When a filter value comes from another table, Trino passes it to
+this connector as a dynamic filter, which is sent like any other filter:
+
+```sql
+SELECT p.name
+FROM petstore.default.pet p
+WHERE p.pet_id IN (SELECT pet_id FROM memory.default.favorite_pets);
+```
+
+## Changing data
+
+`INSERT`, `UPDATE`, and `DELETE` send requests for every row, using the
+operations described in [Schema mapping](#schema-mapping):
+
+```sql
+INSERT INTO petstore.default.pet (id, name, photo_urls, status)
+VALUES (100, 'Cat X', ARRAY[], 'available');
+UPDATE petstore.default.pet SET name = 'Cat Y' WHERE pet_id = 100;
+DELETE FROM petstore.default.pet WHERE pet_id = 100;
+```
+
+A write succeeds if the server responds with any `2xx` status. Writes are not
+transactional: if a statement fails halfway, the rows already sent stay
+changed.
+
+# Schema mapping
+
+## Tables
+
+Paths are mapped to tables. A table name is the path without path parameters,
+with `camelCase` converted to `snake_case`, and other special characters
+converted to underscores. Paths with path parameters are merged with the same
+path without them, so `/pet` and `/pet/{petId}` become one table named `pet`.
+If a path has several variants with different parameters, each variant becomes
+a separate table that also includes the columns of the base path.
+
+SQL statements use these HTTP methods:
+
+| SQL statement | HTTP method                               |
+| ------------- | ----------------------------------------- |
+| `SELECT`      | `GET`, or `POST` if the path has no `GET` |
+| `INSERT`      | `POST`                                    |
+| `UPDATE`      | `PUT`, or `POST` if the path has no `PUT` |
+| `DELETE`      | `DELETE`                                  |
+
+When several paths of a table can be used, the connector picks one for every
+request: it skips paths whose required parameters are missing from the query,
+and prefers the path using the most path parameters, then the most other
+filters, then the shortest path.
+
+## Columns
+
+Column names follow the same rules as table names. Columns are disambiguated:
+
+* if a request parameter has the same name as a response field but a different
+  type, it gets a `_req` suffix;
+* if different fields map to the same name, like `fooBar` and `foo_bar`, or a
+  field has different types in different operations, the next ones get numeric
+  suffixes (`_2`, `_3`, and so on).
+
+Columns are nullable, unless the schema they come from lists them as required.
+In tables that support `INSERT`, columns that only come from responses are
+always nullable, because they can't be set in an `INSERT`.
+
+Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
+
+* `__trino_row_id` identifies rows in `UPDATE` and `DELETE`;
+* pagination parameters, like the page number and page size.
+
+## Data types
+
+| OpenAPI schema                                         | Trino type                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `integer` with `format: int32`                         | `INTEGER`                                                              |
+| `integer` without a format, or `int64`                 | `BIGINT`                                                               |
+| `number` with `format: float`                          | `REAL`                                                                 |
+| `number` with `format: double`                         | `DOUBLE`                                                               |
+| `number` without a format                              | `DECIMAL(18, 8)`                                                       |
+| `boolean`                                              | `BOOLEAN`                                                              |
+| `string`                                               | `VARCHAR`                                                              |
+| `string` with `format: date`                           | `DATE`                                                                 |
+| `string` with `format: date-time`                      | `TIMESTAMP(3)`, in UTC                                                 |
+| `array`                                                | `ARRAY` of the item type                                               |
+| `object` with `properties`                             | `ROW` with a field for every property                                  |
+| `object` with `additionalProperties`                   | `MAP(VARCHAR, ...)` of the value type                                  |
+| `type: [T, "null"]` (OpenAPI 3.1), or `nullable: true` | nullable `T`                                                           |
+| unions, and anything else                              | see [Union types](#union-types), otherwise `VARCHAR` with the raw JSON |
+
+## Union types
+
+* When the response, or its array items, is a `oneOf`, `anyOf`, or `allOf`,
+  the fields of all alternatives become columns. Fields of `oneOf` and `anyOf`
+  alternatives are nullable, since a response matches only some of them, like a
+  success or an error object.
+* When some alternatives are arrays of objects, like a single file or a directory
+  listing, every array element is a row, with its fields in the same columns.
+* A field that is a union of only objects becomes a `ROW` with the fields of all
+  alternatives, and a union of only arrays of objects becomes an `ARRAY` of such
+  rows. Fields of other alternatives are `NULL` when reading, and are not sent in
+  request bodies.
+* A field defined in several alternatives with different types, and any other
+  union, becomes a `VARCHAR` with the raw JSON value, which can be processed with
+  [JSON functions](https://trino.io/docs/current/functions/json.html).
+
+## Request serialization
+
+Parameters are sent as the specification declares, including the `style`,
+`explode`, and `allowReserved` settings, for arrays and objects. Path values are
+percent-encoded. Parameters described with `content` instead of `schema` are
+ignored. Request and response bodies must be JSON.
+
+# OpenAPI extensions
+
+Some behavior can't be described with standard OpenAPI. The connector reads an
+`x-trino` extension in an operation:
+
+```yaml
 paths:
   /records:
     get:
       responses:
         # ...
       x-trino:
-       pageParam: "page"
-       limitParam: "per-page"
-       resultsPath: "$response.body#/workflows"
-       totalResultsPath: "$response.body#/total_count"
-       totalPagesPath: "$response.body#/total_pages"
-       hasMorePath: "$response.body#/has_more"
-       maxPages: 100
+        pageParam: "page"
+        limitParam: "per_page"
+        resultsPath: "$response.body#/records"
+        totalResultsPath: "$response.body#/total_count"
+        errorPath: "$response.body#/message"
 ```
 
-Pagination stops after:
-* an empty page;
-* the number of results given by `totalResultsPath`;
-* the number of pages given by `totalPagesPath`;
-* a page where the boolean value at `hasMorePath` is `false`;
-* `maxPages` pages, which limits the number of requests for servers that don't
-  return any of the other values;
-* a page with fewer results than the page size, when `limitParam` is set and
-  its value is known, either from a query predicate or from the default value of
-  the parameter in the spec. The page size is limited by the `maximum` of the
-  parameter, if the spec declares it, because servers often return fewer results
-  than requested when the requested number is too high.
+| Property           | Description                                                               |
+| ------------------ | ------------------------------------------------------------------------- |
+| `pageParam`        | Parameter with the page number; enables pagination                        |
+| `limitParam`       | Parameter with the page size                                              |
+| `resultsPath`      | JSON pointer to the results in the response, like `$response.body#/items` |
+| `totalResultsPath` | JSON pointer to the total number of results                               |
+| `totalPagesPath`   | JSON pointer to the total number of pages                                 |
+| `hasMorePath`      | JSON pointer to a boolean that is `false` on the last page                |
+| `maxPages`         | Maximum number of pages to request                                        |
+| `errorPath`        | JSON pointer to a human-readable message in error responses               |
 
-If none of these apply, for example when the server returns the last page for
-every page number past it and declares no default page size or total, the query
-makes requests until it's cancelled. Set `maxPages` for such servers.
+If you can't change the API to include the extension in its specification, save
+the specification locally and edit it.
 
-### Error messages
+## Pagination
 
-When the connector makes an API call, for which the server responds with an
-error, an SQL error is returned to the user. The error only contains the HTTP
-status code, and the whole error response body is not visible to the user.
-There are two reasons for this: if it's a JSON message, it might not be human
-readable, and could also contain sensitive information.
+The connector supports page number pagination: when `pageParam` is set and the
+query doesn't filter on the page number, it requests page 1, 2, and so on, until
+one of these happens:
 
-To extract a human readable error message from error responses, set the
-`errorPath` property in the `x-trino` section:
+* a page is empty;
+* the number of results reaches the value at `totalResultsPath`;
+* the number of pages reaches the value at `totalPagesPath`;
+* the boolean value at `hasMorePath` is `false`;
+* `maxPages` pages were requested;
+* a page has fewer results than the page size, when `limitParam` is set and its
+  value is known, either from a query filter or from the parameter's default in
+  the spec. The page size is limited by the parameter's `maximum`, if declared,
+  because servers often return fewer results than requested when the number is
+  too high.
 
-```
-paths:
-  /records:
-    get:
-      responses:
-        # ...
-      x-trino:
-       errorPath: "$response.body#/message"
-```
+Pagination never guesses from page contents. If none of these apply, for
+example when the server returns the last page for every page number past it and
+declares no page size or total, the query makes requests until it's cancelled.
+Set `maxPages` for such servers.
 
-## Build
+## Error messages
 
-Run all the unit tests:
+When the server responds with an error, the query fails with a message that
+contains only the HTTP status code, not the response body, because the body
+might not be readable, and it might contain sensitive information. Set
+`errorPath` to include a readable message from the response.
+
+# Bundled catalogs
+
+The Docker image includes catalogs for some public APIs. Each catalog is enabled
+when the first of its environment variables is set.
+
+| API                                                                                               | Environment variables                        |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [OpenAPI Petstore](https://github.com/OpenAPITools/openapi-petstore)                              | `PETSTORE_URL`                               |
+| [Starburst Galaxy](https://galaxy.starburst.io/public-api)                                        | `GALAXY_URL`, `GALAXY_TOKEN`                 |
+| [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version) | `JIRA_URL`, `JIRA_USERNAME`, `JIRA_PASSWORD` |
+| [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`                               |
+| [Datadog API](https://docs.datadoghq.com/api/latest/)                                             | `DATADOG_URL`, `DD_API_KEY`, `DD_APP_KEY`    |
+
+# Limitations
+
+* The specification is read when the catalog starts. To use a changed
+  specification, restart Trino.
+* `base-uri` is required, even if the specification lists servers
+  ([#51](https://github.com/nineinchnick/trino-openapi/issues/51)), and the
+  specification is loaded without authentication
+  ([#155](https://github.com/nineinchnick/trino-openapi/issues/155)).
+* All tables are in a single `default` schema
+  ([#16](https://github.com/nineinchnick/trino-openapi/issues/16)), with names
+  derived from paths ([#15](https://github.com/nineinchnick/trino-openapi/issues/15),
+  [#255](https://github.com/nineinchnick/trino-openapi/issues/255)).
+* SQL statements are inferred from HTTP methods, so a `POST` search endpoint can
+  also be used for `INSERT`, and `PATCH` operations can't be used
+  ([#210](https://github.com/nineinchnick/trino-openapi/issues/210)). The row ID
+  used by `UPDATE` and `DELETE` comes from the query filters, not from the rows
+  ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
+* Only equality and `IN` filters, and ranges expanded to single values, are sent
+  in requests ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
+  `LIMIT` is not pushed down, so all pages are requested
+  ([#93](https://github.com/nineinchnick/trino-openapi/issues/93)).
+* Only page number pagination is supported, not offset or cursor pagination
+  ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
+  requested one after another ([#94](https://github.com/nineinchnick/trino-openapi/issues/94)).
+* Requests are not retried, so a temporary error fails the query
+  ([#249](https://github.com/nineinchnick/trino-openapi/issues/249)), and
+  responses are not cached ([#12](https://github.com/nineinchnick/trino-openapi/issues/12)).
+* Only JSON request and response bodies are supported, not form-encoded or
+  multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
+* Responses that are arrays of plain values
+  ([#219](https://github.com/nineinchnick/trino-openapi/issues/219)), and objects
+  with dynamic keys ([#172](https://github.com/nineinchnick/trino-openapi/issues/172)),
+  are not mapped to rows. Some unions, like `anyOf` with a `null` alternative,
+  are mapped to `VARCHAR` ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
+* Timestamps are always `TIMESTAMP(3)`.
+* An OAuth token rejected by the server is not refreshed before it expires, and
+  the OAuth flow can't be chosen explicitly
+  ([#248](https://github.com/nineinchnick/trino-openapi/issues/248),
+  [#10](https://github.com/nineinchnick/trino-openapi/issues/10)).
+* Pagination metadata, like totals, is mapped to visible columns
+  ([#137](https://github.com/nineinchnick/trino-openapi/issues/137)).
+
+See all [open issues](https://github.com/nineinchnick/trino-openapi/issues) for
+more.
+
+# Design decisions
+
+* **The specification is the only input.** Tables, columns, types, and requests
+  are derived from it, and `x-trino` extensions describe what OpenAPI can't, so
+  supporting a new API doesn't need code.
+* **Path parameters identify resources.** That's why a path is merged with the
+  same path without parameters into one table, and why its parameters are
+  required filters.
+* **Correct results before pushdown.** A filter is only removed from what Trino
+  applies when every request that can be used sends it. A filter the selected
+  request can't send is still applied by Trino, even if it means reading more
+  data.
+* **Explicit signals only.** Pagination stops only on signals the server or the
+  spec provides, never by guessing from page contents. OAuth flows that need a
+  browser fail with a clear error instead of being attempted.
+* **Columns are nullable unless the spec says otherwise,** because a field that
+  isn't required can be missing from a response.
+* **Unions keep all data.** Alternatives are merged when they're compatible, and
+  kept as raw JSON when they're not, instead of choosing one of them.
+* **Error responses are not shown to users,** unless `errorPath` selects a
+  message, because they might contain sensitive information.
+* **Exact values.** Decimals are read and sent without rounding through `double`,
+  and dates and timestamps keep the precision of their column, in UTC.
+
+# Development
+
+Build the plugin and run all tests, which need Docker:
+
 ```bash
-mvn test
+./mvnw clean install
 ```
 
-Creates a deployable zip file:
+The ZIP package is created in the `target` directory.
+
+To try the connector locally, run `OpenApiQueryRunner` from the tests. Without
+`OPENAPI_SPEC_LOCATION` and `OPENAPI_BASE_URI`, it starts a Petstore server in
+Docker and creates an `openapi` catalog for it:
+
 ```bash
-mvn clean package
+./mvnw test-compile exec:java -Dexec.mainClass="pl.net.was.OpenApiQueryRunner" -Dexec.classpathScope=test
 ```
 
-Unzip the archive from the target directory to use the connector in your Trino
-cluster.
-```bash
-unzip target/*.zip -d ${PLUGIN_DIRECTORY}/
-mv ${PLUGIN_DIRECTORY}/trino-openapi-* ${PLUGIN_DIRECTORY}/trino-openapi
-```
-
-## Debug
-
-To test and debug the connector locally, run the `OpenApiQueryRunner` class
-located in tests:
-```bash
-mvn test-compile exec:java -Dexec.mainClass="pl.net.was.OpenApiQueryRunner" -Dexec.classpathScope=test
-```
-
-And then run the Trino CLI using `trino --server localhost:8080 --no-progress`
-and query it:
-```
-trino> show catalogs;
- Catalog
----------
- openapi
- system
-(2 rows)
-
-trino> show tables from openapi.default;
-   Table
-------------
- single_row
-(1 row)
-
-trino> select * from openapi.default.single_row;
- id |     type      |  name
-----+---------------+---------
- x  | default-value | my-name
-(1 row)
-```
+Then connect with the Trino CLI using `trino --server localhost:8080`, and run
+`SHOW TABLES FROM openapi.default`.
