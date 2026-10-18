@@ -440,7 +440,7 @@ public class OpenApiSpec
                     .collect(ArrayListMultimap::create,
                             (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
                             ArrayListMultimap::putAll);
-            List<String> requiredProperties = schema.getRequired() != null ? schema.getRequired() : List.of();
+            List<String> requiredProperties = getRequiredProperties(schema);
             getSchemaProperties(schema)
                     .entrySet().stream()
                     .map(propEntry -> getPredicateColumn(
@@ -617,17 +617,14 @@ public class OpenApiSpec
 
     private static List<String> getRequiredProperties(Schema<?> schema)
     {
-        List<String> required;
-        if (schema instanceof ArraySchema || schema.getItems() != null) {
-            required = schema.getItems().getRequired();
+        List<String> required = requireNonNullElse(schema.getRequired(), List.of());
+        if (!(schema instanceof ArraySchema) && schema.getItems() == null) {
+            return required;
         }
-        else {
-            required = schema.getRequired();
-        }
-        if (required == null) {
-            return List.of();
-        }
-        return required;
+        // some specs, like Cloudflare's, list required item properties in the array schema
+        return Stream.concat(required.stream(), requireNonNullElse(schema.getItems().getRequired(), List.<String>of()).stream())
+                .distinct()
+                .collect(toImmutableList());
     }
 
     private static Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)

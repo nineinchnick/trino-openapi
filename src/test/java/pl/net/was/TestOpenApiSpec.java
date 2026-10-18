@@ -2391,6 +2391,90 @@ class TestOpenApiSpec
                         Assertions.tuple("comment", true));
     }
 
+    @Test
+    public void testArrayRequestBodyRequiredProperties()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /bulk_items:
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              type: array
+                              items:
+                                type: object
+                                required:
+                                - name
+                                properties:
+                                  name:
+                                    type: string
+                                  note:
+                                    type: string
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  count:
+                                    type: integer
+                  /bulk_values:
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              type: array
+                              # some specs list required item properties in the array schema
+                              required:
+                              - key
+                              items:
+                                type: object
+                                properties:
+                                  key:
+                                    type: string
+                                  value:
+                                    type: string
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  count:
+                                    type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Map<HttpPath, ParameterLocation> bulkItemsBody = Map.of(new HttpPath(PathItem.HttpMethod.POST, "/bulk_items"), ParameterLocation.BODY);
+        Assertions.assertThat(spec.getTables().get("bulk_items"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable(), OpenApiColumn::getRequiresPredicate, OpenApiColumn::getOptionalPredicate)
+                .containsExactly(
+                        Assertions.tuple("count", true, Map.of(), Map.of()),
+                        Assertions.tuple("name", false, bulkItemsBody, Map.of()),
+                        Assertions.tuple("note", true, Map.of(), bulkItemsBody));
+        Map<HttpPath, ParameterLocation> bulkValuesBody = Map.of(new HttpPath(PathItem.HttpMethod.POST, "/bulk_values"), ParameterLocation.BODY);
+        Assertions.assertThat(spec.getTables().get("bulk_values"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable(), OpenApiColumn::getRequiresPredicate, OpenApiColumn::getOptionalPredicate)
+                .containsExactly(
+                        Assertions.tuple("count", true, Map.of(), Map.of()),
+                        Assertions.tuple("key", false, bulkValuesBody, Map.of()),
+                        Assertions.tuple("value", true, Map.of(), bulkValuesBody));
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
