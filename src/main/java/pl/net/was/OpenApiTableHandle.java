@@ -38,7 +38,7 @@ import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiTableHandle
-        implements ConnectorTableHandle, Cloneable
+        implements ConnectorTableHandle
 {
     private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiTableHandle.class);
 
@@ -47,7 +47,7 @@ public class OpenApiTableHandle
     private final List<HttpPath> insertPaths;
     private final List<HttpPath> updatePaths;
     private final List<HttpPath> deletePaths;
-    private TupleDomain<ColumnHandle> constraint;
+    private final TupleDomain<ColumnHandle> constraint;
 
     private OpenApiTableHandle(
             SchemaTableName schemaTableName,
@@ -82,6 +82,16 @@ public class OpenApiTableHandle
     public static Builder builder(SchemaTableName schemaTableName)
     {
         return new Builder(schemaTableName);
+    }
+
+    public Builder toBuilder()
+    {
+        return new Builder(schemaTableName)
+                .setSelectPaths(selectPaths)
+                .setInsertPaths(insertPaths)
+                .setUpdatePaths(updatePaths)
+                .setDeletePaths(deletePaths)
+                .setConstraint(constraint);
     }
 
     @JsonProperty
@@ -148,22 +158,11 @@ public class OpenApiTableHandle
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes());
     }
 
-    @Override
-    public OpenApiTableHandle clone()
-    {
-        try {
-            return (OpenApiTableHandle) super.clone();
-        }
-        catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public OpenApiTableHandle cloneWithConstraint(TupleDomain<ColumnHandle> constraint)
     {
-        OpenApiTableHandle tableHandle = this.clone();
-        tableHandle.constraint = constraint;
-        return tableHandle;
+        return toBuilder()
+                .setConstraint(constraint)
+                .build();
     }
 
     public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(Constraint constraint, Map<String, OpenApiColumn> columns, int domainExpansionLimit)
