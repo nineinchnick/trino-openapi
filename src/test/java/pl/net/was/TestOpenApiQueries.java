@@ -120,6 +120,22 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void insertUpdateDeleteNote()
+    {
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 1");
+        assertUpdate("INSERT INTO fastapi.default.notes (note_id, text) VALUES (1, 'first')", 1);
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.notes WHERE note_id = 1",
+                "VALUES (1, 'first')");
+        assertUpdate("UPDATE fastapi.default.notes SET text = 'second' WHERE note_id = 1", 1);
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.notes WHERE note_id = 1",
+                "VALUES (1, 'second')");
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE note_id = 1", 1);
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 1");
+    }
+
+    @Test
     public void selectFromForecastTable()
     {
         assertQuery(
