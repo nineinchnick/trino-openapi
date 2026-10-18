@@ -75,6 +75,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.function.Predicate;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -348,7 +349,9 @@ public class OpenApiClient
     {
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
-        String selectedPath = PathSelector.selectPath(columns, method, paths, column -> valueProvider.apply(column) != null);
+        Predicate<OpenApiColumn> hasValue = column -> valueProvider.apply(column) != null;
+        String selectedPath = PathSelector.selectPath(columns, method, paths, hasValue)
+                .orElseThrow(() -> new TrinoException(INVALID_ROW_FILTER, PathSelector.describeMissingPredicates(columns, method, paths, hasValue)));
         HttpPath httpPath = new HttpPath(method, selectedPath);
         Map<OpenApiColumn, Object> pathParams = columns.stream()
                 .filter(column -> isPredicate(column, httpPath, ParameterLocation.PATH))

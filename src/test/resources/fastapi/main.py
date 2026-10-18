@@ -143,6 +143,18 @@ class Results(BaseModel):
     total_results: int
 
 
+class Station(BaseModel):
+    station_id: int
+    name: str
+    temperature: float
+
+
+class Comment(BaseModel):
+    comment_id: int
+    author: str
+    text: str
+
+
 items = {
     1: Item(id="1", name="Portal Gun", price=42.0, tags=["sci-fi"], revisedAt=[date.fromisoformat("2007-10-10"), date.fromisoformat("2022-12-08")], categories=[Category(id="1", name="main")]),
     2: Item(id="2", name="Plumbus", price=32.0, validUntil=date.fromisoformat("2999-01-01"), properties={"feeble": "schleem"}),
@@ -150,6 +162,17 @@ items = {
 
 
 notes: dict[int, Note] = {}
+
+stations = {
+    1: Station(station_id=1, name="Alpha", temperature=20.0),
+    2: Station(station_id=2, name="Bravo", temperature=-5.0),
+}
+
+comments = {
+    1: Comment(comment_id=1, author="alice", text="First"),
+    2: Comment(comment_id=2, author="bob", text="Second"),
+    3: Comment(comment_id=3, author="alice", text="Third"),
+}
 
 # kept as raw JSON, because Python floats can't hold all decimal values exactly
 numbers = [
@@ -316,6 +339,35 @@ def delete_note(note_id: int):
     if note_id not in notes:
         raise HTTPException(status_code=404, detail="Note not found")
     del notes[note_id]
+
+
+@router.get("/stations")
+def list_stations() -> list[Station]:
+    return list(stations.values())
+
+
+@router.get("/stations/{station_id}")
+def get_station(station_id: int, units: str) -> Station:
+    # units are required, so this path can't be used without them, even when the station ID is known
+    if station_id not in stations:
+        raise HTTPException(status_code=404, detail="Station not found")
+    station = stations[station_id]
+    if units == "imperial":
+        return station.model_copy(update={"temperature": station.temperature * 9 / 5 + 32})
+    return station
+
+
+@router.get("/comments")
+def list_comments(author: str) -> list[Comment]:
+    # listing comments requires an author, so reading all comments requires their IDs
+    return [comment for comment in comments.values() if comment.author == author]
+
+
+@router.get("/comments/{comment_id}")
+def get_comment(comment_id: int) -> Comment:
+    if comment_id not in comments:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return comments[comment_id]
 
 
 @router.get("/items/{item_id}")
