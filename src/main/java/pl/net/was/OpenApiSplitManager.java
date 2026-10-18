@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import io.trino.spi.TrinoException;
@@ -80,18 +81,20 @@ public class OpenApiSplitManager
             Set<ColumnHandle> dynamicFilterColumns,
             Constraint constraint)
     {
-        return new DynamicFilteringSplitSource(table);
+        return new DynamicFilteringSplitSource(table, dynamicFilterColumns);
     }
 
     private class DynamicFilteringSplitSource
             implements ConnectorSplitSource
     {
         private final ConnectorTableHandle table;
+        private final Set<ColumnHandle> dynamicFilterColumns;
         private Optional<ConnectorSplitSource> delegate = Optional.empty();
 
-        private DynamicFilteringSplitSource(ConnectorTableHandle table)
+        private DynamicFilteringSplitSource(ConnectorTableHandle table, Set<ColumnHandle> dynamicFilterColumns)
         {
             this.table = requireNonNull(table, "table is null");
+            this.dynamicFilterColumns = ImmutableSet.copyOf(requireNonNull(dynamicFilterColumns, "dynamicFilterColumns is null"));
         }
 
         @Override
@@ -123,7 +126,7 @@ public class OpenApiSplitManager
         private synchronized ConnectorSplitSource getDelegate(DynamicFilterSnapshot dynamicFilterSnapshot)
         {
             if (delegate.isEmpty()) {
-                delegate = Optional.of(getSplitSource(table, dynamicFilterSnapshot.currentPredicate()));
+                delegate = Optional.of(getSplitSource(table, dynamicFilterSnapshot, dynamicFilterColumns));
             }
             return delegate.get();
         }
@@ -136,16 +139,27 @@ public class OpenApiSplitManager
 
     private ConnectorSplitSource getSplitSource(
             ConnectorTableHandle tableHandle,
-            TupleDomain<ColumnHandle> dynamicFilterPredicate)
+            DynamicFilterSnapshot dynamicFilterSnapshot,
+            Set<ColumnHandle> dynamicFilterColumns)
     {
         OpenApiTableHandle originalTable = (OpenApiTableHandle) tableHandle;
         List<OpenApiColumn> columnList = spec.getTables().get(originalTable.getSchemaTableName().getTableName());
         Map<String, OpenApiColumn> columns = columnList.stream()
                 .collect(toMap(OpenApiColumn::getName, identity()));
-        // merge in constraints from dynamicFilter, which may contain multivalued domains
-        OpenApiTableHandle table = originalTable.applyFilter(new Constraint(dynamicFilterPredicate), columns, domainExpansionLimit)
+        TupleDomain<ColumnHandle> pushedDownPredicate = originalTable.getConstraint();
+        TupleDomain<ColumnHandle> predicate = pushedDownPredicate.isNone()
+                ? dynamicFilterSnapshot.currentPredicate()
+                : pushedDownPredicate.intersect(dynamicFilterSnapshot.currentPredicate());
+        if (predicate.isNone()) {
+            // the join has no matching rows
+            return getSplitSource(List.of());
+        }
+        // merge in constraints from dynamicFilter, which may contain multivalued domains,
+        // and must be intersected with pushed down constraints, so the handle starts without them
+        OpenApiTableHandle unfilteredTable = originalTable.cloneWithConstraint(TupleDomain.none());
+        OpenApiTableHandle table = unfilteredTable.applyFilter(new Constraint(predicate), columns, domainExpansionLimit)
                 .map(result -> (OpenApiTableHandle) result.getHandle())
-                .orElse(originalTable);
+                .orElse(unfilteredTable);
 
         Map<ColumnHandle, Domain> originalDomains = table.getConstraint().getDomains().orElse(Map.of());
 
@@ -192,7 +206,7 @@ public class OpenApiSplitManager
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
                 newDomains.put(entry.getKey(), entry.getValue());
             }
-            HttpPath httpPath = selectPath(table, columnList, newDomains);
+            HttpPath httpPath = selectPath(table, columnList, newDomains, dynamicFilterSnapshot, dynamicFilterColumns);
             // Trino still applies filters on predicates the selected path doesn't send,
             // and splits that differ only in these predicates would return the same rows
             newDomains.keySet().removeIf(column -> !isSentByPath(columns.get(((OpenApiColumnHandle) column).getName()), httpPath));
@@ -205,12 +219,38 @@ public class OpenApiSplitManager
         return getSplitSource(splits);
     }
 
-    private static HttpPath selectPath(OpenApiTableHandle table, List<OpenApiColumn> columns, Map<ColumnHandle, Domain> domains)
+    private HttpPath selectPath(
+            OpenApiTableHandle table,
+            List<OpenApiColumn> columns,
+            Map<ColumnHandle, Domain> domains,
+            DynamicFilterSnapshot dynamicFilterSnapshot,
+            Set<ColumnHandle> dynamicFilterColumns)
     {
         Predicate<OpenApiColumn> hasValue = column -> domains.containsKey(column.getHandle());
-        String path = PathSelector.selectPath(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue)
-                .orElseThrow(() -> new TrinoException(INVALID_ROW_FILTER, PathSelector.describeMissingPredicates(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue)));
-        return new HttpPath(table.getSelectMethod(), path);
+        Optional<String> path = PathSelector.selectPath(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue);
+        if (path.isPresent()) {
+            return new HttpPath(table.getSelectMethod(), path.get());
+        }
+        String message = PathSelector.describeMissingPredicates(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue);
+        List<String> missingDynamicFilters = table.getSelectPaths().stream()
+                .flatMap(selectPath -> PathSelector.getMissingRequiredPredicates(columns, new HttpPath(table.getSelectMethod(), selectPath), hasValue).stream())
+                .filter(column -> dynamicFilterColumns.contains(column.getHandle()))
+                .map(OpenApiColumn::getName)
+                .distinct()
+                .toList();
+        if (missingDynamicFilters.isEmpty()) {
+            throw new TrinoException(INVALID_ROW_FILTER, message);
+        }
+        if (!dynamicFilterSnapshot.isComplete()) {
+            throw new TrinoException(INVALID_ROW_FILTER, "%s. Dynamic filters from joins for %s were not ready after %d ms".formatted(
+                    message,
+                    String.join(", ", missingDynamicFilters),
+                    TIMEOUT_MILLIS));
+        }
+        throw new TrinoException(INVALID_ROW_FILTER, "%s. Dynamic filters from joins for %s have values that can't be sent, like ranges with more than %d values (domain-expansion-limit)".formatted(
+                message,
+                String.join(", ", missingDynamicFilters),
+                domainExpansionLimit));
     }
 
     private static boolean isSentBySomePath(OpenApiColumn column, OpenApiTableHandle table)
