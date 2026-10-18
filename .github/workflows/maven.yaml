@@ -44,6 +44,13 @@ jobs:
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
         run: ./mvnw -B package
 
+      # the sync program is a separate project, so the plugin build and release don't change,
+      # and its tests use the plugin built above, with the version that the release sets in the root pom only
+      - name: Build the sync program
+        run: |
+          ./mvnw -B install -DskipTests -Dair.check.skip-all=true
+          ./mvnw -B -f sync/pom.xml verify -Ddep.trino-openapi.version=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+
       # tests run the plugin on the same classpath as Trino, so also check that it works in a Trino server,
       # using the automatic token, which is also available in pull requests from forks
       - name: Test the Docker image
