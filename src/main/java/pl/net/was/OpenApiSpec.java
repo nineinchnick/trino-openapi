@@ -35,6 +35,7 @@ import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.parser.OpenAPIV3Parser;
@@ -73,6 +74,7 @@ import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Boolean.TRUE;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
@@ -336,7 +338,7 @@ public class OpenApiSpec
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
     {
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
-                .flatMap(entry -> getColumn(path, entry))
+                .flatMap(entry -> getColumn(path, pathItem.getParameters(), entry))
                 .distinct();
         if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getDelete() != null) {
             // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
@@ -353,10 +355,11 @@ public class OpenApiSpec
         return columns.toList();
     }
 
-    private Stream<OpenApiColumn> getColumn(String path, Map.Entry<PathItem.HttpMethod, Operation> entry)
+    private Stream<OpenApiColumn> getColumn(String path, List<Parameter> pathParameters, Map.Entry<PathItem.HttpMethod, Operation> entry)
     {
         PathItem.HttpMethod method = entry.getKey();
         Operation op = entry.getValue();
+        List<Parameter> parameters = getParameters(pathParameters, op);
         List<OpenApiColumn> result = new ArrayList<>();
 
         Map<String, String> specExtension = op.getExtensions() == null ?
@@ -409,6 +412,7 @@ public class OpenApiSpec
                             propEntry.getValue(),
                             requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(new HttpPath(method, path), ParameterLocation.BODY) : ImmutableMap.of(),
                             !requiredProperties.contains(propEntry.getKey()) ? ImmutableMap.of(new HttpPath(method, path), ParameterLocation.BODY) : ImmutableMap.of(),
+                            ImmutableMap.of(),
                             !requiredProperties.contains(propEntry.getKey()),
                             false,
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
@@ -427,21 +431,27 @@ public class OpenApiSpec
                     })
                     .forEach(result::add);
         }
-        if (op.getParameters() != null && filterPath(path, method)) {
+        if (!parameters.isEmpty() && filterPath(path, method)) {
             ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream()
                     .collect(ArrayListMultimap::create,
                             (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
                             ArrayListMultimap::putAll);
             // add required parameters as columns, so they can be set as predicates;
             // predicate values will be saved in the table handle and copied to result rows
-            op.getParameters().stream()
+            parameters.stream()
                     .map(parameter -> {
                         ParameterLocation parameterLocation = parameter.getIn() == null ? ParameterLocation.NONE : ParameterLocation.valueOf(parameter.getIn().toUpperCase(Locale.ENGLISH));
+                        boolean isRequired = TRUE.equals(parameter.getRequired());
+                        ParameterStyle parameterStyle = ParameterStyle.of(parameter.getStyle(), parameter.getExplode(), parameterLocation);
                         return getPredicateColumn(
                                 parameter.getName(),
                                 parameter.getSchema(),
-                                parameter.getRequired() ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
-                                !parameter.getRequired() ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
+                                isRequired ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
+                                !isRequired ? ImmutableMap.of(new HttpPath(method, path), parameterLocation) : ImmutableMap.of(),
+                                // only save styles different from the default one for the parameter location
+                                !parameterStyle.equals(ParameterStyle.defaultFor(parameterLocation))
+                                        ? ImmutableMap.of(new HttpPath(method, path), parameterStyle)
+                                        : ImmutableMap.of(),
                                 // always nullable, because they're only required as predicates, not in INSERT statements
                                 true,
                                 // keep pagination parameters as hidden columns, so it's possible to
@@ -467,6 +477,19 @@ public class OpenApiSpec
 
         return result.stream();
     }
+
+    private static List<Parameter> getParameters(List<Parameter> pathParameters, Operation op)
+    {
+        // operation parameters override path item parameters with the same name and location
+        Map<ParameterKey, Parameter> parameters = new LinkedHashMap<>();
+        Stream.concat(
+                        Optional.ofNullable(pathParameters).stream().flatMap(List::stream),
+                        Optional.ofNullable(op.getParameters()).stream().flatMap(List::stream))
+                .forEach(parameter -> parameters.put(new ParameterKey(parameter.getName(), parameter.getIn()), parameter));
+        return ImmutableList.copyOf(parameters.values());
+    }
+
+    private record ParameterKey(String name, String in) {}
 
     private static JsonPointer parseJsonPointer(String expression)
     {
@@ -593,6 +616,7 @@ public class OpenApiSpec
             Schema<?> schema,
             Map<HttpPath, ParameterLocation> requiredPredicate,
             Map<HttpPath, ParameterLocation> optionalPredicate,
+            Map<HttpPath, ParameterStyle> parameterStyles,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber)
@@ -605,6 +629,7 @@ public class OpenApiSpec
                 .setSourceType(type.schema())
                 .setRequiresPredicate(requiredPredicate)
                 .setOptionalPredicate(optionalPredicate)
+                .setParameterStyles(parameterStyles)
                 .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
                 .setIsHidden(isHidden)
                 .setIsPageNumber(isPageNumber)
@@ -821,6 +846,10 @@ public class OpenApiSpec
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .setOptionalPredicate(sameColumns.stream()
                                 .map(OpenApiColumn::getOptionalPredicate)
+                                .flatMap(map -> map.entrySet().stream())
+                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
+                        .setParameterStyles(sameColumns.stream()
+                                .map(OpenApiColumn::getParameterStyles)
                                 .flatMap(map -> map.entrySet().stream())
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .build())

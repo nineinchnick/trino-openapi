@@ -16,6 +16,7 @@ package pl.net.was;
 
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -1348,6 +1349,7 @@ class TestOpenApiSpec
                                 .setName("hourly_req").setSourceName("hourly")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setParameterStyles(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), new ParameterStyle(Parameter.StyleEnum.FORM, false)))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
@@ -1559,6 +1561,74 @@ class TestOpenApiSpec
                         Assertions.tuple("foo_bar", "foo-bar"),
                         Assertions.tuple("foo_bar_2", "foo_bar"),
                         Assertions.tuple("foo_bar_3", "fooBar"));
+    }
+
+    @Test
+    public void testPathItemParameters()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items/{id}:
+                    parameters:
+                    - in: path
+                      name: id
+                      required: true
+                      schema:
+                        type: string
+                    - in: query
+                      name: filter
+                      schema:
+                        type: string
+                    get:
+                      parameters:
+                      - in: query
+                        name: filter
+                        required: true
+                        schema:
+                          type: string
+                      - in: cookie
+                        name: session
+                        schema:
+                          type: string
+                      - in: query
+                        name: tags
+                        style: pipeDelimited
+                        explode: false
+                        schema:
+                          type: array
+                          items:
+                            type: string
+                      responses:
+                        "200":
+                          description: Item
+                          content:
+                            application/json:
+                              schema:
+                                $ref: '#/components/schemas/Item'
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        HttpPath httpPath = new HttpPath(PathItem.HttpMethod.GET, "/items/{id}");
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getRequiresPredicate, OpenApiColumn::getOptionalPredicate, OpenApiColumn::getParameterStyles)
+                .containsExactly(
+                        Assertions.tuple("name", Map.of(), Map.of(), Map.of()),
+                        Assertions.tuple("id", Map.of(httpPath, ParameterLocation.PATH), Map.of(), Map.of()),
+                        Assertions.tuple("filter", Map.of(httpPath, ParameterLocation.QUERY), Map.of(), Map.of()),
+                        Assertions.tuple("session", Map.of(), Map.of(httpPath, ParameterLocation.COOKIE), Map.of()),
+                        Assertions.tuple("tags", Map.of(), Map.of(httpPath, ParameterLocation.QUERY), Map.of(httpPath, new ParameterStyle(Parameter.StyleEnum.PIPEDELIMITED, false))));
     }
 
     private OpenApiSpec loadSpec(String name)

@@ -19,6 +19,7 @@ public enum ParameterLocation
     PATH,
     QUERY,
     HEADER,
+    COOKIE,
     BODY,
     ANY
 }
