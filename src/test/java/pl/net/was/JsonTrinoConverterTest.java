@@ -22,6 +22,8 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.DecimalNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.swagger.v3.oas.models.media.ArraySchema;
@@ -48,6 +50,7 @@ import io.trino.spi.type.TypeOperators;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -55,6 +58,8 @@ import java.util.Locale;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DecimalType.createDecimalType;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
@@ -311,6 +316,78 @@ class JsonTrinoConverterTest
         assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("10000000000")), type, new NumberSchema()))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Value 10000000000 doesn't fit in decimal(18,8)");
+    }
+
+    @Test
+    void shouldConvertDecimalsFromJsonStrings()
+    {
+        var shortType = createDecimalType(18, 8);
+        var longType = createDecimalType(38, 10);
+        var schema = new NumberSchema();
+
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("12.50"), shortType, schema))
+                .isEqualTo(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("12.50")), shortType, schema))
+                .isEqualTo(1250000000L);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("-1234567890.12345678"), shortType, schema))
+                .isEqualTo(-123456789012345678L);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("0.000000005"), shortType, schema))
+                .isEqualTo(1L);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("1E-8"), shortType, schema))
+                .isEqualTo(1L);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("9999999999999999999999999999.9999999999"), longType, schema))
+                .isEqualTo(Int128.valueOf("99999999999999999999999999999999999999"));
+    }
+
+    @Test
+    void shouldRejectInvalidDecimalStrings()
+    {
+        var type = createDecimalType(18, 8);
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), type, new NumberSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read 'abc' as decimal(18,8)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf(""), type, new NumberSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read '' as decimal(18,8)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("10000000000"), type, new NumberSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Value 10000000000 doesn't fit in decimal(18,8)");
+    }
+
+    @Test
+    void shouldConvertOtherNumbersFromJsonStrings()
+    {
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("42"), INTEGER, new IntegerSchema()))
+                .isEqualTo(JsonTrinoConverter.convert(IntNode.valueOf(42), INTEGER, new IntegerSchema()))
+                .isEqualTo(42);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("9223372036854775807"), BIGINT, new IntegerSchema()))
+                .isEqualTo(JsonTrinoConverter.convert(LongNode.valueOf(Long.MAX_VALUE), BIGINT, new IntegerSchema()))
+                .isEqualTo(BigInteger.valueOf(Long.MAX_VALUE));
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("-2.25"), REAL, new NumberSchema().format("float")))
+                .isEqualTo(JsonTrinoConverter.convert(DoubleNode.valueOf(-2.25), REAL, new NumberSchema().format("float")))
+                .isEqualTo(-2.25f);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("1.5"), DOUBLE, new NumberSchema().format("double")))
+                .isEqualTo(JsonTrinoConverter.convert(DoubleNode.valueOf(1.5), DOUBLE, new NumberSchema().format("double")))
+                .isEqualTo(1.5);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("NaN"), DOUBLE, new NumberSchema().format("double")))
+                .isEqualTo(Double.NaN);
+    }
+
+    @Test
+    void shouldRejectInvalidNumberStrings()
+    {
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), INTEGER, new IntegerSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read 'abc' as integer");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("1.5"), BIGINT, new IntegerSchema()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read '1.5' as bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), REAL, new NumberSchema().format("float")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read 'abc' as real");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), DOUBLE, new NumberSchema().format("double")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read 'abc' as double");
     }
 
     @Test
