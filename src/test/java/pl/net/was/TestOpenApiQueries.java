@@ -386,6 +386,24 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void objectParameterStyles()
+    {
+        String color = "CAST(ROW(100, 'a/b c') AS ROW(r bigint, name varchar))";
+        assertQuery(
+                "SELECT query FROM echo.default.echo_query_object WHERE color = " + color,
+                "VALUES 'r=100&name=a%2Fb%20c'");
+        assertQuery(
+                "SELECT query FROM echo.default.echo_deep_object WHERE color = " + color,
+                "VALUES 'color[r]=100&color[name]=a%2Fb%20c'");
+        assertQuery(
+                "SELECT header FROM echo.default.echo_header_object WHERE x_color = " + color,
+                "VALUES 'r=100,name=a/b c'");
+        assertQuery(
+                "SELECT cookie FROM echo.default.echo_cookie_object WHERE color = " + color,
+                "VALUES 'color=r%2C100%2Cname%2Ca%2Fb%20c'");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();

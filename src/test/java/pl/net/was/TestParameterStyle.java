@@ -125,11 +125,36 @@ class TestParameterStyle
     }
 
     @Test
+    void testFormQueryStyleObjects()
+    {
+        assertThat(queryParameter(StyleEnum.FORM, true, OBJECT)).containsExactly("R=100", "G=200", "B=150");
+        assertThat(queryParameter(StyleEnum.FORM, false, OBJECT)).containsExactly("color=R,100,G,200,B,150");
+        assertThat(queryParameter(StyleEnum.FORM, true, OBJECT_MAPPER.createObjectNode())).isEmpty();
+    }
+
+    @Test
     void testDelimitedQueryStyles()
     {
         assertThat(queryParameter(StyleEnum.SPACEDELIMITED, false, ARRAY)).containsExactly("color=blue%20black%20brown");
         assertThat(queryParameter(StyleEnum.PIPEDELIMITED, false, ARRAY)).containsExactly("color=blue%7Cblack%7Cbrown");
         assertThat(queryParameter(StyleEnum.PIPEDELIMITED, true, ARRAY)).containsExactly("color=blue", "color=black", "color=brown");
+        assertThat(queryParameter(StyleEnum.SPACEDELIMITED, false, OBJECT)).containsExactly("color=R%20100%20G%20200%20B%20150");
+        assertThat(queryParameter(StyleEnum.PIPEDELIMITED, false, OBJECT)).containsExactly("color=R%7C100%7CG%7C200%7CB%7C150");
+    }
+
+    @Test
+    void testDeepObjectQueryStyle()
+    {
+        assertThat(queryParameter(StyleEnum.DEEPOBJECT, true, OBJECT)).containsExactly("color[R]=100", "color[G]=200", "color[B]=150");
+        assertThat(queryParameter(StyleEnum.DEEPOBJECT, true, OBJECT_MAPPER.createObjectNode().put("a[b]", RESERVED)))
+                .containsExactly("color[a%5Bb%5D]=a%2Fb%3Fc%26d%23e%20f");
+        assertThat(queryParameter(StyleEnum.DEEPOBJECT, true, OBJECT_MAPPER.createObjectNode().set("nested", ARRAY)))
+                .containsExactly("color[nested]=%5B%22blue%22%2C%22black%22%2C%22brown%22%5D");
+        for (JsonNode value : new JsonNode[] {PRIMITIVE, ARRAY}) {
+            assertThatThrownBy(() -> queryParameter(StyleEnum.DEEPOBJECT, true, value))
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                    .hasMessage("Parameter color uses the deepObject style, which only supports object values");
+        }
     }
 
     @Test
@@ -149,6 +174,45 @@ class TestParameterStyle
                     .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
                     .hasMessage("Parameter color uses the %s style, which is not supported for query parameters", style);
         }
+    }
+
+    @Test
+    void testHeaderValues()
+    {
+        assertThat(headerValue(false, PRIMITIVE)).isEqualTo("blue");
+        assertThat(headerValue(false, TextNode.valueOf(RESERVED))).isEqualTo(RESERVED);
+        assertThat(headerValue(false, ARRAY)).isEqualTo("blue,black,brown");
+        assertThat(headerValue(true, ARRAY)).isEqualTo("blue,black,brown");
+        assertThat(headerValue(false, OBJECT)).isEqualTo("R,100,G,200,B,150");
+        assertThat(headerValue(true, OBJECT)).isEqualTo("R=100,G=200,B=150");
+        assertThatThrownBy(() -> new ParameterStyle(StyleEnum.FORM, false).serializeHeaderValue("color", PRIMITIVE))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessage("Parameter color uses the form style, which is not supported for header parameters");
+    }
+
+    @Test
+    void testCookieValues()
+    {
+        assertThat(cookieValue(true, PRIMITIVE)).isEqualTo("blue");
+        assertThat(cookieValue(true, TextNode.valueOf(RESERVED + ";,"))).isEqualTo("a%2Fb%3Fc%26d%23e%20f%3B%2C");
+        assertThat(cookieValue(true, ARRAY)).isEqualTo("blue%2Cblack%2Cbrown");
+        assertThat(cookieValue(false, OBJECT)).isEqualTo("R%2C100%2CG%2C200%2CB%2C150");
+        assertThatThrownBy(() -> cookieValue(true, OBJECT))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessage("Parameter color is an exploded object cookie, which is not supported");
+        assertThatThrownBy(() -> new ParameterStyle(StyleEnum.SIMPLE, false).serializeCookieValue("color", PRIMITIVE))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessage("Parameter color uses the simple style, which is not supported for cookie parameters");
+    }
+
+    private static String headerValue(boolean explode, JsonNode value)
+    {
+        return new ParameterStyle(StyleEnum.SIMPLE, explode).serializeHeaderValue("color", value);
+    }
+
+    private static String cookieValue(boolean explode, JsonNode value)
+    {
+        return new ParameterStyle(StyleEnum.FORM, explode).serializeCookieValue("color", value);
     }
 
     private static String pathValue(StyleEnum style, boolean explode, JsonNode value)
