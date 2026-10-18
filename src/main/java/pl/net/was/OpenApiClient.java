@@ -170,7 +170,7 @@ public class OpenApiClient
                 httpPath,
                 openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
                 openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
-                openApiSpec.getTotalResultsPointers(table.getSchemaTableName()).get(httpPath));
+                openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()));
     }
 
     private BodyGenerator getBodyGenerator(OpenApiTableHandle table, HttpPath httpPath)
@@ -654,15 +654,15 @@ public class OpenApiClient
         private final HttpPath httpPath;
         private final JsonPointer errorPointer;
         private final JsonPointer resultsPointer;
-        private final JsonPointer totalResultsPointer;
+        private final Pagination pagination;
 
-        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer, JsonPointer totalResultsPointer)
+        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer, Pagination pagination)
         {
             this.table = requireNonNull(table, "table is null");
             this.httpPath = requireNonNull(httpPath, "httpPath is null");
             this.errorPointer = errorPointer;
             this.resultsPointer = resultsPointer;
-            this.totalResultsPointer = totalResultsPointer;
+            this.pagination = requireNonNull(pagination, "pagination is null");
         }
 
         @Override
@@ -702,10 +702,10 @@ public class OpenApiClient
 
         private OptionalLong getTotalResults(JsonNode jsonNode)
         {
-            if (totalResultsPointer == null || JsonPointer.empty().equals(totalResultsPointer)) {
+            if (JsonPointer.empty().equals(pagination.totalResultsPointer())) {
                 return OptionalLong.empty();
             }
-            JsonNode totalNode = jsonNode.at(totalResultsPointer);
+            JsonNode totalNode = jsonNode.at(pagination.totalResultsPointer());
             if (!totalNode.canConvertToExactIntegral() || !totalNode.canConvertToLong()) {
                 return OptionalLong.empty();
             }
