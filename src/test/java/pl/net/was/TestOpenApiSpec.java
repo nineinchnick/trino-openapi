@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.models.PathItem;
@@ -34,7 +35,9 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -751,6 +754,40 @@ class TestOpenApiSpec
                     .as("columns of %s", paginatedPath.path())
                     .extracting(OpenApiColumn::getName)
                     .contains(paginatedPath.resultColumn(), "per_page");
+        }
+    }
+
+    @Test
+    public void getGithubPatchedOperations()
+            throws IOException
+    {
+        OpenApiSpec spec = loadSpecFile("specs/github.json");
+        Map<HttpPath, String> selectTables = spec.getTables().keySet().stream()
+                .flatMap(table -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, table)).getSelectPaths().stream()
+                        .map(path -> Map.entry(path, table)))
+                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue, (first, _) -> first));
+
+        // nothing else checks that every operation in the patch still matches the upstream spec
+        JsonNode patchPaths = new ObjectMapper().readTree(Path.of("dev/specs/github.patch.json").toFile()).get("paths");
+        Assertions.assertThat(patchPaths.properties()).isNotEmpty();
+        for (Map.Entry<String, JsonNode> patchPath : patchPaths.properties()) {
+            HttpPath httpPath = new HttpPath(PathItem.HttpMethod.GET, patchPath.getKey());
+            JsonNode extension = patchPath.getValue().get("get").get("x-trino");
+            String table = selectTables.get(httpPath);
+            Assertions.assertThat(table).as("table selecting %s", httpPath).isNotNull();
+            List<OpenApiColumn> columns = spec.getTables().get(table);
+            if (extension.has("pageParam")) {
+                Assertions.assertThat(columns)
+                        .as("page number of %s", httpPath)
+                        .filteredOn(OpenApiColumn::isPageNumber)
+                        .anySatisfy(column -> Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY));
+                Assertions.assertThat(columns)
+                        .as("page size of %s", httpPath)
+                        .anySatisfy(column -> {
+                            Assertions.assertThat(column.getSourceName()).isEqualTo(extension.get("limitParam").asText());
+                            Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY);
+                        });
+            }
         }
     }
 

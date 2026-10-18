@@ -1,6 +1,659 @@
 {
   "paths": {
+    "/agents/automations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/agents/automations/{automation_id}/tasks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "tasks"
+        }
+      }
+    },
+    "/agents/repos/{owner}/{repo}/automations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "automations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/app/installation-requests": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/app/installations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists/public": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists/starred": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists/{gist_id}/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists/{gist_id}/commits": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/gists/{gist_id}/forks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/installation/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/licenses": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/marketplace_listing/plans": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/marketplace_listing/plans/{plan_id}/accounts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/marketplace_listing/stubbed/plans": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/marketplace_listing/stubbed/plans/{plan_id}/accounts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/networks/{owner}/{repo}/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/actions/cache/usage-by-repository": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repository_cache_usages",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/hosted-runners": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runners",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/permissions/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/permissions/self-hosted-runners/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/policies": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "policies",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/runner-groups": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runner_groups",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/runner-groups/{runner_group_id}/hosted-runners": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runners",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/runner-groups/{runner_group_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/runner-groups/{runner_group_id}/runners": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runners",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/runners": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runners",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/secrets/{secret_name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/actions/variables/{name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/agents/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/agents/secrets/{secret_name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/agents/variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/agents/variables/{name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/blocks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/campaigns": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/code-scanning/alerts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/codespaces": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "codespaces",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/codespaces/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/codespaces/secrets/{secret_name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/copilot/billing/seats": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "seats",
+          "totalResultsPath": "total_seats"
+        }
+      }
+    },
+    "/orgs/{org}/copilot/coding-agent/permissions/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/dependabot/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/dependabot/secrets/{secret_name}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/failed_invitations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/hooks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/insights/api/route-stats/{actor_type}/{actor_id}": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/insights/api/subject-stats": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/insights/api/user-stats/{user_id}": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/installations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "installations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/invitations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/invitations/{invitation_id}/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/orgs/{org}/members": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/members/{username}/codespaces": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "codespaces",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/migrations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/migrations/{migration_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/organization-roles/{role_id}/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/organization-roles/{role_id}/users": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/outside_collaborators": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/packages": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/packages/{package_type}/{package_name}/versions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/personal-access-token-requests": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/personal-access-token-requests/{pat_request_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/personal-access-tokens": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/personal-access-tokens/{pat_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/private-registries": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "configurations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/properties/values": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/public_members": {
       "get": {
         "x-trino": {
           "pageParam": "page",
@@ -16,12 +669,185 @@
         }
       }
     },
+    "/orgs/{org}/rulesets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/rulesets/rule-suites": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/rulesets/{ruleset_id}/history": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/secret-scanning/alerts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/settings/immutable-releases/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/settings/network-configurations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "network_configurations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/orgs/{org}/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/teams/{team_slug}/invitations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/teams/{team_slug}/members": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/teams/{team_slug}/repos": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/orgs/{org}/teams/{team_slug}/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/artifacts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "artifacts",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/caches": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "actions_caches",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/organization-secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/organization-variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/policies": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "policies",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/runners": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "runners",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/actions/runs": {
       "get": {
         "x-trino": {
           "pageParam": "page",
           "limitParam": "per_page",
-          "resultsPath": "workflow_runs"
+          "resultsPath": "workflow_runs",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/runs/{run_id}/artifacts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "artifacts",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "jobs",
+          "totalResultsPath": "total_count"
         }
       }
     },
@@ -30,7 +856,28 @@
         "x-trino": {
           "pageParam": "page",
           "limitParam": "per_page",
-          "resultsPath": "jobs"
+          "resultsPath": "jobs",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/actions/variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
         }
       }
     },
@@ -39,7 +886,8 @@
         "x-trino": {
           "pageParam": "page",
           "limitParam": "per_page",
-          "resultsPath": "workflows"
+          "resultsPath": "workflows",
+          "totalResultsPath": "total_count"
         }
       }
     },
@@ -48,7 +896,56 @@
         "x-trino": {
           "pageParam": "page",
           "limitParam": "per_page",
-          "resultsPath": "workflow_runs"
+          "resultsPath": "workflow_runs",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/agents/organization-secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/agents/organization-variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/agents/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/agents/variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/assignees": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
         }
       }
     },
@@ -60,7 +957,263 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/check-runs/{check_run_id}/annotations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/check-suites/{check_suite_id}/check-runs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "check_runs",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/code-scanning/alerts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/code-scanning/alerts/{alert_number}/instances": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/code-scanning/analyses": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/codespaces": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "codespaces",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/codespaces/devcontainers": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "devcontainers",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/codespaces/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/collaborators": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/comments/{comment_id}/reactions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits/{commit_sha}/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits/{commit_sha}/pulls": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits/{ref}/check-runs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "check_runs",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits/{ref}/check-suites": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "check_suites",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/commits/{ref}/statuses": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/contributors": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/dependabot/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/deployments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/deployments/{deployment_id}/statuses": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/environments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "environments",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/environments/{environment_name}/deployment-branch-policies": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "branch_policies",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/environments/{environment_name}/deployment_protection_rules/apps": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "available_custom_deployment_protection_rule_integrations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/environments/{environment_name}/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/environments/{environment_name}/variables": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "variables",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/forks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/hooks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/invitations": {
       "get": {
         "x-trino": {
           "pageParam": "page",
@@ -84,7 +1237,215 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocking": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/issue-field-values": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/labels": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/reactions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/relates_to": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/sub_issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/suggestions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/timeline": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/labels": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/milestones": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/milestones/{milestone_number}/labels": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/notifications": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pages/builds": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/pulls": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{pull_number}/comments": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{pull_number}/commits": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{pull_number}/files": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{pull_number}/reviews": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments": {
       "get": {
         "x-trino": {
           "pageParam": "page",
@@ -100,7 +1461,356 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/releases/{release_id}/assets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/releases/{release_id}/reactions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/rules/branches/{branch}": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/rulesets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/rulesets/rule-suites": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/rulesets/{ruleset_id}/history": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/secret-scanning/alerts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/stacks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/stargazers": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/stargazers/history": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/subscribers": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/repos/{owner}/{repo}/tags": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/search/code": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/commits": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/labels": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/topics": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/search/users": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "items",
+          "totalResultsPath": "total_count",
+          "maxResults": 1000
+        }
+      }
+    },
+    "/user/blocks": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/codespaces": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "codespaces",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/user/codespaces/secrets": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "secrets",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/user/emails": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/followers": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/following": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/gpg_keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/installations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "installations",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/user/installations/{installation_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page",
+          "resultsPath": "repositories",
+          "totalResultsPath": "total_count"
+        }
+      }
+    },
+    "/user/issues": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/marketplace_purchases": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/marketplace_purchases/stubbed": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/memberships/orgs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/migrations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/migrations/{migration_id}/repositories": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/orgs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/packages": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/packages/{package_type}/{package_name}/versions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/public_emails": {
       "get": {
         "x-trino": {
           "pageParam": "page",
@@ -116,7 +1826,183 @@
         }
       }
     },
+    "/user/repository_invitations": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/social_accounts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/ssh_signing_keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/starred": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/subscriptions": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/user/teams": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/events/orgs/{org}": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/events/public": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/followers": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/following": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/gists": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/gpg_keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/orgs": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/packages": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/received_events": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/received_events/public": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
     "/users/{username}/repos": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/social_accounts": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/ssh_signing_keys": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/starred": {
+      "get": {
+        "x-trino": {
+          "pageParam": "page",
+          "limitParam": "per_page"
+        }
+      }
+    },
+    "/users/{username}/subscriptions": {
       "get": {
         "x-trino": {
           "pageParam": "page",
