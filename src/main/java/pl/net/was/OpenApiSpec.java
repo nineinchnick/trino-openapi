@@ -101,6 +101,7 @@ public class OpenApiSpec
     private static final String PAGINATION_TOTAL_RESULTS_PATH = "totalResultsPath";
     private static final String ERROR_PATH = "errorPath";
     private static final String PAGINATION_PAGE_PARAM = "pageParam";
+    private static final String PAGINATION_LIMIT_PARAM = "limitParam";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -672,8 +673,16 @@ public class OpenApiSpec
 
     private Map<HttpPath, Pagination> paginations(PathItem pathItem, String path)
     {
-        return pointers(pathItem, path, PAGINATION_TOTAL_RESULTS_PATH).entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> new Pagination(entry.getValue())));
+        return pathItem.readOperationsMap().entrySet().stream()
+                .filter(entry -> entry.getValue().getExtensions() != null && entry.getValue().getExtensions().containsKey(SPEC_EXTENSION))
+                .collect(toImmutableMap(
+                        entry -> new HttpPath(entry.getKey(), path),
+                        entry -> {
+                            Map<String, String> specExtension = getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION));
+                            return new Pagination(
+                                    Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)),
+                                    pointer(specExtension, PAGINATION_TOTAL_RESULTS_PATH));
+                        }));
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)
@@ -684,13 +693,18 @@ public class OpenApiSpec
                         entry -> new HttpPath(entry.getKey(), path),
                         entry -> {
                             Map<String, String> specExtension = getMapOfStrings(entry.getValue().getExtensions().get(SPEC_EXTENSION));
-                            try {
-                                return parseJsonPointer(specExtension.get(extensionName));
-                            }
-                            catch (IllegalArgumentException e) {
-                                throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()));
-                            }
+                            return pointer(specExtension, extensionName);
                         }));
+    }
+
+    private static JsonPointer pointer(Map<String, String> specExtension, String extensionName)
+    {
+        try {
+            return parseJsonPointer(specExtension.get(extensionName));
+        }
+        catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()));
+        }
     }
 
     private boolean filterPath(String path, PathItem.HttpMethod method)

@@ -16,14 +16,17 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
 
+import java.util.Optional;
+
 import static java.util.Objects.requireNonNull;
 
-public record Pagination(JsonPointer totalResultsPointer)
+public record Pagination(Optional<String> limitParam, JsonPointer totalResultsPointer)
 {
-    private static final Pagination NONE = new Pagination(JsonPointer.empty());
+    private static final Pagination NONE = new Pagination(Optional.empty(), JsonPointer.empty());
 
     public Pagination
     {
+        requireNonNull(limitParam, "limitParam is null");
         requireNonNull(totalResultsPointer, "totalResultsPointer is null");
     }
 

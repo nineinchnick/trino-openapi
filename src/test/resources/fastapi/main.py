@@ -200,6 +200,26 @@ def list_clamped_items(page: int = 1) -> Results:
         total_results=len(items))
 
 
+@router.get("/clamped_sized_items")
+def list_clamped_sized_items(page: int = 1, size: int = 3) -> Results:
+    # out of range page numbers return the last page, and the total is not configured in the spec,
+    # so only a page with fewer items than requested can end pagination
+    last_page = max(1, -(-len(items) // size))
+    page = min(max(page, 1), last_page)
+    return Results(
+        results=list(items.values())[(page - 1) * size:page * size],
+        total_results=len(items))
+
+
+@router.get("/capped_items")
+def list_capped_items(page: int = 1, size: int = 1) -> Results:
+    # return at most one item per page, even when asked for more
+    size = min(size, 1)
+    return Results(
+        results=list(items.values())[(page - 1) * size:page * size],
+        total_results=len(items))
+
+
 @router.post("/paged_search")
 def paged_search(q: PageFilter) -> Results:
     return Results(
@@ -374,6 +394,18 @@ def custom_openapi():
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
     }
+    openapi_schema["paths"]["/clamped_sized_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "size",
+        "resultsPath": "$response.body#/results",
+    }
+    openapi_schema["paths"]["/capped_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "size",
+        "resultsPath": "$response.body#/results",
+    }
+    capped_size = next(parameter for parameter in openapi_schema["paths"]["/capped_items"]["get"]["parameters"] if parameter["name"] == "size")
+    capped_size["schema"]["maximum"] = 1
     openapi_schema["paths"]["/paged_search"]["post"]["x-trino"] = {
         "pageParam": "page",
         "resultsPath": "$response.body#/results",

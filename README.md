@@ -141,6 +141,19 @@ paths:
        totalResultsPath: "$response.body#/total_count"
 ```
 
+Pagination stops after:
+* an empty page;
+* the number of results given by `totalResultsPath`;
+* a page with fewer results than the page size, when `limitParam` is set and
+  its value is known, either from a query predicate or from the default value of
+  the parameter in the spec. The page size is limited by the `maximum` of the
+  parameter, if the spec declares it, because servers often return fewer results
+  than requested when the requested number is too high.
+
+If none of these apply, for example when the server returns the last page for
+every page number past it and declares no default page size or total, the query
+makes requests until it's cancelled.
+
 ### Error messages
 
 When the connector makes an API call, for which the server responds with an
