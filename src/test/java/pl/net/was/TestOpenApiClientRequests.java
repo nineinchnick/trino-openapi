@@ -581,7 +581,7 @@ class TestOpenApiClientRequests
                     .orElseThrow();
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(secret)))));
         }
-        return ImmutableList.copyOf(client.getRows(table, false));
+        return ImmutableList.copyOf(client.getRows(table, 1, 1, false));
     }
 
     private static HttpHandler disconnect()
