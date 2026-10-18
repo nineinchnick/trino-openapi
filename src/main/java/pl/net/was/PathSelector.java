@@ -14,8 +14,6 @@
 
 package pl.net.was;
 
-import io.swagger.v3.oas.models.PathItem;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -35,27 +33,27 @@ public final class PathSelector
      * Returns the path that has all required predicates, and uses the most of the available path parameters,
      * then the most of other available predicates.
      */
-    public static Optional<String> selectPath(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
+    public static Optional<HttpPath> selectPath(List<OpenApiColumn> columns, List<HttpPath> paths, Predicate<OpenApiColumn> hasValue)
     {
         checkArgument(!paths.isEmpty(), "paths are empty");
         // path parameters are counted first, because rows read using a more generic path don't have values of the other path parameters,
         // so filters on them would remove all rows; paths of equal length are ordered only to make the choice deterministic
-        Comparator<String> comparator = comparingLong((String path) -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue, true))
-                .thenComparingLong(path -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue, false))
-                .thenComparing(comparingInt(String::length).reversed())
-                .thenComparing(Comparator.<String>naturalOrder().reversed());
+        Comparator<HttpPath> comparator = comparingLong((HttpPath path) -> countAvailablePredicates(columns, path, hasValue, true))
+                .thenComparingLong(path -> countAvailablePredicates(columns, path, hasValue, false))
+                .thenComparing(comparingInt((HttpPath path) -> path.path().length()).reversed())
+                .thenComparing(Comparator.<HttpPath>naturalOrder().reversed());
         return paths.stream()
-                .filter(path -> getMissingRequiredPredicates(columns, new HttpPath(method, path), hasValue).isEmpty())
+                .filter(path -> getMissingRequiredPredicates(columns, path, hasValue).isEmpty())
                 .max(comparator);
     }
 
-    public static String describeMissingPredicates(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
+    public static String describeMissingPredicates(List<OpenApiColumn> columns, List<HttpPath> paths, Predicate<OpenApiColumn> hasValue)
     {
         if (paths.size() == 1) {
-            return "Missing required constraint for " + describeColumns(getMissingRequiredPredicates(columns, new HttpPath(method, paths.getFirst()), hasValue));
+            return "Missing required constraint for " + describeColumns(getMissingRequiredPredicates(columns, paths.getFirst(), hasValue));
         }
         return "Missing required constraints for every path: " + paths.stream()
-                .map(path -> "%s %s requires %s".formatted(method, path, describeColumns(getMissingRequiredPredicates(columns, new HttpPath(method, path), hasValue))))
+                .map(path -> "%s requires %s".formatted(path, describeColumns(getMissingRequiredPredicates(columns, path, hasValue))))
                 .collect(joining("; "));
     }
 

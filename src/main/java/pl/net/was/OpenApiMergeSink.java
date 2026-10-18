@@ -14,7 +14,6 @@
 
 package pl.net.was;
 
-import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorMergeSink;
@@ -54,26 +53,11 @@ public class OpenApiMergeSink
 
     private void updatedPage(Page page, int position)
     {
-        PathItem.HttpMethod method = this.table.getTableHandle().getUpdateMethod();
-        if (method == PathItem.HttpMethod.PUT) {
-            client.putRows(table, page, position);
-        }
-        else if (method == PathItem.HttpMethod.POST) {
-            client.postRows(table, page, position);
-        }
-        else {
-            throw new IllegalArgumentException("Unsupported UPDATE method: " + method);
-        }
+        client.updateRows(table, page, position);
     }
 
     private void deletedPage(Block rowIds, int position)
     {
-        PathItem.HttpMethod method = this.table.getTableHandle().getDeleteMethod();
-        if (method == PathItem.HttpMethod.DELETE) {
-            client.deleteRows(table, rowIds, position);
-        }
-        else {
-            throw new IllegalArgumentException("Unsupported DELETE method: " + method);
-        }
+        client.deleteRows(table, rowIds, position);
     }
 }

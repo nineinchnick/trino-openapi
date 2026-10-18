@@ -42,7 +42,6 @@ import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
-import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -225,10 +224,10 @@ public class OpenApiSpec
         this.handles.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .flatMap(entry -> Stream.concat(Stream.of(
-                        "SELECT FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getSelectMethod(), entry.getValue().getSelectPaths()),
-                        "INSERT INTO " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getInsertMethod(), entry.getValue().getInsertPaths()),
-                        "UPDATE " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getUpdateMethod(), entry.getValue().getUpdatePaths()),
-                        "DELETE FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getDeleteMethod(), entry.getValue().getDeletePaths())),
+                        "SELECT FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getSelectPaths()),
+                        "INSERT INTO " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getInsertPaths()),
+                        "UPDATE " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getUpdatePaths()),
+                        "DELETE FROM " + entry.getKey() + " maps to: " + pathsToString(entry.getValue().getDeletePaths())),
                         this.tables.get(entry.getKey()).stream().filter(column -> !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty())
                                 .map(column -> entry.getKey() + "." + column.getName() + " is " +
                                         (column.isPageNumber() ? "the page number, " : "") +
@@ -252,11 +251,11 @@ public class OpenApiSpec
         this.securityRequirements = openApi.getSecurity();
     }
 
-    private static String pathsToString(PathItem.HttpMethod method, List<String> paths)
+    private static String pathsToString(List<HttpPath> paths)
     {
         return Optional.of(String.join(
                         ", ",
-                        paths.stream().map(path -> method + " " + path).toList()))
+                        paths.stream().map(HttpPath::toString).toList()))
                 .filter(value -> !value.isBlank())
                 .orElse("<none>");
     }
@@ -1154,19 +1153,21 @@ public class OpenApiSpec
 
     private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, List<String>> tablePaths)
     {
-        return new OpenApiTableHandle(
-                SchemaTableName.schemaTableName(SCHEMA_NAME, tableName),
+        return OpenApiTableHandle.builder(SchemaTableName.schemaTableName(SCHEMA_NAME, tableName))
                 // some APIs use POST to query resources
-                tablePaths.containsKey(PathItem.HttpMethod.GET) ? tablePaths.get(PathItem.HttpMethod.GET) : firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
-                tablePaths.containsKey(PathItem.HttpMethod.GET) ? PathItem.HttpMethod.GET : PathItem.HttpMethod.POST,
-                firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
-                PathItem.HttpMethod.POST,
+                .setSelectPaths(tablePaths.containsKey(PathItem.HttpMethod.GET) ? httpPaths(tablePaths, PathItem.HttpMethod.GET) : httpPaths(tablePaths, PathItem.HttpMethod.POST))
+                .setInsertPaths(httpPaths(tablePaths, PathItem.HttpMethod.POST))
                 // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
-                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? tablePaths.get(PathItem.HttpMethod.PUT) : firstNonNull(tablePaths.get(PathItem.HttpMethod.POST), ImmutableList.of()),
-                tablePaths.containsKey(PathItem.HttpMethod.PUT) ? PathItem.HttpMethod.PUT : PathItem.HttpMethod.POST,
-                firstNonNull(tablePaths.get(PathItem.HttpMethod.DELETE), ImmutableList.of()),
-                PathItem.HttpMethod.DELETE,
-                TupleDomain.none());
+                .setUpdatePaths(tablePaths.containsKey(PathItem.HttpMethod.PUT) ? httpPaths(tablePaths, PathItem.HttpMethod.PUT) : httpPaths(tablePaths, PathItem.HttpMethod.POST))
+                .setDeletePaths(httpPaths(tablePaths, PathItem.HttpMethod.DELETE))
+                .build();
+    }
+
+    private static List<HttpPath> httpPaths(Map<PathItem.HttpMethod, List<String>> tablePaths, PathItem.HttpMethod method)
+    {
+        return firstNonNull(tablePaths.get(method), ImmutableList.<String>of()).stream()
+                .map(path -> new HttpPath(method, path))
+                .collect(toImmutableList());
     }
 
     public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()

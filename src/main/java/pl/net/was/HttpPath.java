@@ -13,6 +13,8 @@
  */
 package pl.net.was;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.airlift.slice.SizeOf;
 import io.swagger.v3.oas.models.PathItem;
 
 import java.util.Comparator;
@@ -20,12 +22,19 @@ import java.util.Comparator;
 public record HttpPath(PathItem.HttpMethod method, String path)
         implements Comparable<HttpPath>
 {
+    private static final int INSTANCE_SIZE = SizeOf.instanceSize(HttpPath.class);
     private static final Comparator<HttpPath> COMPARATOR = Comparator.comparing(HttpPath::method).thenComparing(HttpPath::path);
 
     @Override
     public int compareTo(HttpPath other)
     {
         return COMPARATOR.compare(this, other);
+    }
+
+    @JsonIgnore
+    public long getRetainedSizeInBytes()
+    {
+        return INSTANCE_SIZE + SizeOf.estimatedSizeOf(path);
     }
 
     @Override

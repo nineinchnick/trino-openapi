@@ -132,11 +132,10 @@ public class OpenApiClient
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
     {
-        PathItem.HttpMethod method = table.getSelectMethod();
-        List<String> selectPaths = table.getSelectPaths();
+        List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
-        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
-        HttpPath httpPath = new HttpPath(method, pathWithParams.getKey());
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, (column) -> getFilter(column, table.getConstraint()));
+        HttpPath httpPath = pathWithParams.getKey();
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
@@ -213,77 +212,49 @@ public class OpenApiClient
         }
     }
 
-    public void postRows(OpenApiOutputTableHandle table, Page page, int position)
+    public void insertRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
-        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
-                table.getTableHandle(),
-                PathItem.HttpMethod.POST,
-                table.getTableHandle().getInsertPaths(),
-                rowValues);
-        HttpPath httpPath = new HttpPath(PathItem.HttpMethod.POST, pathWithParams.getKey());
-        postRows(table, httpPath, pathWithParams.getValue(), rowValues, serializePage(table, httpPath, page, position));
+        writeRows(table, table.getTableHandle().getInsertPaths(), page, position);
     }
 
-    public void postRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
+    public void updateRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        try {
-            makeRequest(
-                    table.getTableHandle(),
-                    httpPath,
-                    pathParams,
-                    valueProvider,
-                    createStaticBodyGenerator(toBytes(data)),
-                    new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
-        }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    public void putRows(OpenApiOutputTableHandle table, Page page, int position)
-    {
-        Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
-        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
-                table.getTableHandle(),
-                PathItem.HttpMethod.PUT,
-                table.getTableHandle().getUpdatePaths(),
-                rowValues);
-        HttpPath httpPath = new HttpPath(PathItem.HttpMethod.PUT, pathWithParams.getKey());
-        putRows(table, httpPath, pathWithParams.getValue(), rowValues, serializePage(table, httpPath, page, position));
-    }
-
-    public void putRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
-    {
-        try {
-            makeRequest(
-                    table.getTableHandle(),
-                    httpPath,
-                    pathParams,
-                    valueProvider,
-                    createStaticBodyGenerator(toBytes(data)),
-                    new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
-        }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        writeRows(table, table.getTableHandle().getUpdatePaths(), page, position);
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
         // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
-        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
-                PathItem.HttpMethod.DELETE,
                 table.getTableHandle().getDeletePaths(),
                 (column) -> getFilter(column, table.getTableHandle().getConstraint()));
-        HttpPath httpPath = new HttpPath(PathItem.HttpMethod.DELETE, pathWithParams.getKey());
+        HttpPath httpPath = pathWithParams.getKey();
         makeRequest(
                 table.getTableHandle(),
                 httpPath,
                 pathWithParams.getValue(),
                 null,
                 new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
+    }
+
+    private void writeRows(OpenApiOutputTableHandle table, List<HttpPath> paths, Page page, int position)
+    {
+        Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table.getTableHandle(), paths, rowValues);
+        HttpPath httpPath = pathWithParams.getKey();
+        try {
+            makeRequest(
+                    table.getTableHandle(),
+                    httpPath,
+                    pathWithParams.getValue(),
+                    rowValues,
+                    createStaticBodyGenerator(toBytes(serializePage(table, httpPath, page, position))),
+                    new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public <T> T makeRequest(
@@ -345,20 +316,19 @@ public class OpenApiClient
         return httpClient.execute(request, responseHandler);
     }
 
-    private Map.Entry<String, Map<OpenApiColumn, Object>> selectPath(OpenApiTableHandle table, PathItem.HttpMethod method, List<String> paths, Function<OpenApiColumn, Object> valueProvider)
+    private Map.Entry<HttpPath, Map<OpenApiColumn, Object>> selectPath(OpenApiTableHandle table, List<HttpPath> paths, Function<OpenApiColumn, Object> valueProvider)
     {
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
         Predicate<OpenApiColumn> hasValue = column -> valueProvider.apply(column) != null;
-        String selectedPath = PathSelector.selectPath(columns, method, paths, hasValue)
-                .orElseThrow(() -> new TrinoException(INVALID_ROW_FILTER, PathSelector.describeMissingPredicates(columns, method, paths, hasValue)));
-        HttpPath httpPath = new HttpPath(method, selectedPath);
+        HttpPath httpPath = PathSelector.selectPath(columns, paths, hasValue)
+                .orElseThrow(() -> new TrinoException(INVALID_ROW_FILTER, PathSelector.describeMissingPredicates(columns, paths, hasValue)));
         Map<OpenApiColumn, Object> pathParams = columns.stream()
                 .filter(column -> isPredicate(column, httpPath, ParameterLocation.PATH))
                 .map(column -> new SimpleEntry<>(column, valueProvider.apply(column)))
                 .filter(entry -> entry.getValue() != null)
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
-        return Map.entry(selectedPath, pathParams);
+        return Map.entry(httpPath, pathParams);
     }
 
     private static URI buildUri(URI uri, String path, List<String> queryParams)

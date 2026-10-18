@@ -16,8 +16,10 @@ package pl.net.was;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
+import com.google.common.collect.ImmutableList;
 import io.airlift.slice.SizeOf;
-import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorTableHandle;
@@ -36,45 +38,38 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.util.Objects.requireNonNull;
 
+@JsonDeserialize(builder = OpenApiTableHandle.Builder.class)
 public class OpenApiTableHandle
         implements ConnectorTableHandle, Cloneable
 {
     private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiTableHandle.class);
 
     private final SchemaTableName schemaTableName;
-    private final List<String> selectPaths;
-    private final PathItem.HttpMethod selectMethod;
-    private final List<String> insertPaths;
-    private final PathItem.HttpMethod insertMethod;
-    private final List<String> updatePaths;
-    private final PathItem.HttpMethod updateMethod;
-    private final List<String> deletePaths;
-    private final PathItem.HttpMethod deleteMethod;
+    private final List<HttpPath> selectPaths;
+    private final List<HttpPath> insertPaths;
+    private final List<HttpPath> updatePaths;
+    private final List<HttpPath> deletePaths;
     private TupleDomain<ColumnHandle> constraint;
 
-    @JsonCreator
-    public OpenApiTableHandle(
+    private OpenApiTableHandle(
             SchemaTableName schemaTableName,
-            List<String> selectPaths,
-            PathItem.HttpMethod selectMethod,
-            List<String> insertPaths,
-            PathItem.HttpMethod insertMethod,
-            List<String> updatePaths,
-            PathItem.HttpMethod updateMethod,
-            List<String> deletePaths,
-            PathItem.HttpMethod deleteMethod,
+            List<HttpPath> selectPaths,
+            List<HttpPath> insertPaths,
+            List<HttpPath> updatePaths,
+            List<HttpPath> deletePaths,
             TupleDomain<ColumnHandle> constraint)
     {
-        this.schemaTableName = schemaTableName;
-        this.selectPaths = requireNonNull(selectPaths, "selectPaths is null");
-        this.selectMethod = selectMethod;
-        this.insertPaths = requireNonNull(insertPaths, "insertPaths is null");
-        this.insertMethod = insertMethod;
-        this.updatePaths = requireNonNull(updatePaths, "updatePaths is null");
-        this.updateMethod = updateMethod;
-        this.deletePaths = requireNonNull(deletePaths, "deletePaths is null");
-        this.deleteMethod = deleteMethod;
-        this.constraint = constraint;
+        this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
+        this.selectPaths = ImmutableList.copyOf(requireNonNull(selectPaths, "selectPaths is null"));
+        this.insertPaths = ImmutableList.copyOf(requireNonNull(insertPaths, "insertPaths is null"));
+        this.updatePaths = ImmutableList.copyOf(requireNonNull(updatePaths, "updatePaths is null"));
+        this.deletePaths = ImmutableList.copyOf(requireNonNull(deletePaths, "deletePaths is null"));
+        this.constraint = requireNonNull(constraint, "constraint is null");
+    }
+
+    public static Builder builder(SchemaTableName schemaTableName)
+    {
+        return new Builder(schemaTableName);
     }
 
     @JsonProperty
@@ -84,51 +79,27 @@ public class OpenApiTableHandle
     }
 
     @JsonProperty
-    public List<String> getSelectPaths()
+    public List<HttpPath> getSelectPaths()
     {
         return selectPaths;
     }
 
     @JsonProperty
-    public PathItem.HttpMethod getSelectMethod()
-    {
-        return selectMethod;
-    }
-
-    @JsonProperty
-    public List<String> getInsertPaths()
+    public List<HttpPath> getInsertPaths()
     {
         return insertPaths;
     }
 
     @JsonProperty
-    public PathItem.HttpMethod getInsertMethod()
-    {
-        return insertMethod;
-    }
-
-    @JsonProperty
-    public List<String> getUpdatePaths()
+    public List<HttpPath> getUpdatePaths()
     {
         return updatePaths;
     }
 
     @JsonProperty
-    public PathItem.HttpMethod getUpdateMethod()
-    {
-        return updateMethod;
-    }
-
-    @JsonProperty
-    public List<String> getDeletePaths()
+    public List<HttpPath> getDeletePaths()
     {
         return deletePaths;
-    }
-
-    @JsonProperty
-    public PathItem.HttpMethod getDeleteMethod()
-    {
-        return deleteMethod;
     }
 
     @JsonProperty("constraint")
@@ -147,14 +118,10 @@ public class OpenApiTableHandle
     {
         return (long) INSTANCE_SIZE
                 + schemaTableName.getRetainedSizeInBytes()
-                + SizeOf.estimatedSizeOf(selectPaths, String::length)
-                + SizeOf.estimatedSizeOf(insertPaths, String::length)
-                + SizeOf.estimatedSizeOf(updatePaths, String::length)
-                + SizeOf.estimatedSizeOf(deletePaths, String::length)
-                + SizeOf.estimatedSizeOf(selectMethod.toString())
-                + SizeOf.estimatedSizeOf(insertMethod.toString())
-                + SizeOf.estimatedSizeOf(updateMethod.toString())
-                + SizeOf.estimatedSizeOf(deleteMethod.toString())
+                + SizeOf.estimatedSizeOf(selectPaths, HttpPath::getRetainedSizeInBytes)
+                + SizeOf.estimatedSizeOf(insertPaths, HttpPath::getRetainedSizeInBytes)
+                + SizeOf.estimatedSizeOf(updatePaths, HttpPath::getRetainedSizeInBytes)
+                + SizeOf.estimatedSizeOf(deletePaths, HttpPath::getRetainedSizeInBytes)
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes());
     }
 
@@ -241,14 +208,12 @@ public class OpenApiTableHandle
     private boolean isSentByAllSelectPaths(OpenApiColumn column)
     {
         return selectPaths.stream()
-                .map(path -> new HttpPath(selectMethod, path))
                 .allMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
     }
 
     private boolean isSentBySomeSelectPath(OpenApiColumn column)
     {
         return selectPaths.stream()
-                .map(path -> new HttpPath(selectMethod, path))
                 .anyMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
     }
 
@@ -286,5 +251,62 @@ public class OpenApiTableHandle
         }
         // can push down only the first predicate against this column
         throw new TrinoException(INVALID_ROW_FILTER, "Already pushed down a predicate for " + column.getName() + " which only supports a single value");
+    }
+
+    @JsonPOJOBuilder(withPrefix = "set")
+    public static class Builder
+    {
+        private final SchemaTableName schemaTableName;
+        private List<HttpPath> selectPaths = ImmutableList.of();
+        private List<HttpPath> insertPaths = ImmutableList.of();
+        private List<HttpPath> updatePaths = ImmutableList.of();
+        private List<HttpPath> deletePaths = ImmutableList.of();
+        private TupleDomain<ColumnHandle> constraint = TupleDomain.none();
+
+        @JsonCreator
+        public Builder(@JsonProperty("schemaTableName") SchemaTableName schemaTableName)
+        {
+            this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
+        }
+
+        @JsonProperty
+        public Builder setSelectPaths(List<HttpPath> selectPaths)
+        {
+            this.selectPaths = requireNonNull(selectPaths, "selectPaths is null");
+            return this;
+        }
+
+        @JsonProperty
+        public Builder setInsertPaths(List<HttpPath> insertPaths)
+        {
+            this.insertPaths = requireNonNull(insertPaths, "insertPaths is null");
+            return this;
+        }
+
+        @JsonProperty
+        public Builder setUpdatePaths(List<HttpPath> updatePaths)
+        {
+            this.updatePaths = requireNonNull(updatePaths, "updatePaths is null");
+            return this;
+        }
+
+        @JsonProperty
+        public Builder setDeletePaths(List<HttpPath> deletePaths)
+        {
+            this.deletePaths = requireNonNull(deletePaths, "deletePaths is null");
+            return this;
+        }
+
+        @JsonProperty
+        public Builder setConstraint(TupleDomain<ColumnHandle> constraint)
+        {
+            this.constraint = requireNonNull(constraint, "constraint is null");
+            return this;
+        }
+
+        public OpenApiTableHandle build()
+        {
+            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint);
+        }
     }
 }
