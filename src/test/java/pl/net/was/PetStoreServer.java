@@ -24,6 +24,7 @@ import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 
 import static java.lang.String.format;
@@ -57,7 +58,10 @@ public class PetStoreServer
         ReportLeakedContainers.ignoreContainerId(dockerContainer.getContainerId());
 
         try {
-            ObjectNode spec = (ObjectNode) OBJECT_MAPPER.readTree(URI.create(getContainerSpecUrl()).toURL());
+            ObjectNode spec;
+            try (InputStream input = URI.create(getContainerSpecUrl()).toURL().openStream()) {
+                spec = (ObjectNode) OBJECT_MAPPER.readTree(input);
+            }
             ObjectNode flows = spec.withObject("/components/securitySchemes/petstore_auth/flows");
             // the implicit flow requires a browser to log in, so replace it with a flow the connector can run on its own
             JsonNode implicitFlow = requireNonNull(flows.remove("implicit"), "implicit flow is missing in the petstore spec");
