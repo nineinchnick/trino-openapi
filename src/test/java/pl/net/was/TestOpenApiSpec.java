@@ -2730,6 +2730,80 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testUnionOfObjectAndArrayResponses()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /contents:
+                    get:
+                      responses:
+                        "200":
+                          description: A file or a directory listing
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Contents"
+                  /contents_results:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: A file or a directory listing
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  results:
+                                    $ref: "#/components/schemas/Contents"
+                components:
+                  schemas:
+                    Contents:
+                      oneOf:
+                      - $ref: "#/components/schemas/File"
+                      - type: array
+                        items:
+                          $ref: "#/components/schemas/Entry"
+                      - type: array
+                        items:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/Entry"
+                    File:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        content:
+                          type: string
+                    Entry:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        size:
+                          type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        for (String table : List.of("contents", "contents_results")) {
+            Assertions.assertThat(spec.getTables().get(table))
+                    .as(table)
+                    .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                    .containsExactly(
+                            Assertions.tuple("name", VARCHAR, true),
+                            Assertions.tuple("content", VARCHAR, true),
+                            Assertions.tuple("size", BIGINT, true));
+        }
+    }
+
+    @Test
     public void testNestedObjectUnions()
             throws JsonProcessingException
     {

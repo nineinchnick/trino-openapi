@@ -755,11 +755,7 @@ public class OpenApiClient
         Iterable<JsonNode> resultNodes = List.of(jsonNode);
         List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
         if (resultsPointer != null && !JsonPointer.empty().equals(resultsPointer)) {
-            JsonNode resultNode = jsonNode.at(resultsPointer);
-            if (!(resultNode instanceof ArrayNode)) {
-                throw new IllegalArgumentException("Result path points to a node that's not an array");
-            }
-            resultNodes = jsonNode.at(resultsPointer);
+            resultNodes = getResultNodes(jsonNode.at(resultsPointer));
         }
 
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
@@ -787,6 +783,18 @@ public class OpenApiClient
         }
 
         return resultRecordsBuilder.build();
+    }
+
+    private static Iterable<JsonNode> getResultNodes(JsonNode resultNode)
+    {
+        if (resultNode instanceof ArrayNode) {
+            return resultNode;
+        }
+        // results can be a union of a single object and an array of objects
+        if (resultNode.isObject()) {
+            return List.of(resultNode);
+        }
+        throw new IllegalArgumentException("Result path points to a node that's not an array");
     }
 
     private byte[] toBytes(JsonNode rootNode)
