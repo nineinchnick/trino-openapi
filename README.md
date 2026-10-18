@@ -234,7 +234,10 @@ DELETE FROM petstore.default.pet WHERE pet_id = 100;
 
 An `UPDATE` using `PATCH` sends only the updated columns, and the required
 fields of the request body, like identifiers. Setting a column to `NULL` sends
-an explicit `null`. Other requests send all columns that are not `NULL`.
+an explicit `null`. Other requests send all columns that are not `NULL`. A
+`DELETE` sends the query filters, and when it uses an operation with a request
+body, like a `POST` marked with `sqlOperation: delete`, the body includes the
+filters on its fields.
 
 A write succeeds if the server responds with any `2xx` status. Writes are not
 transactional: if a statement fails halfway, the rows already sent stay
