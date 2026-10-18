@@ -116,26 +116,29 @@ Restart Trino. Every catalog can point to a different API.
 
 # Configuration
 
-| Property                       | Container environment variable    | Default   | Description                                                                                                 |
-| ------------------------------ | --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
-| `spec-location`                | `OPENAPI_SPEC_LOCATION`           |           | URL or file path of the OpenAPI specification, in JSON or YAML                                              |
-| `base-uri`                     | `OPENAPI_BASE_URI`                |           | Base URL of the API, often including the API version                                                        |
-| `authentication.type`          | `OPENAPI_AUTH_TYPE`               | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, `api_key`, or `oauth`  |
-| `authentication.scheme`        | `OPENAPI_AUTH_SCHEME`             | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                             |
-| `authentication.username`      | `OPENAPI_USERNAME`                |           | Username for `http` basic authentication and the OAuth `password` flow                                      |
-| `authentication.password`      | `OPENAPI_PASSWORD`                |           | Password for `http` basic authentication and the OAuth `password` flow                                      |
-| `authentication.bearer-token`  | `OPENAPI_BEARER_TOKEN`            |           | Token for `http` bearer authentication                                                                      |
-| `authentication.api-key-name`  | `OPENAPI_API_KEY_NAME`            |           | Name of the API key, when the specification doesn't declare it                                              |
-| `authentication.api-key-value` | `OPENAPI_API_KEY_VALUE`           |           | Value of the API key                                                                                        |
-| `authentication.api-keys`      | `OPENAPI_API_KEYS`                |           | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above |
-| `authentication.client-id`     | `OPENAPI_CLIENT_ID`               |           | OAuth client ID                                                                                             |
-| `authentication.client-secret` | `OPENAPI_CLIENT_SECRET`           |           | OAuth client secret                                                                                         |
-| `max-requests-per-second`      | `OPENAPI_MAX_REQUESTS_PER_SECOND` | unlimited | Maximum number of HTTP requests per second from a single Trino node                                         |
-| `max-splits-per-second`        | `OPENAPI_MAX_SPLITS_PER_SECOND`   | unlimited | Maximum number of splits per second generated for a query                                                   |
-| `max-retries`                  | `OPENAPI_MAX_RETRIES`             | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries       |
-| `retry-initial-delay`          | `OPENAPI_RETRY_INITIAL_DELAY`     | `1s`      | Delay before the first retry, doubled for every next retry                                                  |
-| `retry-max-delay`              | `OPENAPI_RETRY_MAX_DELAY`         | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                   |
-| `domain-expansion-limit`       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`  | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause |
+| Property                       | Container environment variable      | Default   | Description                                                                                                     |
+| ------------------------------ | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `spec-location`                | `OPENAPI_SPEC_LOCATION`             |           | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
+| `base-uri`                     | `OPENAPI_BASE_URI`                  |           | Base URL of the API, often including the API version                                                            |
+| `authentication.type`          | `OPENAPI_AUTH_TYPE`                 | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, `api_key`, or `oauth`      |
+| `authentication.scheme`        | `OPENAPI_AUTH_SCHEME`               | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                                 |
+| `authentication.username`      | `OPENAPI_USERNAME`                  |           | Username for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.password`      | `OPENAPI_PASSWORD`                  |           | Password for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.bearer-token`  | `OPENAPI_BEARER_TOKEN`              |           | Token for `http` bearer authentication                                                                          |
+| `authentication.api-key-name`  | `OPENAPI_API_KEY_NAME`              |           | Name of the API key, when the specification doesn't declare it                                                  |
+| `authentication.api-key-value` | `OPENAPI_API_KEY_VALUE`             |           | Value of the API key                                                                                            |
+| `authentication.api-keys`      | `OPENAPI_API_KEYS`                  |           | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above     |
+| `authentication.client-id`     | `OPENAPI_CLIENT_ID`                 |           | OAuth client ID                                                                                                 |
+| `authentication.client-secret` | `OPENAPI_CLIENT_SECRET`             |           | OAuth client secret                                                                                             |
+| `max-requests-per-second`      | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited | Maximum number of HTTP requests per second from a single Trino node                                             |
+| `max-splits-per-second`        | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited | Maximum number of splits per second generated for a query                                                       |
+| `max-retries`                  | `OPENAPI_MAX_RETRIES`               | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
+| `retry-initial-delay`          | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`      | Delay before the first retry, doubled for every next retry                                                      |
+| `retry-max-delay`              | `OPENAPI_RETRY_MAX_DELAY`           | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
+| `domain-expansion-limit`       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
+| `http-cache.directory`         | `OPENAPI_HTTP_CACHE_DIRECTORY`      |           | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
+| `http-cache.max-size`          | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog; the least recently used responses are removed above it                  |
+| `http-cache.max-entry-size`    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
 
 ## Authentication
 
@@ -200,6 +203,38 @@ right away, because retrying earlier than the server allows can get the client
 blocked, for example by GitHub. Increase `retry-max-delay` to wait longer.
 
 Retries count against `max-requests-per-second`, like any other request.
+
+## HTTP cache
+
+To avoid sending the same requests again, set `http-cache.directory`, and the
+connector caches responses on disk, following
+[RFC 9111](https://www.rfc-editor.org/rfc/rfc9111). Every catalog uses its own
+subdirectory, named after the catalog, because every catalog has its own
+credentials, and cached responses survive restarts.
+
+* Responses to `GET` and `HEAD` requests are cached when the server says how
+  long they're fresh, with `Cache-Control: max-age` or `Expires`, or how to check
+  if they changed, with `ETag` or `Last-Modified`. Responses with
+  `Cache-Control: no-store` are never cached.
+* A fresh response is reused without sending a request.
+* A response that is no longer fresh, or has no freshness information, is
+  revalidated: the request includes `If-None-Match` or `If-Modified-Since`, and
+  if the server responds with `304 Not Modified`, the cached response is used.
+  Some APIs, like GitHub, don't count such requests against rate limits.
+* A successful `INSERT`, `UPDATE`, or `DELETE` removes cached responses of the
+  same URL.
+* When the cache is bigger than `http-cache.max-size`, the least recently used
+  responses are removed. Responses bigger than `http-cache.max-entry-size` are
+  not cached.
+
+The connector never guesses how long a response is fresh, so it never returns
+data older than the server allows. To make a query check every cached response
+with the server, set the `http_cache_enabled` session property of the catalog to
+`false`:
+
+```sql
+SET SESSION openapi.http_cache_enabled = false;
+```
 
 # Usage
 
@@ -632,8 +667,7 @@ how they're made.
 * `POST` and `PATCH` requests are not retried, so a temporary error in an
   `INSERT`, an `UPDATE` that uses `PATCH`, or a search that uses `POST`, fails
   the query
-  ([#249](https://github.com/nineinchnick/trino-openapi/issues/249)), and
-  responses are not cached ([#12](https://github.com/nineinchnick/trino-openapi/issues/12)).
+  ([#249](https://github.com/nineinchnick/trino-openapi/issues/249)).
 * Only JSON request and response bodies are supported, not form-encoded or
   multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
 * Responses that are arrays of plain values

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -98,9 +99,37 @@ public class TestOpenApiQueries
                         "base-uri", "https://api.open-meteo.com"),
                 "petstore", petStoreProperties.buildOrThrow(),
                 "fastapi", fastApiProperties.buildOrThrow(),
+                "fastapi_cached", ImmutableMap.<String, String>builder()
+                        .putAll(fastApiProperties.buildOrThrow())
+                        .put("http-cache.directory", Files.createTempDirectory("trino-openapi-http-cache").toString())
+                        .buildOrThrow(),
                 "echo", Map.of(
                         "spec-location", "src/test/resources/echo.yml",
                         "base-uri", fastApiServer.getApiUrl())));
+    }
+
+    @Test
+    public void cachedResponses()
+    {
+        String query = "SELECT name FROM fastapi_cached.default.cached_items";
+        String expected = "VALUES 'Portal Gun', 'Plumbus'";
+        assertQuery(query, expected);
+        List<Object> requestsBefore = cachedItemRequests();
+        // the response is fresh for 5 minutes, so it's reused without a request
+        assertQuery(query, expected);
+        assertThat(cachedItemRequests()).isEqualTo(requestsBefore);
+
+        // without the cache, the stored response is revalidated, and the server confirms it hasn't changed
+        Session withoutCache = Session.builder(getSession())
+                .setCatalogSessionProperty("fastapi_cached", "http_cache_enabled", "false")
+                .build();
+        assertQuery(withoutCache, query, expected);
+        assertThat(cachedItemRequests()).containsExactly((long) requestsBefore.get(0) + 1, (long) requestsBefore.get(1) + 1);
+    }
+
+    private List<Object> cachedItemRequests()
+    {
+        return computeActual("SELECT total, revalidated FROM fastapi.default.cached_item_requests").getMaterializedRows().getFirst().getFields();
     }
 
     @Test

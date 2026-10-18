@@ -411,7 +411,7 @@ class TestOpenApiClientRequests
     private List<List<?>> getRows(OpenApiConfig config, String tableName, String secret)
     {
         OpenApiSpec spec = new OpenApiSpec(config);
-        OpenApiClient client = new OpenApiClient(config, httpClient, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (secret != null) {
             OpenApiColumn column = spec.getTables().get(tableName).stream()
@@ -420,7 +420,7 @@ class TestOpenApiClientRequests
                     .orElseThrow();
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(secret)))));
         }
-        return ImmutableList.copyOf(client.getRows(table));
+        return ImmutableList.copyOf(client.getRows(table, false));
     }
 
     private static HttpHandler disconnect()

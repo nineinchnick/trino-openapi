@@ -63,7 +63,7 @@ class TestOpenApiClient
 
     private static Object serializeMap(OpenApiSpec spec, String tableName, Domain domain, OpenApiColumn column)
     {
-        OpenApiClient client = new OpenApiClient(new OpenApiConfig(), new TestingHttpClient(_ -> {
+        OpenApiClient client = new OpenApiClient(new OpenApiConfig(), new CatalogName("test"), new TestingHttpClient(_ -> {
             throw new UnsupportedOperationException();
         }), spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName))
