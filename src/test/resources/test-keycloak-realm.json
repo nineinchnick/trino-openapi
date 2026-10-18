@@ -10,10 +10,27 @@
       "secret": "secret",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "protocol": "openid-connect",
       "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "test-user",
+      "enabled": true,
+      "email": "test-user@example.com",
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-password",
+          "temporary": false
+        }
+      ]
     }
   ]
 }
