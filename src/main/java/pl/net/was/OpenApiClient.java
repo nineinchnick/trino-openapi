@@ -375,14 +375,7 @@ public class OpenApiClient
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
     {
-        Optional<String> limitParam = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).limitParam();
-        if (limitParam.isEmpty()) {
-            return OptionalLong.empty();
-        }
-        Optional<OpenApiColumn> limitColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
-                // the row ID column has no source name
-                .filter(column -> limitParam.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
-                .findFirst();
+        Optional<OpenApiColumn> limitColumn = getLimitColumn(table, httpPath);
         if (limitColumn.isEmpty()) {
             return OptionalLong.empty();
         }
@@ -402,6 +395,18 @@ public class OpenApiClient
             return OptionalLong.of(min(limitNumber.longValue(), schema.getMaximum().longValue()));
         }
         return OptionalLong.of(limitNumber.longValue());
+    }
+
+    private Optional<OpenApiColumn> getLimitColumn(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        Optional<String> limitParam = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).limitParam();
+        if (limitParam.isEmpty()) {
+            return Optional.empty();
+        }
+        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                // the row ID column has no source name
+                .filter(column -> limitParam.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
+                .findFirst();
     }
 
     private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath)
