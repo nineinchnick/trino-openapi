@@ -22,5 +22,8 @@ fi
 if [ -n "$DATADOG_URL" ]; then
     cp $catalog_dir/disabled/datadog.properties $catalog_dir/datadog.properties
 fi
+if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+    cp $catalog_dir/disabled/cloudflare.properties $catalog_dir/cloudflare.properties
+fi
 
 exec "$@"
