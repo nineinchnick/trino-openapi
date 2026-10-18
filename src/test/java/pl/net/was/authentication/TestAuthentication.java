@@ -16,6 +16,7 @@ package pl.net.was.authentication;
 import io.airlift.configuration.InvalidConfigurationException;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.testing.TestingHttpClient;
+import io.trino.spi.TrinoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.OpenApiConfig;
@@ -28,6 +29,7 @@ import java.nio.file.Path;
 
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestAuthentication
 {
@@ -163,18 +165,90 @@ class TestAuthentication
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
+    @Test
+    void testOAuthFlowsRequiringBrowser()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        authorizationCode:
+                          authorizationUrl: http://localhost:8081/authorize
+                          tokenUrl: http://localhost:8081/token
+                          scopes: {}
+                        implicit:
+                          authorizationUrl: http://localhost:8081/authorize
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES));
+
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("The oauth OAuth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser");
+    }
+
+    @Test
+    void testOAuthPasswordFlowWithoutCredentials()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        password:
+                          tokenUrl: http://localhost:8081/token
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES), new OpenApiConfig()
+                .setAuthenticationType(AuthenticationType.OAUTH)
+                .setClientId("client")
+                .setClientSecret("secret"));
+
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("The password flow of the oauth OAuth security scheme requires the authentication.username and authentication.password configuration properties");
+    }
+
     private Authentication createAuthentication(String specContents)
             throws IOException, InvalidConfigurationException
     {
-        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), specContents);
-        OpenApiConfig config = new OpenApiConfig()
-                .setSpecLocation(specFile.toString())
-                .setBaseUri(BASE_URI)
+        return createAuthentication(specContents, new OpenApiConfig()
                 .setAuthenticationType(AuthenticationType.HTTP)
                 .setAuthenticationScheme(AuthenticationScheme.BASIC)
                 .setUsername("user")
                 .setPassword("password")
-                .setApiKeys("X-API-Key=header-secret,session=cookie-secret,api_key=query-secret");
+                .setApiKeys("X-API-Key=header-secret,session=cookie-secret,api_key=query-secret"));
+    }
+
+    private Authentication createAuthentication(String specContents, OpenApiConfig config)
+            throws IOException
+    {
+        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), specContents);
+        config.setSpecLocation(specFile.toString())
+                .setBaseUri(BASE_URI);
         return new Authentication(config, new OpenApiSpec(config), new TestingHttpClient(_ -> {
             throw new UnsupportedOperationException("Unexpected request to the authentication server");
         }));

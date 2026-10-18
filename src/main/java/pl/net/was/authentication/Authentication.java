@@ -28,6 +28,7 @@ import io.swagger.v3.oas.models.security.OAuthFlow;
 import io.swagger.v3.oas.models.security.OAuthFlows;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.trino.spi.TrinoException;
 import pl.net.was.OpenApiConfig;
 import pl.net.was.OpenApiSpec;
 
@@ -40,13 +41,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.io.BaseEncoding.base64Url;
 import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.json.JsonCodec.jsonCodec;
+import static io.trino.spi.StandardErrorCode.CONFIGURATION_INVALID;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -77,7 +79,7 @@ public class Authentication
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
-    private final LoadingCache<String, TokenWithExpiry> tokens = CacheBuilder.newBuilder()
+    private final LoadingCache<TokenRequest, TokenWithExpiry> tokens = CacheBuilder.newBuilder()
             .build(CacheLoader.from(this::fetchTokenWithExpiry));
 
     @Inject
@@ -156,20 +158,7 @@ public class Authentication
                     switch (securitySchema.getType()) {
                         case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
                         case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
-                        case OAUTH2 -> {
-                            OAuthFlows flows = requireNonNull(securitySchema.getFlows(), "flows are null");
-                            OAuthFlow flow = firstNonNull(
-                                    flows.getPassword(),
-                                    firstNonNull(
-                                            flows.getAuthorizationCode(),
-                                            firstNonNull(
-                                                    flows.getClientCredentials(),
-                                                    flows.getImplicit())));
-                            // clientCredentials and password flows use tokenUrl; interactive flows
-                            // (authorizationCode, implicit) use authorizationUrl.
-                            String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
-                            applyOAuth(builder, tokenUrl);
-                        }
+                        case OAUTH2 -> applyOAuth(builder, getTokenRequest(name, securitySchema.getFlows()));
                         default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
                     }
                 });
@@ -227,22 +216,52 @@ public class Authentication
         return builder.addHeader("Authorization", value);
     }
 
-    private Request.Builder applyOAuth(Request.Builder builder, String tokenUrl)
+    private TokenRequest getTokenRequest(String schemeName, OAuthFlows flows)
     {
-        // TODO pick one of supported securitySchema.getFlows(), instead of hardcoding clientCredentials
+        // the authorizationCode and implicit flows require a user to log in using a browser, so only flows that don't need user interaction can be used
+        OAuthFlow passwordFlow = flows == null ? null : flows.getPassword();
+        OAuthFlow clientCredentialsFlow = flows == null ? null : flows.getClientCredentials();
+        if (passwordFlow != null && username != null && password != null) {
+            return new TokenRequest(getTokenUrl(schemeName, passwordFlow), GrantType.PASSWORD);
+        }
+        if (clientCredentialsFlow != null) {
+            return new TokenRequest(getTokenUrl(schemeName, clientCredentialsFlow), GrantType.CLIENT_CREDENTIALS);
+        }
+        if (passwordFlow != null) {
+            throw new TrinoException(CONFIGURATION_INVALID, format(
+                    "The password flow of the %s OAuth security scheme requires the authentication.username and authentication.password configuration properties",
+                    schemeName));
+        }
+        throw new TrinoException(NOT_SUPPORTED, format(
+                "The %s OAuth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser",
+                schemeName));
+    }
+
+    private static String getTokenUrl(String schemeName, OAuthFlow flow)
+    {
+        // specs written for older versions of the connector could only set authorizationUrl, so keep using it when tokenUrl is missing
+        String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
+        if (tokenUrl == null) {
+            throw new TrinoException(NOT_SUPPORTED, format("The %s OAuth security scheme doesn't set tokenUrl", schemeName));
+        }
+        return tokenUrl;
+    }
+
+    private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
+    {
         // TODO use options as scopes
-        TokenWithExpiry tokenWithExpiry = getToken(tokenUrl);
+        TokenWithExpiry tokenWithExpiry = getToken(tokenRequest);
         if (tokenWithExpiry.isExpiringSoon()) {
-            tokens.invalidate(tokenUrl);
-            tokenWithExpiry = getToken(tokenUrl);
+            tokens.invalidate(tokenRequest);
+            tokenWithExpiry = getToken(tokenRequest);
         }
         return builder.addHeader("Authorization", "Bearer " + tokenWithExpiry.token());
     }
 
-    private TokenWithExpiry getToken(String tokenUrl)
+    private TokenWithExpiry getToken(TokenRequest tokenRequest)
     {
         try {
-            return tokens.get(tokenUrl);
+            return tokens.get(tokenRequest);
         }
         catch (ExecutionException e) {
             // the loader doesn't throw checked exceptions, so this only keeps the same behavior as getUnchecked()
@@ -260,15 +279,13 @@ public class Authentication
         return input.substring(0, 1).toUpperCase(Locale.ENGLISH) + input.substring(1).toLowerCase(Locale.ENGLISH);
     }
 
-    private TokenWithExpiry fetchTokenWithExpiry(String tokenUrl)
+    private TokenWithExpiry fetchTokenWithExpiry(TokenRequest tokenRequest)
     {
         TokenResponse response = httpClient.execute(
                 preparePost()
-                        .setUri(URI.create(tokenUrl))
+                        .setUri(URI.create(tokenRequest.tokenUrl()))
                         .setHeader("Content-Type", "application/x-www-form-urlencoded")
-                        .setBodyGenerator(createStaticBodyGenerator(
-                                getBody("client_credentials", clientId, clientSecret),
-                                UTF_8))
+                        .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
                         .build(),
                 createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
         long expiresIn = response.expiresIn() != null ? response.expiresIn() : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
@@ -285,11 +302,15 @@ public class Authentication
         }
     }
 
-    private static String getBody(String grantType, String clientId, String clientSecret)
+    private String getBody(GrantType grantType)
     {
         requireNonNull(grantType, "grantType is null");
         ImmutableMap.Builder<String, String> params = ImmutableMap.<String, String>builder()
-                .put("grant_type", grantType);
+                .put("grant_type", grantType.value());
+        if (grantType == GrantType.PASSWORD) {
+            params.put("username", username);
+            params.put("password", password);
+        }
         if (clientId != null && !clientId.isEmpty()) {
             params.put("client_id", clientId);
         }
@@ -305,6 +326,33 @@ public class Authentication
     private static String encodePair(String key, String value)
     {
         return format("%s=%s", key, URLEncoder.encode(value, UTF_8));
+    }
+
+    private record TokenRequest(String tokenUrl, GrantType grantType)
+    {
+        TokenRequest
+        {
+            requireNonNull(tokenUrl, "tokenUrl is null");
+            requireNonNull(grantType, "grantType is null");
+        }
+    }
+
+    private enum GrantType
+    {
+        PASSWORD("password"),
+        CLIENT_CREDENTIALS("client_credentials");
+
+        private final String value;
+
+        GrantType(String value)
+        {
+            this.value = value;
+        }
+
+        String value()
+        {
+            return value;
+        }
     }
 
     public record TokenResponse(

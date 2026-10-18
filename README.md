@@ -59,6 +59,13 @@ After reloading Trino, you should be able to connect to the `openapi` catalog.
 | max-splits-per-second         | `OPENAPI_MAX_SPLITS_PER_SECOND`  | Maximum number of splits per second generated when executing a query                                     |
 | domain-expansion-limit        | `OPENAPI_DOMAIN_EXPANSION_LIMIT` | Maximum number of discrete domain values generated from range predicates, which correlates with the number of HTTP requests executed |
 
+For OAuth security schemes, the connector requests access tokens from the
+`tokenUrl` of a flow that doesn't require a user to log in using a browser. If
+the scheme declares the `password` flow, and `authentication.username` and
+`authentication.password` are set, the connector uses the `password` flow.
+Otherwise, it uses the `clientCredentials` flow. The `authorizationCode` and
+`implicit` flows are not supported.
+
 The connector is using the Airlift HTTP client, which can be configured with
 [additional
 properties](https://github.com/airlift/airlift/blob/master/http-client/src/main/java/io/airlift/http/client/HttpClientConfig.java)
