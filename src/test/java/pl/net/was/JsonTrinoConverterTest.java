@@ -44,6 +44,7 @@ import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.DateType;
 import io.trino.spi.type.Int128;
+import io.trino.spi.type.LongTimestamp;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.TimestampType;
@@ -62,6 +63,7 @@ import static io.trino.spi.type.DecimalType.createDecimalType;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.Float.intBitsToFloat;
@@ -71,6 +73,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JsonTrinoConverterTest
 {
+    // 2025-04-18T12:30:45Z
+    private static final long EPOCH_MICROS = 1_744_979_445_000_000L;
+    private static final int EPOCH_DAY = 20_196;
+
     @Test
     void shouldConvertDifferentDateTimeFormatsIntoLong()
     {
@@ -96,6 +102,162 @@ class JsonTrinoConverterTest
 
         assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2024-09-24"), type, schema))
                 .isEqualTo(19990);
+    }
+
+    @Test
+    void shouldParseDateTimeWithPrecisionOfColumn()
+    {
+        var schema = new Schema<>().format("date-time");
+        var text = TextNode.valueOf("2025-04-18T12:30:45.123456789Z");
+
+        assertThat(JsonTrinoConverter.convert(text, TimestampType.createTimestampType(0), schema))
+                .isEqualTo(EPOCH_MICROS);
+        assertThat(JsonTrinoConverter.convert(text, TimestampType.createTimestampType(3), schema))
+                .isEqualTo(EPOCH_MICROS + 123_000);
+        assertThat(JsonTrinoConverter.convert(text, TimestampType.createTimestampType(6), schema))
+                .isEqualTo(EPOCH_MICROS + 123_457);
+        assertThat(JsonTrinoConverter.convert(text, TimestampType.createTimestampType(9), schema))
+                .isEqualTo(new LongTimestamp(EPOCH_MICROS + 123_456, 789_000));
+    }
+
+    @Test
+    void shouldRoundParsedDateTimeToPrecisionOfColumn()
+    {
+        var schema = new Schema<>().format("date-time");
+
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2025-04-18T12:30:45.5Z"), TimestampType.createTimestampType(0), schema))
+                .isEqualTo(EPOCH_MICROS + 1_000_000);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2025-04-18T12:30:44.9995Z"), TimestampType.createTimestampType(3), schema))
+                .isEqualTo(EPOCH_MICROS);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2025-04-18T12:30:44.9999995Z"), TimestampType.createTimestampType(6), schema))
+                .isEqualTo(EPOCH_MICROS);
+    }
+
+    @Test
+    void shouldParseDateTimeWithOffsetsAsUtc()
+    {
+        var type = TimestampType.createTimestampType(3);
+        var schema = new Schema<>().format("date-time");
+
+        assertThat(List.of(
+                "2025-04-18T12:30:45.250Z",
+                "2025-04-18T12:30:45.25+00:00",
+                "2025-04-18T14:30:45.25+02:00",
+                "2025-04-18T07:00:45.25-05:30",
+                "2025-04-18T14:30:45.25+02:00[Europe/Warsaw]",
+                // without an offset, the value is already in UTC
+                "2025-04-18T12:30:45.25"))
+                .allSatisfy(text -> assertThat(JsonTrinoConverter.convert(TextNode.valueOf(text), type, schema))
+                        .as(text)
+                        .isEqualTo(EPOCH_MICROS + 250_000));
+    }
+
+    @Test
+    void shouldParseDateTimeWithCustomFormats()
+    {
+        var type = TimestampType.createTimestampType(3);
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            // month names in custom formats must not depend on the default locale
+            Locale.setDefault(Locale.GERMANY);
+            assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2025/04/18 12:30:45"), type, new Schema<>().format("yyyy/MM/dd HH:mm:ss")))
+                    .isEqualTo(EPOCH_MICROS);
+            assertThat(JsonTrinoConverter.convert(TextNode.valueOf("18 Apr 2025 14:30:45.123+02:00"), type, new Schema<>().format("dd MMM yyyy HH:mm:ss.SSSXXX")))
+                    .isEqualTo(EPOCH_MICROS + 123_000);
+            assertThat(JsonTrinoConverter.convert(TextNode.valueOf("Fri, 18 Apr 2025 12:30:45 GMT"), type, new Schema<>().format("EEE, dd MMM yyyy HH:mm:ss zzz")))
+                    .isEqualTo(EPOCH_MICROS);
+            assertThat(JsonTrinoConverter.convert(TextNode.valueOf("20250418"), type, new Schema<>().format("yyyyMMdd")))
+                    .isEqualTo(EPOCH_MICROS - (12 * 3600 + 30 * 60 + 45) * 1_000_000L);
+        }
+        finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    void shouldParseNestedLongTimestamps()
+    {
+        var type = new ArrayType(TimestampType.TIMESTAMP_NANOS);
+        var schema = new ArraySchema().items(new Schema<>().format("date-time"));
+        ArrayNode values = new ObjectMapper().createArrayNode()
+                .add("2025-04-18T12:30:45.123456789Z")
+                .addNull();
+
+        Block block = (Block) JsonTrinoConverter.convert(values, type, schema);
+
+        assertThat(TimestampType.TIMESTAMP_NANOS.getObject(block, 0)).isEqualTo(new LongTimestamp(EPOCH_MICROS + 123_456, 789_000));
+        assertThat(block.isNull(1)).isTrue();
+    }
+
+    @Test
+    void shouldRejectInvalidDateTimes()
+    {
+        var type = TimestampType.createTimestampType(3);
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("2025-04-18 12:30:45"), type, new Schema<>().format("date-time")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read '2025-04-18 12:30:45' as timestamp(3)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("18.04.2025"), DateType.DATE, new Schema<>().format("date")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read '18.04.2025' as date");
+    }
+
+    @Test
+    void shouldFormatDateTimeWithPrecisionOfColumn()
+    {
+        var schema = new Schema<>().format("date-time");
+
+        assertThat(formatTimestamp(TimestampType.createTimestampType(0), EPOCH_MICROS, schema))
+                .isEqualTo("2025-04-18T12:30:45Z");
+        assertThat(formatTimestamp(TimestampType.createTimestampType(3), EPOCH_MICROS + 120_000, schema))
+                .isEqualTo("2025-04-18T12:30:45.120Z");
+        assertThat(formatTimestamp(TimestampType.createTimestampType(6), EPOCH_MICROS + 123_456, schema))
+                .isEqualTo("2025-04-18T12:30:45.123456Z");
+        assertThat(formatTimestamp(TimestampType.TIMESTAMP_NANOS, new LongTimestamp(EPOCH_MICROS + 123_456, 789_000), schema))
+                .isEqualTo("2025-04-18T12:30:45.123456789Z");
+        assertThat(formatTimestamp(TimestampType.createTimestampType(3), -1_000L, schema))
+                .isEqualTo("1969-12-31T23:59:59.999Z");
+        assertThat(formatTimestamp(TimestampType.createTimestampType(3), EPOCH_MICROS, new Schema<>()))
+                .isEqualTo("2025-04-18T12:30:45.000Z");
+    }
+
+    @Test
+    void shouldFormatDateTimeWithCustomFormats()
+    {
+        var type = TimestampType.createTimestampType(3);
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMANY);
+            assertThat(formatTimestamp(type, EPOCH_MICROS + 123_000, new Schema<>().format("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")))
+                    .isEqualTo("2025-04-18T12:30:45.123Z");
+            assertThat(formatTimestamp(type, EPOCH_MICROS, new Schema<>().format("yyyy-MM-dd HH:mm:ss xxx")))
+                    .isEqualTo("2025-04-18 12:30:45 +00:00");
+            assertThat(formatTimestamp(type, EPOCH_MICROS, new Schema<>().format("EEE, dd MMM yyyy HH:mm:ss 'GMT'")))
+                    .isEqualTo("Fri, 18 Apr 2025 12:30:45 GMT");
+            assertThat(formatTimestamp(type, EPOCH_MICROS, new Schema<>().format("yyyyMMdd")))
+                    .isEqualTo("20250418");
+        }
+        finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    void shouldConvertDatesWithStandardAndCustomFormats()
+    {
+        var objectMapper = new ObjectMapper();
+        BlockBuilder blockBuilder = DateType.DATE.createBlockBuilder(null, 1);
+        DateType.DATE.writeLong(blockBuilder, EPOCH_DAY);
+        Block block = blockBuilder.build();
+
+        assertThat(JsonTrinoConverter.convert(block, 0, DateType.DATE, new Schema<>().format("date"), objectMapper))
+                .isEqualTo("2025-04-18");
+        assertThat(JsonTrinoConverter.convert(block, 0, DateType.DATE, new Schema<>(), objectMapper))
+                .isEqualTo("2025-04-18");
+        assertThat(JsonTrinoConverter.convert(block, 0, DateType.DATE, new Schema<>().format("dd.MM.yyyy"), objectMapper))
+                .isEqualTo("18.04.2025");
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("18.04.2025"), DateType.DATE, new Schema<>().format("dd.MM.yyyy")))
+                .isEqualTo(EPOCH_DAY);
     }
 
     @Test
@@ -430,5 +592,12 @@ class JsonTrinoConverterTest
         finally {
             Locale.setDefault(defaultLocale);
         }
+    }
+
+    private static Object formatTimestamp(TimestampType type, Object value, Schema<?> schema)
+    {
+        BlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
+        writeNativeValue(type, blockBuilder, value);
+        return JsonTrinoConverter.convert(blockBuilder.build(), 0, type, schema, new ObjectMapper());
     }
 }

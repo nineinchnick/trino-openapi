@@ -56,6 +56,7 @@ import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.StandardTypes;
+import io.trino.spi.type.TimestampType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -548,7 +549,7 @@ public class OpenApiClient
             case StandardTypes.DECIMAL -> JsonTrinoConverter.toBigDecimal(value, (DecimalType) column.getType());
             case StandardTypes.VARCHAR -> ((Slice) value).toStringUtf8();
             case StandardTypes.DATE -> DateTimeConverter.formatDate((Long) value, column.getSourceType());
-            case StandardTypes.TIMESTAMP -> DateTimeConverter.formatTimestamp((Long) value, column.getSourceType());
+            case StandardTypes.TIMESTAMP -> DateTimeConverter.formatTimestamp(value, (TimestampType) column.getType(), column.getSourceType());
             case StandardTypes.BOOLEAN -> value;
             case StandardTypes.MAP -> (SqlMap) value;
             case StandardTypes.ARRAY -> (Block) value;

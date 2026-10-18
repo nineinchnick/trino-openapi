@@ -36,7 +36,6 @@ import io.trino.spi.block.SqlRow;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
-import io.trino.spi.type.DateTimeEncoding;
 import io.trino.spi.type.DateType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.DoubleType;
@@ -53,10 +52,6 @@ import io.trino.spi.type.VarcharType;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -69,9 +64,7 @@ import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.type.Decimals.encodeScaledValue;
 import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
-import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
-import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MILLISECOND;
-import static io.trino.spi.type.Timestamps.roundDiv;
+import static io.trino.spi.type.TypeUtils.readNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.String.format;
@@ -279,7 +272,7 @@ public class JsonTrinoConverter
                 timestampType.writeLong(rowBuilder, (Long) value);
             }
             else {
-                timestampType.writeLong(rowBuilder, packTimestamp((ZonedDateTime) value));
+                timestampType.writeObject(rowBuilder, value);
             }
             return;
         }
@@ -300,16 +293,6 @@ public class JsonTrinoConverter
             return;
         }
         throw new RuntimeException(format("Unsupported array element type %s", type.getClass().getCanonicalName()));
-    }
-
-    private static long packTimestamp(ZonedDateTime timestamp)
-    {
-        if (timestamp == null) {
-            return 0;
-        }
-        return DateTimeEncoding.packDateTimeWithZone(
-                timestamp.toEpochSecond() * MILLISECONDS_PER_SECOND + roundDiv(timestamp.toLocalTime().getNano(), NANOSECONDS_PER_MILLISECOND),
-                timestamp.getZone().getId());
     }
 
     public static Object convert(Block block, int position, Type type, Schema<?> schemaType, ObjectMapper objectMapper)
@@ -341,13 +324,10 @@ public class JsonTrinoConverter
             return type.getSlice(block, position).toStringUtf8();
         }
         if (type instanceof DateType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            return dateFormatter.format(LocalDate.ofEpochDay(type.getLong(block, position)));
+            return DateTimeConverter.formatDate(type.getLong(block, position), schemaType);
         }
-        if (type instanceof TimestampType) {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(schemaType.getFormat());
-            // TODO this is probably wrong, handle other types/precisions
-            return dateFormatter.format(Instant.ofEpochMilli(type.getLong(block, position)));
+        if (type instanceof TimestampType timestampType) {
+            return DateTimeConverter.formatTimestamp(readNativeValue(type, block, position), timestampType, schemaType);
         }
         if (type instanceof ArrayType arrayType) {
             if (block instanceof ArrayBlock arrayBlock) {
