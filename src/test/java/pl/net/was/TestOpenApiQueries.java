@@ -761,6 +761,21 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void limitStopsPagination()
+    {
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items", 2, "Portal Gun", "Plumbus");
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items LIMIT 1", 1, "Portal Gun");
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE page = 2 LIMIT 1", 1, "Plumbus");
+    }
+
+    @Test
+    public void limitWithRemainingFilterRequestsAllPages()
+    {
+        // the matching row is on the last page, so stopping after reading enough rows would return no rows
+        assertCountedItems("SELECT name FROM fastapi.default.counted_items WHERE name = 'Plumbus' LIMIT 1", 2, "Plumbus");
+    }
+
+    @Test
     public void itemsWithPagesInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.paged_search").getMaterializedRows();
@@ -782,6 +797,21 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT %s FROM fastapi.default.numbers WHERE id = %d".formatted(columns, id)).getMaterializedRows();
         assertThat(rows).hasSize(1);
         return rows.getFirst().getFields();
+    }
+
+    // tests run concurrently, so requests made by other tests must not be counted
+    private synchronized void assertCountedItems(String query, long expectedRequests, String... expectedNames)
+    {
+        long requestsBefore = getCountedItemsRequests();
+        assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly((Object[]) expectedNames);
+        assertThat(getCountedItemsRequests() - requestsBefore).isEqualTo(expectedRequests);
+    }
+
+    private long getCountedItemsRequests()
+    {
+        return (long) computeScalar("SELECT requests FROM fastapi.default.counted_items_requests");
     }
 
     // fail instead of hanging when pagination never ends

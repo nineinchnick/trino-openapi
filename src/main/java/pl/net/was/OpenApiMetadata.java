@@ -32,6 +32,7 @@ import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableVersion;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
+import io.trino.spi.connector.LimitApplicationResult;
 import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.RowChangeParadigm;
@@ -181,7 +182,27 @@ public class OpenApiMetadata
             Constraint constraint)
     {
         OpenApiTableHandle openApiTable = (OpenApiTableHandle) table;
+        if (openApiTable.getLimit().isPresent()) {
+            // the limit applies to rows before this filter, so sending the filter in requests would change the results
+            return Optional.empty();
+        }
         return openApiTable.applyFilter(constraint, getColumns(table), domainExpansionLimit);
+    }
+
+    @Override
+    public Optional<LimitApplicationResult<ConnectorTableHandle>> applyLimit(
+            ConnectorSession session,
+            ConnectorTableHandle table,
+            long limit)
+    {
+        // Trino pushes a limit only into a scan without a remaining filter, so every row read from the server is returned,
+        // and pagination can stop once the limit is reached
+        OpenApiTableHandle openApiTable = (OpenApiTableHandle) table;
+        if (openApiTable.getLimit().isPresent() && openApiTable.getLimit().getAsLong() <= limit) {
+            return Optional.empty();
+        }
+        // every split reads up to the limit, and the last page can have more rows than needed, so Trino must still apply it
+        return Optional.of(new LimitApplicationResult<>(openApiTable.cloneWithLimit(limit), false, false));
     }
 
     @Override

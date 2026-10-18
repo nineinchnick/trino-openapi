@@ -437,6 +437,9 @@ one of these happens:
 * the number of pages reaches the value at `totalPagesPath`;
 * the boolean value at `hasMorePath` is `false`;
 * `maxPages` pages were requested;
+* the number of results reaches the query's `LIMIT`, when Trino doesn't apply
+  any other filter to the returned rows. With an `IN` list, every value is
+  requested separately and reads up to the limit;
 * a page has fewer results than the page size, when `limitParam` is set and its
   value is known, either from a query filter or from the parameter's default in
   the spec. The page size is limited by the parameter's `maximum`, if declared,
@@ -509,8 +512,8 @@ how they're made.
   from the rows ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
 * Only equality and `IN` filters, and ranges expanded to single values, are sent
   in requests ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
-  `LIMIT` is not pushed down, so all pages are requested
-  ([#93](https://github.com/nineinchnick/trino-openapi/issues/93)).
+  `LIMIT` doesn't change the page size sent in requests, and it doesn't stop
+  pagination when Trino filters the returned rows.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another ([#94](https://github.com/nineinchnick/trino-openapi/issues/94)).

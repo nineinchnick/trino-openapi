@@ -164,7 +164,7 @@ public class OpenApiClient
                     return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
                 },
                 0,
-                Long.MAX_VALUE,
+                table.getLimit().orElse(Long.MAX_VALUE),
                 1,
                 getPageSize(table, httpPath),
                 openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).maxPages());
