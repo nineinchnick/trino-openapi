@@ -81,7 +81,7 @@ class TestOpenApiSpec
         Set<String> expected = Set.of(
                 "repos_contributors",
                 "repos_pages",
-                "projects");
+                "orgs_projects_v2");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
     }
 
@@ -340,6 +340,10 @@ class TestOpenApiSpec
                                 .setName("collaborators").setSourceName("collaborators")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
+                                .setComment("""
+                                            The number of collaborators on private repositories.
+                                            
+                                            This field may be null if the number of private repositories is over 50,000.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("billing_email").setSourceName("billing_email")
@@ -362,6 +366,12 @@ class TestOpenApiSpec
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("default_repository_branch").setSourceName("default_repository_branch")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setIsNullable(true)
+                                .setComment("The default branch for repositories created in this organization.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("members_can_create_repositories").setSourceName("members_can_create_repositories")
@@ -417,6 +427,46 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
+                                .setName("members_can_delete_repositories").setSourceName("members_can_delete_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_change_repo_visibility").setSourceName("members_can_change_repo_visibility")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_invite_outside_collaborators").setSourceName("members_can_invite_outside_collaborators")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_delete_issues").setSourceName("members_can_delete_issues")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("display_commenter_full_name_setting_enabled").setSourceName("display_commenter_full_name_setting_enabled")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("readers_can_create_discussions").setSourceName("readers_can_create_discussions")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_create_teams").setSourceName("members_can_create_teams")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("members_can_view_dependency_insights").setSourceName("members_can_view_dependency_insights")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("members_can_fork_private_repositories").setSourceName("members_can_fork_private_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
@@ -434,6 +484,8 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
                                             Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
@@ -444,8 +496,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-                                            Whether GitHub Advanced Security is automatically enabled for new repositories and repositories transferred to
-                                            this organization.
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
+                                            Whether Dependabot alerts are automatically enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -455,8 +508,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-                                            Whether dependabot security updates are automatically enabled for new repositories and repositories transferred
-                                            to this organization.
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
+                                            Whether Dependabot security updates are automatically enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -466,8 +520,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-                                            Whether dependency graph is automatically enabled for new repositories and repositories transferred to this
-                                            organization.
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
+                                            Whether dependency graph is automatically enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -477,8 +532,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-                                            Whether secret scanning is automatically enabled for new repositories and repositories transferred to this
-                                            organization.
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
+                                            Whether secret scanning is automatically enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -488,8 +544,9 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
                                 .setComment("""
-                                            Whether secret scanning push protection is automatically enabled for new repositories and repositories
-                                            transferred to this organization.
+                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+                                            
+                                            Whether secret scanning push protection is automatically enabled for new repositories and repositories transferred to this organization.
                                             
                                             This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
@@ -519,6 +576,13 @@ class TestOpenApiSpec
                                 .setName("archived_at").setSourceName("archived_at")
                                 .setType(TIMESTAMP_MILLIS).setSourceType(stringSchema)
                                 .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("deploy_keys_enabled_for_repositories").setSourceName("deploy_keys_enabled_for_repositories")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
+                                .setIsNullable(true)
+                                .setComment("Controls whether or not deploy keys may be added and used for repositories in the organization.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("org").setSourceName("org")
