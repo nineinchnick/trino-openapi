@@ -68,6 +68,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.stream.IntStream;
@@ -86,6 +87,7 @@ import static io.trino.spi.type.DecimalConversions.longDecimalToDouble;
 import static io.trino.spi.type.DecimalConversions.shortDecimalToDouble;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.intBitsToFloat;
+import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.AbstractMap.SimpleEntry;
@@ -144,18 +146,18 @@ public class OpenApiClient
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = new HttpPath(method, pathWithParams.getKey());
-        BodyGenerator bodyGenerator = getBodyGenerator(table, httpPath);
         JsonResponseHandler responseHandler = new JsonResponseHandler(
                 table,
                 httpPath,
                 openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
-                openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath));
+                openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
+                openApiSpec.getTotalResultsPointers(table.getSchemaTableName()).get(httpPath));
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .findFirst();
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
-            return makeRequest(table, httpPath, pathWithParams.getValue(), bodyGenerator, responseHandler);
+            return makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), responseHandler).rows();
         }
         return pageIterator(
                 page -> {
@@ -165,10 +167,11 @@ public class OpenApiClient
                                     pageColumn.get().getType(),
                                     pageColumn.get().getType() instanceof BigintType ? (long) page : page)));
                     OpenApiTableHandle pageTable = table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
-                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), bodyGenerator, responseHandler);
+                    // the body must be serialized for every page, since it can contain the page number
+                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), responseHandler);
                 },
                 0,
-                Integer.MAX_VALUE,
+                Long.MAX_VALUE,
                 1);
     }
 
@@ -552,33 +555,37 @@ public class OpenApiClient
         }
     }
 
+    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults) {}
+
     private class JsonResponseHandler
-            implements ResponseHandler<Iterable<List<?>>, RuntimeException>
+            implements ResponseHandler<ResultsPage, RuntimeException>
     {
         private final OpenApiTableHandle table;
         private final HttpPath httpPath;
         private final JsonPointer errorPointer;
         private final JsonPointer resultsPointer;
+        private final JsonPointer totalResultsPointer;
 
-        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer)
+        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer, JsonPointer totalResultsPointer)
         {
             this.table = requireNonNull(table, "table is null");
             this.httpPath = requireNonNull(httpPath, "httpPath is null");
             this.errorPointer = errorPointer;
             this.resultsPointer = resultsPointer;
+            this.totalResultsPointer = totalResultsPointer;
         }
 
         @Override
-        public Iterable<List<?>> handleException(Request request, Exception exception)
+        public ResultsPage handleException(Request request, Exception exception)
         {
             throw new RuntimeException(exception);
         }
 
         @Override
-        public Iterable<List<?>> handle(Request request, Response response)
+        public ResultsPage handle(Request request, Response response)
         {
             if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
-                return List.of();
+                return new ResultsPage(List.of(), OptionalLong.empty());
             }
             String result = "";
             try {
@@ -592,13 +599,27 @@ public class OpenApiClient
                 errorResponse(response.getStatusCode(), result, errorPointer);
             }
 
+            JsonNode jsonNode;
             try {
-                return convertJson(table, httpPath, resultsPointer, OBJECT_MAPPER.readTree(result));
+                jsonNode = OBJECT_MAPPER.readTree(result);
             }
             catch (JsonProcessingException ex) {
                 String message = format("Could not marshal JSON from API response: %s", result);
                 throw new TrinoException(GENERIC_INTERNAL_ERROR, message, ex);
             }
+            return new ResultsPage(convertJson(table, httpPath, resultsPointer, jsonNode), getTotalResults(jsonNode));
+        }
+
+        private OptionalLong getTotalResults(JsonNode jsonNode)
+        {
+            if (totalResultsPointer == null || JsonPointer.empty().equals(totalResultsPointer)) {
+                return OptionalLong.empty();
+            }
+            JsonNode totalNode = jsonNode.at(totalResultsPointer);
+            if (!totalNode.canConvertToExactIntegral() || !totalNode.canConvertToLong()) {
+                return OptionalLong.empty();
+            }
+            return OptionalLong.of(totalNode.asLong());
         }
     }
 
@@ -740,14 +761,15 @@ public class OpenApiClient
     }
 
     private Iterable<List<?>> pageIterator(
-            IntFunction<Iterable<List<?>>> getter,
+            IntFunction<ResultsPage> getter,
             int offset,
-            final int limit,
+            long limit,
             int pageIncrement)
     {
         return () -> new Iterator<>()
         {
-            int resultSize;
+            long resultSize;
+            long resultLimit = limit;
             int page = offset + 1;
             Iterator<List<?>> rows;
 
@@ -757,12 +779,14 @@ public class OpenApiClient
                 if (rows != null && rows.hasNext()) {
                     return true;
                 }
-                if (resultSize >= limit) {
+                if (resultSize >= resultLimit) {
                     return false;
                 }
-                Iterable<List<?>> items = getter.apply(page);
+                ResultsPage resultsPage = getter.apply(page);
                 page += pageIncrement;
-                rows = items.iterator();
+                // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
+                resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
+                rows = resultsPage.rows().iterator();
                 return rows.hasNext();
             }
 
