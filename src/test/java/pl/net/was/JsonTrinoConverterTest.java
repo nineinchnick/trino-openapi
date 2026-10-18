@@ -13,12 +13,20 @@
  */
 package pl.net.was;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.Schema;
+import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.type.DateType;
+import io.trino.spi.type.MapType;
 import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.TypeOperators;
 import org.junit.jupiter.api.Test;
 
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class JsonTrinoConverterTest
@@ -48,5 +56,21 @@ class JsonTrinoConverterTest
 
         assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2024-09-24"), type, schema))
                 .isEqualTo(19990);
+    }
+
+    @Test
+    void shouldConvertMapUsingValueSchema()
+    {
+        var type = new MapType(VARCHAR, BIGINT, new TypeOperators());
+        var schema = new MapSchema().additionalProperties(new IntegerSchema());
+        MapBlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
+        blockBuilder.buildEntry((keyBuilder, valueBuilder) -> {
+            VARCHAR.writeString(keyBuilder, "answer");
+            BIGINT.writeLong(valueBuilder, 42);
+        });
+        var objectMapper = new ObjectMapper();
+
+        assertThat(JsonTrinoConverter.convert(blockBuilder.build(), 0, type, schema, objectMapper))
+                .isEqualTo(objectMapper.createObjectNode().put("answer", 42L));
     }
 }

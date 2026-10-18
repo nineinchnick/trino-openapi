@@ -1,8 +1,8 @@
 import logging
 from datetime import date, datetime
-from typing import Callable
+from typing import Annotated, Callable
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -145,6 +145,11 @@ def paged_search(q: PageFilter) -> Results:
     return Results(
         results=list(items.values())[q.page - 1:q.page],
         total_results=len(items))
+
+
+@router.get("/items_by_ids")
+def items_by_ids(item_ids: Annotated[list[int], Query()]) -> list[Item]:
+    return [items[item_id] for item_id in item_ids if item_id in items]
 
 
 @router.get("/items/{item_id}")
