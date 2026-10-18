@@ -1679,6 +1679,55 @@ class TestOpenApiSpec
                                 .toList()));
     }
 
+    @Test
+    public void testOpenApi31NullableTypesMatchOpenApi30()
+    {
+        List<OpenApiColumn> columns30 = parseSpec(nullableTypesSpec("3.0.3", "type: integer, nullable: true", "type: object, nullable: true")).getTables().get("points");
+        List<OpenApiColumn> columns31 = parseSpec(nullableTypesSpec("3.1.0", "type: [integer, \"null\"]", "type: [object, \"null\"]")).getTables().get("points");
+
+        Assertions.assertThat(columns30)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("id", BIGINT, false),
+                        Assertions.tuple("count", BIGINT, true),
+                        Assertions.tuple("point", RowType.from(List.of(RowType.field("x", DOUBLE))), true));
+        Assertions.assertThat(columns31)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactlyElementsOf(columns30.stream()
+                        .map(column -> Assertions.tuple(column.getName(), column.getType(), column.getMetadata().isNullable()))
+                        .toList());
+    }
+
+    private static String nullableTypesSpec(String version, String nullableInteger, String nullableObject)
+    {
+        // all properties are required, so only the nullable ones map to nullable columns
+        return """
+                openapi: %s
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /points:
+                    get:
+                      responses:
+                        "200":
+                          description: Points
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                required:
+                                  - id
+                                  - count
+                                  - point
+                                properties:
+                                  id:
+                                    type: integer
+                                  count: {%s}
+                                  point: {%s, properties: {x: {type: number, format: double}}}
+                """.formatted(version, nullableInteger, nullableObject);
+    }
+
     private static String typesSpec(String version)
     {
         return """

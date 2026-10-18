@@ -618,7 +618,7 @@ public class OpenApiSpec
                 .setSourceName(sourceName)
                 .setType(type.type())
                 .setSourceType(type.schema())
-                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setIsNullable(isNullable(schema, isNullable))
                 .setIsHidden(false)
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
@@ -644,11 +644,19 @@ public class OpenApiSpec
                 .setRequiresPredicate(requiredPredicate)
                 .setOptionalPredicate(optionalPredicate)
                 .setParameterStyles(parameterStyles)
-                .setIsNullable(Optional.ofNullable(schema.getNullable()).orElse(isNullable))
+                .setIsNullable(isNullable(schema, isNullable))
                 .setIsHidden(isHidden)
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
                 .build());
+    }
+
+    private static boolean isNullable(Schema<?> schema, boolean defaultValue)
+    {
+        if (schema.getTypes() != null && schema.getTypes().contains("null")) {
+            return true;
+        }
+        return Optional.ofNullable(schema.getNullable()).orElse(defaultValue);
     }
 
     private Map<PathItem.HttpMethod, List<String>> methodsToPaths(PathItem pathItem, String path)
@@ -775,10 +783,17 @@ public class OpenApiSpec
         if (property.getType() != null) {
             return property.getType();
         }
-        if (property.getTypes() != null && property.getTypes().size() == 1) {
-            return property.getTypes().iterator().next();
+        if (property.getTypes() == null) {
+            return null;
         }
-        return null;
+        // OpenAPI 3.1 declares nullable values with a list of types including null, instead of the nullable keyword
+        List<String> types = property.getTypes().stream()
+                .filter(type -> !type.equals("null"))
+                .toList();
+        if (types.size() != 1) {
+            return null;
+        }
+        return types.getFirst();
     }
 
     private Optional<TypeTuple> convertArray(Schema<?> array)
