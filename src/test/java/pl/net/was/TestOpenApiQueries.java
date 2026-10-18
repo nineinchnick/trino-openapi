@@ -216,6 +216,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithUnionFieldInRowInRequestBody()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT wrapper.name, wrapper.value FROM echo.default.echo_union " +
+                "WHERE wrapper = CAST(ROW('answer', '{\"number\":42}') AS ROW(name VARCHAR, value VARCHAR))").getMaterializedRows();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getFields()).containsExactly("answer", "{\"number\":42}");
+    }
+
+    @Test
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(

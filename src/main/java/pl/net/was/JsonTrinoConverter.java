@@ -450,33 +450,7 @@ public class JsonTrinoConverter
             RowType.Field field = rowType.getFields().get(i);
             String key = field.getName().orElse(format("_col%d", i));
             Object value = convert(row.getRawFieldBlock(i), row.getRawIndex(), field.getType(), schemaType.getProperties().get(key), objectMapper);
-            if (value == null) {
-                rowNode.putNull(key);
-            }
-            else if (value instanceof Boolean booleanValue) {
-                rowNode.put(key, booleanValue);
-            }
-            else if (value instanceof Long longValue) {
-                rowNode.put(key, longValue);
-            }
-            else if (value instanceof Float floatValue) {
-                rowNode.put(key, floatValue);
-            }
-            else if (value instanceof Double doubleValue) {
-                rowNode.put(key, doubleValue);
-            }
-            else if (value instanceof BigDecimal decimalValue) {
-                rowNode.put(key, decimalValue);
-            }
-            else if (value instanceof String stringValue) {
-                rowNode.put(key, stringValue);
-            }
-            else if (value instanceof ArrayNode || value instanceof ObjectNode) {
-                rowNode.set(key, (JsonNode) value);
-            }
-            else {
-                throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
-            }
+            putValue(rowNode, key, value);
         }
     }
 
