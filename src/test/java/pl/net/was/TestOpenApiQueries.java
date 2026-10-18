@@ -30,7 +30,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
+import static java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestOpenApiQueries
@@ -53,9 +56,13 @@ public class TestOpenApiQueries
             throws Exception
     {
         // this method is called from a @BeforeAll method in the super class
-        keycloakServer = new KeycloakServer();
-        petStoreServer = new PetStoreServer(keycloakServer);
-        fastApiServer = new FastApiServer();
+        try (ExecutorService executor = newVirtualThreadPerTaskExecutor()) {
+            // building the FastAPI image takes about as long as starting Keycloak, so do both at the same time
+            Future<FastApiServer> fastApiServerFuture = executor.submit(FastApiServer::new);
+            keycloakServer = new KeycloakServer();
+            petStoreServer = new PetStoreServer(keycloakServer);
+            fastApiServer = fastApiServerFuture.get();
+        }
 
         ImmutableMap.Builder<String, String> petStoreProperties = ImmutableMap.builder();
         petStoreProperties.putAll(Map.of(
