@@ -246,6 +246,30 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectPathByAvailablePredicates()
+    {
+        assertQuery(
+                "SELECT name, temperature, units FROM fastapi.default.stations WHERE station_id = 2 AND units = 'imperial'",
+                "VALUES ('Bravo', 23.0, 'imperial')");
+        // the path with the station ID also requires units, so without them, all stations are read and filtered
+        assertQuery(
+                "SELECT name, temperature, units FROM fastapi.default.stations WHERE station_id = 2",
+                "VALUES ('Bravo', -5.0, NULL)");
+        assertQuery(
+                "SELECT name FROM fastapi.default.stations",
+                "VALUES 'Alpha', 'Bravo'");
+        assertQuery(
+                "SELECT comment_id, text FROM fastapi.default.comments WHERE author = 'alice'",
+                "VALUES (1, 'First'), (3, 'Third')");
+        assertQuery(
+                "SELECT author, text FROM fastapi.default.comments WHERE comment_id = 2",
+                "VALUES ('bob', 'Second')");
+        assertQueryFails(
+                "SELECT text FROM fastapi.default.comments",
+                "Missing required constraints for every path: GET /comments requires author; GET /comments/\\{comment_id} requires comment_id");
+    }
+
+    @Test
     public void selectWithRealAndDecimalsInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values, decimal_values FROM fastapi.default.echo_numbers " +

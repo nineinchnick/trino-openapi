@@ -18,40 +18,66 @@ import io.swagger.v3.oas.models.PathItem;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Comparator.comparingInt;
 import static java.util.Comparator.comparingLong;
+import static java.util.function.Predicate.not;
+import static java.util.stream.Collectors.joining;
 
 public final class PathSelector
 {
     private PathSelector() {}
 
-    public static String selectPath(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
+    /**
+     * Returns the path that has all required predicates, and uses the most of the available predicates.
+     */
+    public static Optional<String> selectPath(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
     {
-        // pick the path that has the highest number of params present in query predicates, and the shortest if there are ties
-        Comparator<String> comparator = comparingLong((String path) -> countPathParams(columns, new HttpPath(method, path), hasValue))
-                .thenComparing(comparingInt(String::length).reversed());
+        checkArgument(!paths.isEmpty(), "paths are empty");
+        // the shortest path is the most generic one, and paths of equal length are ordered only to make the choice deterministic
+        Comparator<String> comparator = comparingLong((String path) -> countAvailablePredicates(columns, new HttpPath(method, path), hasValue))
+                .thenComparing(comparingInt(String::length).reversed())
+                .thenComparing(Comparator.<String>naturalOrder().reversed());
         return paths.stream()
-                // ignore paths where required params are not present
-                .filter(path -> hasRequiredPathParams(columns, new HttpPath(method, path), hasValue))
-                .max(comparator)
-                .orElseThrow();
+                .filter(path -> getMissingRequiredPredicates(columns, new HttpPath(method, path), hasValue).isEmpty())
+                .max(comparator);
     }
 
-    private static long countPathParams(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue)
+    public static String describeMissingPredicates(List<OpenApiColumn> columns, PathItem.HttpMethod method, List<String> paths, Predicate<OpenApiColumn> hasValue)
+    {
+        if (paths.size() == 1) {
+            return "Missing required constraint for " + describeColumns(getMissingRequiredPredicates(columns, new HttpPath(method, paths.getFirst()), hasValue));
+        }
+        return "Missing required constraints for every path: " + paths.stream()
+                .map(path -> "%s %s requires %s".formatted(method, path, describeColumns(getMissingRequiredPredicates(columns, new HttpPath(method, path), hasValue))))
+                .collect(joining("; "));
+    }
+
+    public static List<OpenApiColumn> getMissingRequiredPredicates(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue)
     {
         return columns.stream()
-                .filter(column -> column.getRequiresPredicate().get(httpPath) == ParameterLocation.PATH
-                        || column.getOptionalPredicate().get(httpPath) == ParameterLocation.PATH)
+                .filter(column -> column.getRequiresPredicate().containsKey(httpPath))
+                // page numbers are set when reading every page
+                .filter(column -> !column.isPageNumber())
+                .filter(not(hasValue))
+                .toList();
+    }
+
+    private static long countAvailablePredicates(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue)
+    {
+        return columns.stream()
+                .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .filter(hasValue)
                 .count();
     }
 
-    private static boolean hasRequiredPathParams(List<OpenApiColumn> columns, HttpPath httpPath, Predicate<OpenApiColumn> hasValue)
+    private static String describeColumns(List<OpenApiColumn> columns)
     {
         return columns.stream()
-                .filter(column -> column.getRequiresPredicate().get(httpPath) == ParameterLocation.PATH)
-                .allMatch(hasValue);
+                .map(OpenApiColumn::getName)
+                .collect(joining(", "));
     }
 }
