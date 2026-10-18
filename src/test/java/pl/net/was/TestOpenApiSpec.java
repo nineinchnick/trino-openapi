@@ -746,17 +746,17 @@ class TestOpenApiSpec
         Set<String> expected = Set.of(
                 "rest_api_3_issue",
                 "rest_api_3_project",
-                "rest_api_3_search");
+                "rest_api_3_search_jql");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
 
-        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "rest_api_3_search"));
-        String path = "/rest/api/3/search";
+        OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "rest_api_3_search_jql"));
+        String path = "/rest/api/3/search/jql";
         // the POST operation is a search, but without the sqlOperation extension, the connector can't tell it apart from one creating resources
         Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, path));
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
         Assertions.assertThat(tableHandle.getUpdatePaths()).isEmpty();
         Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
-        List<OpenApiColumn> columns = tables.get("rest_api_3_search").stream()
+        List<OpenApiColumn> columns = tables.get("rest_api_3_search_jql").stream()
                 .map(column -> {
                     // compare only source types, so rebuild it without any other attribute
                     Schema<?> sourceType = new Schema<>();
@@ -816,26 +816,16 @@ class TestOpenApiSpec
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
-                                .setName("expand").setSourceName("expand")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setName("is_last").setSourceName("isLast")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setIsNullable(true)
-                                .setComment("Expand options that include additional search result details in the response.")
+                                .setComment("Indicates whether this is the last page of the paginated response.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("issues").setSourceName("issues")
                                 .setType(issuesType).setSourceType(arraySchema)
                                 .setIsNullable(true)
-                                .setComment("The list of issues found by the search.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("max_results").setSourceName("maxResults")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setOptionalPredicate(Map.of(
-                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
-                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
-                                .setIsNullable(true)
-                                .setComment("The maximum number of results that could be on the page.")
+                                .setComment("The list of issues found by the search or reconsiliation.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("names").setSourceName("names")
@@ -844,77 +834,102 @@ class TestOpenApiSpec
                                 .setComment("The ID and name of each field in the search results.")
                                 .build(),
                         OpenApiColumn.builder()
+                                .setName("next_page_token").setSourceName("nextPageToken")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setIsNullable(true)
+                                .setComment("Continuation token to fetch the next page. If this result represents the last or the only page this token will be null. This token will expire in 7 days.")
+                                .build(),
+                        OpenApiColumn.builder()
                                 .setName("schema").setSourceName("schema")
                                 .setType(schemaType).setSourceType(objectSchema)
                                 .setIsNullable(true)
                                 .setComment("The schema describing the field types in the search results.")
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("start_at").setSourceName("startAt")
+                                .setName("warnings").setSourceName("warnings")
+                                .setType(new ArrayType(RowType.from(List.of(
+                                        RowType.field("details", RowType.from(List.of(
+                                                RowType.field("actual", BIGINT),
+                                                RowType.field("arguments", VARCHAR),
+                                                RowType.field("clause", VARCHAR),
+                                                RowType.field("limit", BIGINT)))),
+                                        RowType.field("message", VARCHAR),
+                                        RowType.field("type", VARCHAR))))).setSourceType(arraySchema)
+                                .setIsNullable(true)
+                                .setComment("Experimental. Warnings generated during the search, e.g. when a JQL clause exceeded its argument limit or when the result set was truncated due to an ingestion limit. This field is currently rolling out behind a feature flag and may be absent, empty, or change shape without notice until generally available.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("jql").setSourceName("jql")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("max_results").setSourceName("maxResults")
                                 .setType(INTEGER).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("The index of the first item returned on the page.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("total").setSourceName("total")
-                                .setType(INTEGER).setSourceType(intSchema)
-                                .setIsNullable(true)
-                                .setComment("The number of results on the page.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("warning_messages").setSourceName("warningMessages")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setIsNullable(true)
-                                .setComment("Any warnings related to the JQL query.")
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("jql").setSourceName("jql")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY, new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
-                                .setIsNullable(true)
-                                .build(),
-                        OpenApiColumn.builder()
-                                .setName("validate_query").setSourceName("validateQuery")
-                                .setType(VARCHAR).setSourceType(stringSchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY, new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
-                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields").setSourceName("fields")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY, new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("expand").setSourceName("expand")
+                                .setType(VARCHAR).setSourceType(stringSchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("properties").setSourceName("properties")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY, new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields_by_keys").setSourceName("fieldsByKeys")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY, new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
-                                .setName("expand_req").setSourceName("expand")
-                                .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
-                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY))
+                                .setName("fail_fast").setSourceName("failFast")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("Use [expand](em>#expansion) to include additional information about issues in the response. Note that, unlike the majority of instances where `expand` is specified, `expand` is defined as a list of values. The expand options are:\n" +
-                                        "\n" +
-                                        " *  `renderedFields` Returns field values rendered in HTML format.\n" +
-                                        " *  `names` Returns the display name of each field.\n" +
-                                        " *  `schema` Returns the schema describing a field type.\n" +
-                                        " *  `transitions` Returns all possible transitions for the issue.\n" +
-                                        " *  `operations` Returns all possible operations for the issue.\n" +
-                                        " *  `editmeta` Returns information about how each field can be edited.\n" +
-                                        " *  `changelog` Returns a list of recent updates to an issue, sorted by date, starting from the most recent.\n" +
-                                        " *  `versionedRepresentations` Instead of `fields`, returns `versionedRepresentations` a JSON array containing each version of a field's value, with the highest numbered item representing the most recent version.")
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("reconcile_issues").setSourceName("reconcileIssues")
+                                .setType(new ArrayType(BIGINT)).setSourceType(arraySchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setIsNullable(true)
+                                .build(),
+                        OpenApiColumn.builder()
+                                .setName("include_archived_projects").setSourceName("includeArchivedProjects")
+                                .setType(BOOLEAN).setSourceType(booleanSchema)
+                                .setOptionalPredicate(Map.of(
+                                        new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
+                                        new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
+                                .setIsNullable(true)
                                 .build());
     }
 

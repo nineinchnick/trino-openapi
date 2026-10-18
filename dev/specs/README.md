@@ -30,3 +30,16 @@ curl -fsSL -o /tmp/github.json https://github.com/github/rest-api-description/ra
 jq --indent 2 . /tmp/github.json > src/test/resources/github.json
 jq --indent 2 --slurpfile patch dev/specs/github.patch.json -f dev/specs/merge-patch.jq /tmp/github.json > specs/github.json
 ```
+
+## Unpatched copies
+
+These test resources are upstream specs without changes, formatted like the
+GitHub one, for example:
+
+```shell
+curl -fsSL https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json | jq --indent 2 . > src/test/resources/jira.json
+```
+
+| Output                         | Upstream                                                               |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `src/test/resources/jira.json` | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
