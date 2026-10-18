@@ -15,15 +15,20 @@
 package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.type.Type;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static java.util.Objects.requireNonNull;
 
@@ -36,6 +41,7 @@ public class OpenApiColumn
     private final Map<HttpPath, ParameterLocation> requiresPredicate;
     private final Map<HttpPath, ParameterLocation> optionalPredicate;
     private final Map<HttpPath, ParameterStyle> parameterStyles;
+    private final Set<HttpPath> responseRequiredPaths;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
     private final OpenApiColumnHandle handle;
@@ -48,6 +54,7 @@ public class OpenApiColumn
             Map<HttpPath, ParameterLocation> requiresPredicate,
             Map<HttpPath, ParameterLocation> optionalPredicate,
             Map<HttpPath, ParameterStyle> parameterStyles,
+            Set<HttpPath> responseRequiredPaths,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
@@ -60,6 +67,7 @@ public class OpenApiColumn
         this.requiresPredicate = ImmutableMap.copyOf(requiresPredicate);
         this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
         this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
+        this.responseRequiredPaths = ImmutableSet.copyOf(responseRequiredPaths);
         this.metadata = ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
@@ -106,6 +114,23 @@ public class OpenApiColumn
         return parameterStyles;
     }
 
+    /**
+     * Operations whose responses always include a non-null value of this field.
+     */
+    public Set<HttpPath> getResponseRequiredPaths()
+    {
+        return responseRequiredPaths;
+    }
+
+    /**
+     * Unlike the column metadata, which allows nulls so that INSERT statements can omit response fields,
+     * this tells whether every row read using any of the given operations has a value.
+     */
+    public boolean isResponseRequired(Collection<HttpPath> selectPaths)
+    {
+        return !selectPaths.isEmpty() && responseRequiredPaths.containsAll(selectPaths);
+    }
+
     public ColumnMetadata getMetadata()
     {
         return metadata;
@@ -144,6 +169,7 @@ public class OpenApiColumn
                 && Objects.equals(requiresPredicate, that.requiresPredicate)
                 && Objects.equals(optionalPredicate, that.optionalPredicate)
                 && Objects.equals(parameterStyles, that.parameterStyles)
+                && Objects.equals(responseRequiredPaths, that.responseRequiredPaths)
                 && Objects.equals(metadata, that.metadata)
                 && isPageNumber == that.isPageNumber;
     }
@@ -159,6 +185,7 @@ public class OpenApiColumn
                 ", requiresPredicate=" + requiresPredicate +
                 ", optionalPredicate=" + optionalPredicate +
                 ", parameterStyles=" + parameterStyles +
+                ", responseRequiredPaths=" + responseRequiredPaths +
                 ", metadata=" + metadata +
                 ", isPageNumber=" + isPageNumber +
                 '}';
@@ -166,7 +193,7 @@ public class OpenApiColumn
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, metadata, isPageNumber);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -188,6 +215,7 @@ public class OpenApiColumn
         private final SortedMap<HttpPath, ParameterLocation> requiresPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterLocation> optionalPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
+        private final SortedSet<HttpPath> responseRequiredPaths = new TreeSet<>();
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
@@ -204,6 +232,7 @@ public class OpenApiColumn
             this.requiresPredicate.putAll(handle.getRequiresPredicate());
             this.optionalPredicate.putAll(handle.getOptionalPredicate());
             this.parameterStyles.putAll(handle.getParameterStyles());
+            this.responseRequiredPaths.addAll(handle.getResponseRequiredPaths());
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
@@ -252,6 +281,13 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setResponseRequiredPaths(Set<HttpPath> responseRequiredPaths)
+        {
+            this.responseRequiredPaths.clear();
+            this.responseRequiredPaths.addAll(requireNonNull(responseRequiredPaths, "responseRequiredPaths is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setIsNullable(boolean isNullable)
         {
             this.isNullable = isNullable;
@@ -288,6 +324,7 @@ public class OpenApiColumn
                     requiresPredicate,
                     optionalPredicate,
                     parameterStyles,
+                    responseRequiredPaths,
                     isNullable,
                     isHidden,
                     isPageNumber,

@@ -70,6 +70,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Sets.toImmutableEnumSet;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -430,6 +431,7 @@ public class OpenApiSpec
                     .entrySet().stream()
                     .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
                     .map(propEntry -> getResultColumn(
+                            new HttpPath(method, path),
                             propEntry.getKey(),
                             propEntry.getValue(),
                             !requiredProperties.contains(propEntry.getKey()),
@@ -441,6 +443,7 @@ public class OpenApiSpec
             getAlternativesProperties(resultsSchema)
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
+                            new HttpPath(method, path),
                             propEntry.getKey(),
                             propEntry.getValue(),
                             !requiredResultsProperties.contains(propEntry.getKey()),
@@ -734,19 +737,22 @@ public class OpenApiSpec
     }
 
     private Optional<OpenApiColumn> getResultColumn(
+            HttpPath httpPath,
             String sourceName,
             Schema<?> schema,
             boolean isNullable,
             boolean isPageNumber)
     {
         String name = getIdentifier(sourceName);
+        boolean isResponseRequired = !isNullable && !isNullable(schema, false);
         return convertType(schema).map(type -> OpenApiColumn.builder()
                 .setName(name)
                 .setSourceName(sourceName)
                 .setType(type.type())
                 .setSourceType(type.schema())
                 // optional properties can be missing from the response, even if they're not nullable
-                .setIsNullable(isNullable || isNullable(schema, false))
+                .setIsNullable(!isResponseRequired)
+                .setResponseRequiredPaths(isResponseRequired ? Set.of(httpPath) : Set.of())
                 .setIsHidden(false)
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
@@ -1171,6 +1177,9 @@ public class OpenApiSpec
                 .values().stream()
                 .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
                         .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))
+                        .setResponseRequiredPaths(sameColumns.stream()
+                                .flatMap(column -> column.getResponseRequiredPaths().stream())
+                                .collect(toImmutableSet()))
                         .setRequiresPredicate(sameColumns.stream()
                                 .map(OpenApiColumn::getRequiresPredicate)
                                 .flatMap(map -> map.entrySet().stream())
