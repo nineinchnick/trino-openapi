@@ -17,9 +17,12 @@ package pl.net.was;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.base.CaseFormat;
+import com.google.common.base.Enums;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.inject.Inject;
@@ -63,8 +66,10 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.collect.Sets.toImmutableEnumSet;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
@@ -79,7 +84,6 @@ import static java.lang.Boolean.TRUE;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
-import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -105,6 +109,7 @@ public class OpenApiSpec
     private static final String PAGINATION_TOTAL_PAGES_PATH = "totalPagesPath";
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
+    private static final String SQL_OPERATION = "sqlOperation";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -163,7 +168,7 @@ public class OpenApiSpec
                 tables.put(Map.entry(
                         groupEntry.getKey(),
                         mergeColumns(getColumns(pathItems.getFirst(), firstEntry.getKey()))));
-                Map<PathItem.HttpMethod, List<String>> tablePaths = methodsToPaths(firstEntry.getValue(), firstEntry.getKey());
+                Map<SqlOperation, List<HttpPath>> tablePaths = operationPaths(firstEntry.getValue(), firstEntry.getKey());
                 errorPointers.put(groupEntry.getKey(), errorPointers(firstEntry.getValue(), firstEntry.getKey()));
                 resultsPointers.put(groupEntry.getKey(), resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
                 paginations.put(groupEntry.getKey(), paginations(firstEntry.getValue(), firstEntry.getKey()));
@@ -174,7 +179,7 @@ public class OpenApiSpec
                     .min(comparingInt(entry -> entry.getKey().length()))
                     .orElseThrow();
             List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
-            Map<PathItem.HttpMethod, List<String>> baseMethods = methodsToPaths(baseEntry.getValue(), baseEntry.getKey());
+            Map<SqlOperation, List<HttpPath>> baseOperations = operationPaths(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseErrorPointers = errorPointers(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseResultsPointers = resultsPointers(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, Pagination> basePaginations = paginations(baseEntry.getValue(), baseEntry.getKey());
@@ -191,9 +196,9 @@ public class OpenApiSpec
                                                 getColumns(entry.getValue(), entry.getKey()).stream())
                                         .distinct()
                                         .toList()));
-                        Map<PathItem.HttpMethod, List<String>> tablePaths = Stream.concat(
-                                        baseMethods.entrySet().stream(),
-                                        methodsToPaths(entry.getValue(), entry.getKey()).entrySet().stream())
+                        Map<SqlOperation, List<HttpPath>> tablePaths = Stream.concat(
+                                        baseOperations.entrySet().stream(),
+                                        operationPaths(entry.getValue(), entry.getKey()).entrySet().stream())
                                 .collect(toImmutableMap(
                                         Map.Entry::getKey,
                                         Map.Entry::getValue,
@@ -379,7 +384,7 @@ public class OpenApiSpec
         Stream<OpenApiColumn> columns = pathItem.readOperationsMap().entrySet().stream()
                 .flatMap(entry -> getColumn(path, pathItem.getParameters(), entry))
                 .distinct();
-        if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getDelete() != null) {
+        if (pathItem.getPost() != null || pathItem.getPut() != null || pathItem.getPatch() != null || pathItem.getDelete() != null) {
             // the ROW_ID column is required for MERGE operation, including UPDATE and DELETE
             return Stream.concat(
                             Stream.of(OpenApiColumn.builder()
@@ -472,7 +477,7 @@ public class OpenApiSpec
                     })
                     .forEach(result::add);
         }
-        if (!parameters.isEmpty() && filterPath(path, method)) {
+        if (!parameters.isEmpty()) {
             ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream()
                     .collect(ArrayListMultimap::create,
                             (map, element) -> map.put(element.getName(), element.getPrimaryKey()),
@@ -778,11 +783,61 @@ public class OpenApiSpec
         return Optional.ofNullable(schema.getNullable()).orElse(defaultValue);
     }
 
-    private Map<PathItem.HttpMethod, List<String>> methodsToPaths(PathItem pathItem, String path)
+    private static Map<SqlOperation, List<HttpPath>> operationPaths(PathItem pathItem, String path)
     {
-        return pathItem.readOperationsMap().keySet().stream()
-                .filter(method -> filterPath(path, method))
-                .collect(toImmutableMap(identity(), method -> ImmutableList.of(path)));
+        Map<PathItem.HttpMethod, Operation> operations = pathItem.readOperationsMap();
+        ListMultimap<SqlOperation, HttpPath> result = MultimapBuilder.enumKeys(SqlOperation.class).arrayListValues().build();
+        operations.forEach((method, operation) -> getSqlOperations(new HttpPath(method, path), operation)
+                .forEach(sqlOperation -> result.put(sqlOperation, new HttpPath(method, path))));
+
+        HttpPath put = new HttpPath(PathItem.HttpMethod.PUT, path);
+        HttpPath patch = new HttpPath(PathItem.HttpMethod.PATCH, path);
+        List<HttpPath> updatePaths = result.get(SqlOperation.UPDATE);
+        if (updatePaths.contains(put) && updatePaths.contains(patch)) {
+            // an UPDATE changes only some columns, and a PUT replaces the whole resource, so it's used only when explicitly requested
+            boolean isOnlyPutExplicit = getSqlOperationExtension(operations.get(PathItem.HttpMethod.PUT)).isPresent()
+                    && getSqlOperationExtension(operations.get(PathItem.HttpMethod.PATCH)).isEmpty();
+            updatePaths.remove(isOnlyPutExplicit ? patch : put);
+        }
+        return result.asMap().entrySet().stream()
+                .collect(toImmutableMap(Map.Entry::getKey, entry -> ImmutableList.copyOf(entry.getValue())));
+    }
+
+    private static Set<SqlOperation> getSqlOperations(HttpPath httpPath, Operation operation)
+    {
+        Optional<Object> extension = getSqlOperationExtension(operation);
+        if (extension.isPresent()) {
+            return parseSqlOperations(httpPath, extension.get());
+        }
+        // POST is used by APIs both to create and to search resources, so using it for SELECT requires the extension
+        return switch (httpPath.method()) {
+            case GET -> ImmutableSet.of(SqlOperation.SELECT);
+            case POST -> ImmutableSet.of(SqlOperation.INSERT);
+            case PUT, PATCH -> ImmutableSet.of(SqlOperation.UPDATE);
+            case DELETE -> ImmutableSet.of(SqlOperation.DELETE);
+            default -> ImmutableSet.of();
+        };
+    }
+
+    private static Optional<Object> getSqlOperationExtension(Operation operation)
+    {
+        if (operation.getExtensions() == null || !(operation.getExtensions().get(SPEC_EXTENSION) instanceof Map<?, ?> specExtension)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(specExtension.get(SQL_OPERATION));
+    }
+
+    private static Set<SqlOperation> parseSqlOperations(HttpPath httpPath, Object value)
+    {
+        List<?> values = value instanceof List<?> list ? list : Splitter.on(',').trimResults().splitToList(value.toString());
+        checkArgument(!values.isEmpty(), "Invalid value of %s in %s: it must not be empty", SQL_OPERATION, httpPath);
+        return values.stream()
+                .map(element -> {
+                    Optional<SqlOperation> sqlOperation = Enums.getIfPresent(SqlOperation.class, String.valueOf(element).trim().toUpperCase(Locale.ENGLISH)).toJavaUtil();
+                    checkArgument(sqlOperation.isPresent(), "Invalid value of %s in %s: '%s', must be one of: select, insert, update, delete", SQL_OPERATION, httpPath, element);
+                    return sqlOperation.get();
+                })
+                .collect(toImmutableEnumSet());
     }
 
     private Map<HttpPath, JsonPointer> errorPointers(PathItem pathItem, String path)
@@ -849,13 +904,6 @@ public class OpenApiSpec
         catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()));
         }
-    }
-
-    private boolean filterPath(String path, PathItem.HttpMethod method)
-    {
-        // ignore PUT operations on paths without parameters, because UPDATE always require a predicate and the required parameter will be the primary key
-        // TODO what if there's no PUT, only POST, on a parametrized endpoint?
-        return !method.equals(PathItem.HttpMethod.PUT) || path.contains("{");
     }
 
     public static String getIdentifier(String string)
@@ -1095,6 +1143,14 @@ public class OpenApiSpec
 
     private record TypeTuple(Type type, Schema<?> schema) {}
 
+    private enum SqlOperation
+    {
+        SELECT,
+        INSERT,
+        UPDATE,
+        DELETE,
+    }
+
     private record MergeKey(OpenApiColumn.PrimaryKey primaryKey, String sourceName) {}
 
     private List<OpenApiColumn> mergeColumns(List<OpenApiColumn> columns)
@@ -1151,23 +1207,14 @@ public class OpenApiSpec
                 && !column.getMetadata().isHidden();
     }
 
-    private static OpenApiTableHandle tableHandle(String tableName, Map<PathItem.HttpMethod, List<String>> tablePaths)
+    private static OpenApiTableHandle tableHandle(String tableName, Map<SqlOperation, List<HttpPath>> tablePaths)
     {
         return OpenApiTableHandle.builder(SchemaTableName.schemaTableName(SCHEMA_NAME, tableName))
-                // some APIs use POST to query resources
-                .setSelectPaths(tablePaths.containsKey(PathItem.HttpMethod.GET) ? httpPaths(tablePaths, PathItem.HttpMethod.GET) : httpPaths(tablePaths, PathItem.HttpMethod.POST))
-                .setInsertPaths(httpPaths(tablePaths, PathItem.HttpMethod.POST))
-                // some APIs use POST to update resources, or both PUT and POST, with an identifier as a required query parameter or in the body
-                .setUpdatePaths(tablePaths.containsKey(PathItem.HttpMethod.PUT) ? httpPaths(tablePaths, PathItem.HttpMethod.PUT) : httpPaths(tablePaths, PathItem.HttpMethod.POST))
-                .setDeletePaths(httpPaths(tablePaths, PathItem.HttpMethod.DELETE))
+                .setSelectPaths(tablePaths.getOrDefault(SqlOperation.SELECT, ImmutableList.of()))
+                .setInsertPaths(tablePaths.getOrDefault(SqlOperation.INSERT, ImmutableList.of()))
+                .setUpdatePaths(tablePaths.getOrDefault(SqlOperation.UPDATE, ImmutableList.of()))
+                .setDeletePaths(tablePaths.getOrDefault(SqlOperation.DELETE, ImmutableList.of()))
                 .build();
-    }
-
-    private static List<HttpPath> httpPaths(Map<PathItem.HttpMethod, List<String>> tablePaths, PathItem.HttpMethod method)
-    {
-        return firstNonNull(tablePaths.get(method), ImmutableList.<String>of()).stream()
-                .map(path -> new HttpPath(method, path))
-                .collect(toImmutableList());
     }
 
     public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()

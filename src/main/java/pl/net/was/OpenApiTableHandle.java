@@ -36,6 +36,7 @@ import java.util.Optional;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNull;
 
 @JsonDeserialize(builder = OpenApiTableHandle.Builder.class)
@@ -106,6 +107,17 @@ public class OpenApiTableHandle
     public TupleDomain<ColumnHandle> getConstraint()
     {
         return constraint;
+    }
+
+    public void checkHasPaths(String statement, List<HttpPath> paths)
+    {
+        if (!paths.isEmpty()) {
+            return;
+        }
+        throw new TrinoException(NOT_SUPPORTED, "Table %s has no operation for %s. Set sqlOperation in the x-trino extension of an operation to use it for %s".formatted(
+                schemaTableName.getTableName(),
+                statement,
+                statement));
     }
 
     @Override

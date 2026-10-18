@@ -186,7 +186,8 @@ A table has columns for:
   `resultsPath`;
 * the request parameters (path, query, header, and cookie), including the ones
   shared by all operations of a path;
-* the fields of the JSON request body, if the table can use a `POST` request.
+* the fields of JSON request bodies, like the ones of `POST`, `PUT`, and `PATCH`
+  operations.
 
 Request parameters are filters. Their values are copied from the query into
 every returned row, because most APIs don't repeat them in responses.
@@ -246,14 +247,32 @@ path without them, so `/pet` and `/pet/{petId}` become one table named `pet`.
 If a path has several variants with different parameters, each variant becomes
 a separate table that also includes the columns of the base path.
 
-SQL statements use these HTTP methods:
+SQL statements use operations with these HTTP methods:
 
-| SQL statement | HTTP method                               |
-| ------------- | ----------------------------------------- |
-| `SELECT`      | `GET`, or `POST` if the path has no `GET` |
-| `INSERT`      | `POST`                                    |
-| `UPDATE`      | `PUT`, or `POST` if the path has no `PUT` |
-| `DELETE`      | `DELETE`                                  |
+| SQL statement | HTTP method      |
+| ------------- | ---------------- |
+| `SELECT`      | `GET`            |
+| `INSERT`      | `POST`           |
+| `UPDATE`      | `PATCH` or `PUT` |
+| `DELETE`      | `DELETE`         |
+
+When a path has both `PATCH` and `PUT`, `UPDATE` uses `PATCH`, because an
+`UPDATE` changes only some columns, and `PUT` replaces the whole resource.
+
+Many APIs use `POST` to search, but the connector can't tell a search from an
+operation that creates resources. A `POST` operation is used for `SELECT` only
+when the specification marks it with `sqlOperation` in the
+[`x-trino` extension](#openapi-extensions). This property can change the SQL
+statements of any operation, and a marked operation is used only for the
+statements it lists.
+
+> [!IMPORTANT]
+> Before version 1.88, `POST` operations were also used for `SELECT` when the
+> path had no `GET`, and for `UPDATE` when the path had no `PUT`. Statements
+> that used them now fail with `Table ... has no operation for ...`, until the
+> specification sets `sqlOperation` in the `x-trino` extension of the
+> operation, like `sqlOperation: select` for a search, or
+> `sqlOperation: update` for a `POST` that changes a resource.
 
 When several paths of a table can be used, the connector picks one for every
 request: it skips paths whose required parameters are missing from the query,
@@ -338,18 +357,29 @@ paths:
         resultsPath: "$response.body#/records"
         totalResultsPath: "$response.body#/total_count"
         errorPath: "$response.body#/message"
+  /records/search:
+    post:
+      # ...
+      x-trino:
+        sqlOperation: select
+  /records/{id}:
+    put:
+      # ...
+      x-trino:
+        sqlOperation: [insert, update]
 ```
 
-| Property           | Description                                                               |
-| ------------------ | ------------------------------------------------------------------------- |
-| `pageParam`        | Parameter with the page number; enables pagination                        |
-| `limitParam`       | Parameter with the page size                                              |
-| `resultsPath`      | JSON pointer to the results in the response, like `$response.body#/items` |
-| `totalResultsPath` | JSON pointer to the total number of results                               |
-| `totalPagesPath`   | JSON pointer to the total number of pages                                 |
-| `hasMorePath`      | JSON pointer to a boolean that is `false` on the last page                |
-| `maxPages`         | Maximum number of pages to request                                        |
-| `errorPath`        | JSON pointer to a human-readable message in error responses               |
+| Property           | Description                                                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageParam`        | Parameter with the page number; enables pagination                                                                                                  |
+| `limitParam`       | Parameter with the page size                                                                                                                        |
+| `resultsPath`      | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
+| `totalResultsPath` | JSON pointer to the total number of results                                                                                                         |
+| `totalPagesPath`   | JSON pointer to the total number of pages                                                                                                           |
+| `hasMorePath`      | JSON pointer to a boolean that is `false` on the last page                                                                                          |
+| `maxPages`         | Maximum number of pages to request                                                                                                                  |
+| `errorPath`        | JSON pointer to a human-readable message in error responses                                                                                         |
+| `sqlOperation`     | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
 
 If you can't change the API to include the extension in its specification, save
 the specification locally and edit it.
@@ -408,11 +438,10 @@ when the first of its environment variables is set.
   ([#16](https://github.com/nineinchnick/trino-openapi/issues/16)), with names
   derived from paths ([#15](https://github.com/nineinchnick/trino-openapi/issues/15),
   [#255](https://github.com/nineinchnick/trino-openapi/issues/255)).
-* SQL statements are inferred from HTTP methods, so a `POST` search endpoint can
-  also be used for `INSERT`, and `PATCH` operations can't be used
-  ([#210](https://github.com/nineinchnick/trino-openapi/issues/210)). The row ID
-  used by `UPDATE` and `DELETE` comes from the query filters, not from the rows
-  ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
+* Without the `sqlOperation` extension, SQL statements are mapped from HTTP
+  methods, so a `POST` search endpoint is used for `INSERT`, not for `SELECT`.
+  The row ID used by `UPDATE` and `DELETE` comes from the query filters, not
+  from the rows ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
 * Only equality and `IN` filters, and ranges expanded to single values, are sent
   in requests ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
   `LIMIT` is not pushed down, so all pages are requested
@@ -454,8 +483,10 @@ more.
   request can't send is still applied by Trino, even if it means reading more
   data.
 * **Explicit signals only.** Pagination stops only on signals the server or the
-  spec provides, never by guessing from page contents. OAuth flows that need a
-  browser fail with a clear error instead of being attempted.
+  spec provides, never by guessing from page contents. SQL statements are mapped
+  from HTTP methods or the `sqlOperation` extension, never from operation names
+  or summaries. OAuth flows that need a browser fail with a clear error instead
+  of being attempted.
 * **Columns are nullable unless the spec says otherwise,** because a field that
   isn't required can be missing from a response.
 * **Unions keep all data.** Alternatives are merged when they're compatible, and
