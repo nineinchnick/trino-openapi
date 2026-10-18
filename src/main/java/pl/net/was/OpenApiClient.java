@@ -603,7 +603,7 @@ public class OpenApiClient
                 continue;
             }
             Object value = JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
-            nodePut(node, column.getSourceName(), value);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
         }
         return node;
     }
@@ -633,46 +633,9 @@ public class OpenApiClient
                 JsonTrinoConverter.convertRow(rowNode, sqlRow, (RowType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
                 value = rowNode;
             }
-            nodePut(node, column.getSourceName(), value);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
         }
         return node;
-    }
-
-    private void nodePut(ObjectNode node, String name, Object value)
-    {
-        if (value == null) {
-            node.putNull(name);
-            return;
-        }
-        if (value instanceof Boolean booleanValue) {
-            node.put(name, booleanValue);
-        }
-        else if (value instanceof Long longValue) {
-            // includes all integer types
-            node.put(name, longValue);
-        }
-        else if (value instanceof Float floatValue) {
-            node.put(name, floatValue);
-        }
-        else if (value instanceof Double doubleValue) {
-            node.put(name, doubleValue);
-        }
-        else if (value instanceof BigDecimal decimalValue) {
-            node.put(name, decimalValue);
-        }
-        else if (value instanceof String stringValue) {
-            // also includes dates and timestamps
-            node.put(name, stringValue);
-        }
-        else if (value instanceof ArrayNode || value instanceof ObjectNode) {
-            node.set(name, (JsonNode) value);
-        }
-        else if (value instanceof RawValue rawValue) {
-            node.putRawValue(name, rawValue);
-        }
-        else {
-            throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
-        }
     }
 
     private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults) {}

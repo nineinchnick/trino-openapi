@@ -453,36 +453,7 @@ public class JsonTrinoConverter
         for (int i = 0; i < mapBlock.getSize(); i++) {
             String key = VARCHAR.getSlice(mapBlock.getRawKeyBlock(), mapBlock.getRawOffset() + i).toStringUtf8();
             Object itemValue = convert(mapBlock.getRawValueBlock(), mapBlock.getRawOffset() + i, mapType.getValueType(), valueSchema, objectMapper);
-            if (itemValue == null) {
-                mapNode.putNull(key);
-            }
-            else if (itemValue instanceof Boolean booleanValue) {
-                mapNode.put(key, booleanValue);
-            }
-            else if (itemValue instanceof Long longValue) {
-                mapNode.put(key, longValue);
-            }
-            else if (itemValue instanceof Float floatValue) {
-                mapNode.put(key, floatValue);
-            }
-            else if (itemValue instanceof Double doubleValue) {
-                mapNode.put(key, doubleValue);
-            }
-            else if (itemValue instanceof BigDecimal decimalValue) {
-                mapNode.put(key, decimalValue);
-            }
-            else if (itemValue instanceof String stringValue) {
-                mapNode.put(key, stringValue);
-            }
-            else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
-                mapNode.set(key, (JsonNode) itemValue);
-            }
-            else if (itemValue instanceof RawValue rawValue) {
-                mapNode.putRawValue(key, rawValue);
-            }
-            else {
-                throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
-            }
+            putValue(mapNode, key, itemValue);
         }
         return mapNode;
     }
@@ -520,6 +491,43 @@ public class JsonTrinoConverter
             else {
                 throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
             }
+        }
+    }
+
+    public static void putValue(ObjectNode node, String key, Object value)
+    {
+        if (value == null) {
+            node.putNull(key);
+            return;
+        }
+        if (value instanceof Boolean booleanValue) {
+            node.put(key, booleanValue);
+        }
+        else if (value instanceof Long longValue) {
+            // includes all integer types
+            node.put(key, longValue);
+        }
+        else if (value instanceof Float floatValue) {
+            node.put(key, floatValue);
+        }
+        else if (value instanceof Double doubleValue) {
+            node.put(key, doubleValue);
+        }
+        else if (value instanceof BigDecimal decimalValue) {
+            node.put(key, decimalValue);
+        }
+        else if (value instanceof String stringValue) {
+            // also includes dates and timestamps
+            node.put(key, stringValue);
+        }
+        else if (value instanceof ArrayNode || value instanceof ObjectNode) {
+            node.set(key, (JsonNode) value);
+        }
+        else if (value instanceof RawValue rawValue) {
+            node.putRawValue(key, rawValue);
+        }
+        else {
+            throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
         }
     }
 }
