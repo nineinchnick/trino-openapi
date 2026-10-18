@@ -196,7 +196,6 @@ public class OpenApiClient
         return new JsonResponseHandler(
                 table,
                 httpPath,
-                openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath),
                 openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
                 openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()));
     }
@@ -244,7 +243,7 @@ public class OpenApiClient
                 pathWithParams.getValue(),
                 // operations marked for DELETE, like a POST, can require filters in the request body
                 getBodyGenerator(table.getTableHandle(), httpPath),
-                new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
+                new AnyResponseHandler());
     }
 
     private void writeRows(OpenApiOutputTableHandle table, String statement, List<HttpPath> paths, Page page, int position, Optional<Set<OpenApiColumnHandle>> updatedColumns)
@@ -264,7 +263,7 @@ public class OpenApiClient
                     pathWithParams.getValue(),
                     rowValues,
                     createStaticBodyGenerator(toBytes(body)),
-                    new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
+                    new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -327,7 +326,20 @@ public class OpenApiClient
         if (rateLimiter != null) {
             rateLimiter.acquire();
         }
-        return httpClient.execute(request, responseHandler);
+        try {
+            return httpClient.execute(request, responseHandler);
+        }
+        catch (HttpRequestFailure failure) {
+            throw toTrinoException(failure, openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath));
+        }
+    }
+
+    private static RuntimeException toTrinoException(HttpRequestFailure failure, JsonPointer errorPointer)
+    {
+        return switch (failure) {
+            case HttpRequestFailure.TransportError error -> new RuntimeException(error.getCause());
+            case HttpRequestFailure.ErrorResponse error -> errorResponse(error.getStatusCode(), error.getResponseBody(), errorPointer);
+        };
     }
 
     private Map.Entry<HttpPath, Map<OpenApiColumn, Object>> selectPath(OpenApiTableHandle table, List<HttpPath> paths, Function<OpenApiColumn, Object> valueProvider)
@@ -643,15 +655,13 @@ public class OpenApiClient
     {
         private final OpenApiTableHandle table;
         private final HttpPath httpPath;
-        private final JsonPointer errorPointer;
         private final JsonPointer resultsPointer;
         private final Pagination pagination;
 
-        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer errorPointer, JsonPointer resultsPointer, Pagination pagination)
+        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, Pagination pagination)
         {
             this.table = requireNonNull(table, "table is null");
             this.httpPath = requireNonNull(httpPath, "httpPath is null");
-            this.errorPointer = errorPointer;
             this.resultsPointer = resultsPointer;
             this.pagination = requireNonNull(pagination, "pagination is null");
         }
@@ -659,7 +669,7 @@ public class OpenApiClient
         @Override
         public ResultsPage handleException(Request request, Exception exception)
         {
-            throw new RuntimeException(exception);
+            throw new HttpRequestFailure.TransportError(exception);
         }
 
         @Override
@@ -668,16 +678,10 @@ public class OpenApiClient
             if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
                 return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
-            String result = "";
-            try {
-                result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
-            }
-            catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            String result = readBody(response);
             log.debug("Received response code " + response.getStatusCode() + ": " + result);
             if (response.getStatusCode() != HttpStatus.OK.code()) {
-                errorResponse(response.getStatusCode(), result, errorPointer);
+                throw new HttpRequestFailure.ErrorResponse(response.getStatusCode(), result);
             }
 
             JsonNode jsonNode;
@@ -720,20 +724,30 @@ public class OpenApiClient
         }
     }
 
-    private static void errorResponse(int statusCode, String result, JsonPointer errorPointer)
+    private static TrinoException errorResponse(int statusCode, String result, JsonPointer errorPointer)
     {
         if (errorPointer != null) {
             try {
                 JsonNode errorNode = OBJECT_MAPPER.readTree(result).at(errorPointer);
                 String message = format("Server responded with error %s: %s", statusCode, errorNode);
-                throw new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
+                return new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
             }
             catch (JsonProcessingException ex) {
                 // ignore, so a generic exception will be thrown
             }
         }
         String message = format("Server responded with error %s", statusCode);
-        throw new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
+        return new TrinoException(GENERIC_INTERNAL_ERROR, message, new IllegalArgumentException(result));
+    }
+
+    private static String readBody(Response response)
+    {
+        try {
+            return CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
+        }
+        catch (IOException e) {
+            throw new HttpRequestFailure.TransportError(e);
+        }
     }
 
     private Iterable<List<?>> convertJson(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, JsonNode jsonNode)
@@ -819,33 +833,20 @@ public class OpenApiClient
     private static class AnyResponseHandler
             implements ResponseHandler<Void, RuntimeException>
     {
-        private final JsonPointer errorPointer;
-
-        AnyResponseHandler(JsonPointer errorPointer)
-        {
-            this.errorPointer = errorPointer;
-        }
-
         @Override
         public Void handleException(Request request, Exception exception)
         {
-            throw new RuntimeException(exception);
+            throw new HttpRequestFailure.TransportError(exception);
         }
 
         @Override
         public Void handle(Request request, Response response)
         {
-            String result = "";
-            try {
-                result = CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
-            }
-            catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            String result = readBody(response);
             log.debug("Received response code " + response.getStatusCode() + ": " + result);
             // servers often respond to writes with 201 Created, 202 Accepted, or 204 No Content
             if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
-                errorResponse(response.getStatusCode(), result, errorPointer);
+                throw new HttpRequestFailure.ErrorResponse(response.getStatusCode(), result);
             }
             return null;
         }
