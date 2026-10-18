@@ -2840,6 +2840,38 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testRateLimitExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                x-trino:
+                  rateLimitResetHeader: x-ratelimit-reset
+                  rateLimitResetFormat: epochSeconds
+                  rateLimitRemainingHeader: x-ratelimit-remaining
+                paths: {}
+                """;
+
+        Assertions.assertThat(parseSpec(specContents).getRateLimitHeaders())
+                .contains(new RateLimitHeaders("x-ratelimit-reset", RateLimitHeaders.ResetFormat.EPOCH_SECONDS, Optional.of("x-ratelimit-remaining")));
+        Assertions.assertThat(parseSpec(specContents.replace("epochSeconds", "delaySeconds").replace("  rateLimitRemainingHeader: x-ratelimit-remaining\n", "")).getRateLimitHeaders())
+                .contains(new RateLimitHeaders("x-ratelimit-reset", RateLimitHeaders.ResetFormat.DELAY_SECONDS, Optional.empty()));
+        Assertions.assertThat(parseSpec(specContents.replace("x-trino:", "x-other:")).getRateLimitHeaders()).isEmpty();
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("epochSeconds", "seconds")))
+                .hasMessage("Invalid value of rateLimitResetFormat: seconds, must be one of: epochSeconds, delaySeconds");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("  rateLimitResetFormat: epochSeconds\n", "")))
+                .hasMessage("rateLimitResetFormat is required with rateLimitResetHeader");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("  rateLimitResetHeader: x-ratelimit-reset\n", "")))
+                .hasMessage("rateLimitResetFormat requires rateLimitResetHeader");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("rateLimitRemainingHeader", "pageParam")))
+                .hasMessage("Invalid property of the document-level x-trino extension: pageParam, must be one of: rateLimitResetHeader, rateLimitResetFormat, rateLimitRemainingHeader");
+    }
+
+    @Test
     public void testParserDropsEmptyGlobalSecurity()
     {
         // OpenApiSpec.parse() restores the empty list, so if this fails after upgrading the parser, that workaround can be removed

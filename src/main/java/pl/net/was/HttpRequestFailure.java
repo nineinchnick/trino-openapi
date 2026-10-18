@@ -13,7 +13,10 @@
  */
 package pl.net.was;
 
+import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ListMultimap;
 import com.google.common.io.ByteStreams;
+import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.Response;
 
 import java.io.IOException;
@@ -53,14 +56,16 @@ abstract sealed class HttpRequestFailure
         private final String responseBody;
         private final boolean responseBodyTruncated;
         private final Optional<Duration> retryAfter;
+        private final ListMultimap<HeaderName, String> headers;
 
-        private ErrorResponse(int statusCode, String responseBody, boolean responseBodyTruncated, Optional<Duration> retryAfter)
+        private ErrorResponse(int statusCode, String responseBody, boolean responseBodyTruncated, Optional<Duration> retryAfter, ListMultimap<HeaderName, String> headers)
         {
             super("Server responded with error " + statusCode, null);
             this.statusCode = statusCode;
             this.responseBody = requireNonNull(responseBody, "responseBody is null");
             this.responseBodyTruncated = responseBodyTruncated;
             this.retryAfter = requireNonNull(retryAfter, "retryAfter is null");
+            this.headers = ImmutableListMultimap.copyOf(requireNonNull(headers, "headers is null"));
         }
 
         static ErrorResponse read(Response response)
@@ -76,7 +81,12 @@ abstract sealed class HttpRequestFailure
             if (truncated) {
                 body = Arrays.copyOf(body, MAX_ERROR_BODY_BYTES);
             }
-            return new ErrorResponse(response.getStatusCode(), new String(body, UTF_8), truncated, response.getHeader(RETRY_AFTER).flatMap(value -> parseRetryAfter(value, Instant.now())));
+            return new ErrorResponse(
+                    response.getStatusCode(),
+                    new String(body, UTF_8),
+                    truncated,
+                    response.getHeader(RETRY_AFTER).flatMap(value -> parseRetryAfter(value, Instant.now())),
+                    response.getHeaders());
         }
 
         int getStatusCode()
@@ -97,6 +107,11 @@ abstract sealed class HttpRequestFailure
         Optional<Duration> getRetryAfter()
         {
             return retryAfter;
+        }
+
+        Optional<String> getHeader(String name)
+        {
+            return headers.get(HeaderName.of(name)).stream().findFirst();
         }
 
         // the value is either a number of seconds, or an HTTP date, see RFC 9110, section 10.2.3

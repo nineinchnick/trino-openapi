@@ -186,8 +186,9 @@ connection, or a response with one of these HTTP status codes:
 
 * `429 Too Many Requests`, `502 Bad Gateway`, `503 Service Unavailable`, and
   `504 Gateway Timeout`;
-* `403 Forbidden` with a `Retry-After` header, which some APIs, like GitHub,
-  use for exceeded rate limits.
+* `403 Forbidden` with a `Retry-After` header, or with headers saying that the
+  rate limit is exhausted, as declared in the spec, which some APIs, like
+  GitHub, use for exceeded rate limits.
 
 Only requests that have the same effect when they're repeated are retried:
 `GET`, `HEAD`, `OPTIONS`, `PUT`, and `DELETE`. Requests using `POST`, like
@@ -206,7 +207,41 @@ as it asks for instead. If that's longer than `retry-max-delay`, the query fails
 right away, because retrying earlier than the server allows can get the client
 blocked, for example by GitHub. Increase `retry-max-delay` to wait longer.
 
+Many APIs, like [GitHub](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api),
+respond to an exceeded rate limit without `Retry-After`, but with headers
+saying when it resets. Declare them in the `x-trino` extension of the whole
+document, so the connector waits until then, instead of failing the query:
+
+```yaml
+openapi: 3.0.3
+x-trino:
+  rateLimitResetHeader: "x-ratelimit-reset"
+  rateLimitResetFormat: "epochSeconds"
+  rateLimitRemainingHeader: "x-ratelimit-remaining"
+paths:
+  # ...
+```
+
+| Property                   | Description                                                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rateLimitResetHeader`     | Response header with the time the rate limit resets                                                                                                      |
+| `rateLimitResetFormat`     | Format of the reset time: `epochSeconds` for seconds since the Unix epoch, in UTC, or `delaySeconds` for seconds to wait; required with the reset header |
+| `rateLimitRemainingHeader` | Response header with the number of requests left; the reset time is used only when it's `0`                                                              |
+
+When a `403 Forbidden` or `429 Too Many Requests` response has the reset header,
+and the remaining header is `0`, if declared, the connector waits until the
+reset time, plus a random time up to a second, so requests waiting for the same
+reset aren't all sent at once. Like with `Retry-After`, the query fails right
+away if that's longer than `retry-max-delay`, and every wait counts against
+`max-retries`. `Retry-After` takes precedence over the reset header.
+
+Declare `rateLimitRemainingHeader` if the API sends the reset header in every
+response, like GitHub, because otherwise a `403 Forbidden` caused by missing
+permissions would be retried too.
+
 Retries count against `max-requests-per-second`, like any other request.
+Error responses, including exceeded rate limits, are never stored in the
+[HTTP cache](#http-cache).
 
 ## HTTP cache
 
@@ -433,7 +468,8 @@ ignored. Request and response bodies must be JSON.
 # OpenAPI extensions
 
 Some behavior can't be described with standard OpenAPI. The connector reads an
-`x-trino` extension in an operation:
+`x-trino` extension in an operation, and one of the whole document, which
+describes [rate limits](#retries):
 
 ```yaml
 paths:
