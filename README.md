@@ -397,7 +397,7 @@ statements of any operation, and a marked operation is used only for the
 statements it lists.
 
 > [!IMPORTANT]
-> Before version 1.88, `POST` operations were also used for `SELECT` when the
+> Before version 2.0, `POST` operations were also used for `SELECT` when the
 > path had no `GET`, and for `UPDATE` when the path had no `PUT`. Statements
 > that used them now fail with `Table ... has no operation for ...`, until the
 > specification sets `sqlOperation` in the `x-trino` extension of the
