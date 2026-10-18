@@ -60,11 +60,13 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static com.google.common.base.Verify.verify;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
+import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.type.Decimals.encodeScaledValue;
 import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
@@ -103,19 +105,21 @@ public class JsonTrinoConverter
             return null;
         }
         if (type instanceof IntegerType || type instanceof SmallintType || type instanceof TinyintType) {
-            return jsonNode.asInt();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, Integer::valueOf) : jsonNode.asInt();
         }
         if (type instanceof BigintType) {
-            return jsonNode.bigIntegerValue();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, BigInteger::new) : jsonNode.bigIntegerValue();
         }
         if (type instanceof RealType) {
-            return jsonNode.floatValue();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, Float::valueOf) : jsonNode.floatValue();
         }
         if (type instanceof DoubleType) {
-            return jsonNode.doubleValue();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, Double::valueOf) : jsonNode.doubleValue();
         }
         if (type instanceof DecimalType decimalType) {
-            return toUnscaledValue(jsonNode.decimalValue(), decimalType);
+            // some APIs send decimals as JSON strings, so clients that parse numbers as doubles don't lose precision
+            BigDecimal value = jsonNode.isTextual() ? parseText(jsonNode, type, BigDecimal::new) : jsonNode.decimalValue();
+            return toUnscaledValue(value, decimalType);
         }
         if (type instanceof VarcharType) {
             if (jsonNode.isValueNode()) {
@@ -170,6 +174,16 @@ public class JsonTrinoConverter
             return rowType.getObject(block, block.getPositionCount() - 1);
         }
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
+    }
+
+    private static <T> T parseText(JsonNode jsonNode, Type type, Function<String, T> parser)
+    {
+        try {
+            return parser.apply(jsonNode.textValue());
+        }
+        catch (NumberFormatException e) {
+            throw new TrinoException(TYPE_MISMATCH, format("Cannot read '%s' as %s", jsonNode.textValue(), type), e);
+        }
     }
 
     private static Object toUnscaledValue(BigDecimal value, DecimalType type)
