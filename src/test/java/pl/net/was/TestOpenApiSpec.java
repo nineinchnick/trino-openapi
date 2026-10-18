@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 
 import static com.google.common.collect.MoreCollectors.onlyElement;
@@ -2449,6 +2450,7 @@ class TestOpenApiSpec
                         totalPagesPath: $response.body#/pages
                         hasMorePath: $response.body#/has_more
                         maxPages: 10
+                        maxResults: 1000
                       responses:
                         "200":
                           description: Items
@@ -2476,6 +2478,7 @@ class TestOpenApiSpec
                                 .setTotalPagesPointer(JsonPointer.compile("/pages"))
                                 .setHasMorePointer(JsonPointer.compile("/has_more"))
                                 .setMaxPages(OptionalInt.of(10))
+                                .setMaxResults(OptionalLong.of(1000))
                                 .build()));
         Assertions.assertThat(spec.getResultsPointers(schemaTableName(SCHEMA_NAME, "items")))
                 .containsExactly(Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/results")));
@@ -2485,6 +2488,10 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of maxPages: many");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: 0")))
                 .hasMessage("maxPages must be positive");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: many")))
+                .hasMessage("Invalid value of maxResults: many");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: 0")))
+                .hasMessage("maxResults must be positive");
     }
 
     @Test

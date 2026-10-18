@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -111,6 +112,7 @@ public class OpenApiSpec
     private static final String PAGINATION_TOTAL_PAGES_PATH = "totalPagesPath";
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
+    private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String SQL_OPERATION = "sqlOperation";
     private static final String SORT_PARAM = "sortParam";
     private static final String SORT_VALUES = "sortValues";
@@ -880,6 +882,7 @@ public class OpenApiSpec
                                     .setTotalPagesPointer(pointer(specExtension, PAGINATION_TOTAL_PAGES_PATH))
                                     .setHasMorePointer(pointer(specExtension, PAGINATION_HAS_MORE_PATH))
                                     .setMaxPages(getMaxPages(rawExtension))
+                                    .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
                                     .build();
                         }));
@@ -897,6 +900,20 @@ public class OpenApiSpec
         }
         catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_PAGES, value), e);
+        }
+    }
+
+    private static OptionalLong getMaxResults(Object specExtension)
+    {
+        Object value = specExtension instanceof Map<?, ?> map ? map.get(PAGINATION_MAX_RESULTS) : null;
+        if (value == null) {
+            return OptionalLong.empty();
+        }
+        try {
+            return OptionalLong.of(value instanceof Number number ? number.longValue() : Long.parseLong(value.toString()));
+        }
+        catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_RESULTS, value), e);
         }
     }
 

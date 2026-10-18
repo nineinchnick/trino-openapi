@@ -158,7 +158,10 @@ public class OpenApiClient
         Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
         OpenApiTableHandle pagedTable = sortedTable.orElse(table);
         // without the sort parameters, the first rows are not the top ones, so all pages must be read
-        long limit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? Long.MAX_VALUE : table.getLimit().orElse(Long.MAX_VALUE);
+        OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
+        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
+        // pages are requested until the previous ones have fewer rows than this, so a page that would start past it is never requested
+        long limit = min(queryLimit.orElse(Long.MAX_VALUE), pagination.maxResults().orElse(Long.MAX_VALUE));
         return pageIterator(
                 page -> {
                     TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
@@ -175,7 +178,7 @@ public class OpenApiClient
                 limit,
                 1,
                 getPageSize(table, httpPath),
-                openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).maxPages());
+                pagination.maxPages());
     }
 
     private Optional<OpenApiTableHandle> getSortedTable(OpenApiTableHandle table, HttpPath httpPath, SortItem sortItem)

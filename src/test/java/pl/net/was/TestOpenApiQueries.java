@@ -777,6 +777,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void maxResultsStopsPagination()
+    {
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.max_results_items", 1, "Portal Gun"))
+                .isEqualTo("page=1");
+        assertCountedItems("SELECT name FROM fastapi.default.max_results_items LIMIT 5", 1, "Portal Gun");
+    }
+
+    @Test
     public void topNSendsSortParameters()
     {
         // the table has an INSERT operation, so the column allows nulls, but every response includes it

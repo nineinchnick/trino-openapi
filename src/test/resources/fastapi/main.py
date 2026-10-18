@@ -405,6 +405,12 @@ def create_counted_item(body: NoteBody) -> Item:
     return items[1]
 
 
+@router.get("/max_results_items")
+def list_max_results_items(request: Request, page: int = 1) -> Results:
+    # like servers that fail for results past a limit, but without the error, to check that no such page is requested
+    return list_counted_items(request, page)
+
+
 @router.get("/counted_items_requests")
 def get_counted_items_requests() -> RequestCount:
     return counted_items_requests
@@ -749,6 +755,11 @@ def custom_openapi():
         "directionParam": "direction",
         "ascendingValue": "asc",
         "descendingValue": "desc",
+    }
+    openapi_schema["paths"]["/max_results_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "maxResults": 1,
     }
     openapi_schema["paths"]["/contents_results/{path}"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results",
