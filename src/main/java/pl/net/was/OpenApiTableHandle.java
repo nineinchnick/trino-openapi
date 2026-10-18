@@ -196,11 +196,17 @@ public class OpenApiTableHandle
             if (newConstraint == null || newConstraint.getDomains().isEmpty()) {
                 continue;
             }
+            Domain domain = newConstraint.getDomains().get().get(column.getHandle());
+            boolean isAlwaysSent = isSentByAllSelectPaths(column);
+            // splits are generated for every value of a pushed down domain, so if the selected path ignores it,
+            // every split would return the same rows, and the remaining filter wouldn't remove these duplicates
+            if (!isAlwaysSent && !domain.isSingleValue()) {
+                continue;
+            }
             if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
                 continue;
             }
             // merge with other pushed down constraints
-            Domain domain = newConstraint.getDomains().get().get(column.getHandle());
             if (currentConstraint.getDomains().isEmpty()) {
                 currentConstraint = newConstraint;
             }
@@ -213,6 +219,10 @@ public class OpenApiTableHandle
                 currentConstraint.getDomains().get().get(column.getHandle()).union(domain);
             }
             found = true;
+            if (!isAlwaysSent) {
+                // the path selected for a split might not send this predicate, so Trino still has to apply it
+                continue;
+            }
             // remove from remaining constraints
             summary = summary.filter(
                     (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
@@ -226,6 +236,13 @@ public class OpenApiTableHandle
                 summary,
                 constraint.getExpression(),
                 true));
+    }
+
+    private boolean isSentByAllSelectPaths(OpenApiColumn column)
+    {
+        return selectPaths.stream()
+                .map(path -> new HttpPath(selectMethod, path))
+                .allMatch(httpPath -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath));
     }
 
     private TupleDomain<ColumnHandle> normalizeConstraint(OpenApiColumnHandle column, TupleDomain<ColumnHandle> constraint, int domainExpansionLimit)
