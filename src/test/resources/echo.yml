@@ -180,6 +180,9 @@ paths:
           $ref: '#/components/responses/Echo'
   /echo_map:
     post:
+      # it only reads data, but POST operations are used for INSERT, unless marked otherwise
+      x-trino:
+        sqlOperation: select
       requestBody:
         required: true
         content:
@@ -195,6 +198,9 @@ paths:
                 $ref: '#/components/schemas/MapEcho'
   /echo_union_value:
     post:
+      # it only reads data, but POST operations are used for INSERT, unless marked otherwise
+      x-trino:
+        sqlOperation: select
       requestBody:
         required: true
         content:

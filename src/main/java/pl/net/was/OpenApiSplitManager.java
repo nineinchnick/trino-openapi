@@ -81,6 +81,8 @@ public class OpenApiSplitManager
             Set<ColumnHandle> dynamicFilterColumns,
             Constraint constraint)
     {
+        OpenApiTableHandle tableHandle = (OpenApiTableHandle) table;
+        tableHandle.checkHasPaths("SELECT", tableHandle.getSelectPaths());
         return new DynamicFilteringSplitSource(table, dynamicFilterColumns);
     }
 

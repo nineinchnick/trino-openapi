@@ -201,7 +201,7 @@ public class OpenApiClient
 
     private BodyGenerator getBodyGenerator(OpenApiTableHandle table, HttpPath httpPath)
     {
-        if (httpPath.method() != PathItem.HttpMethod.POST) {
+        if (!hasRequestBody(httpPath.method())) {
             return null;
         }
         try {
@@ -212,18 +212,24 @@ public class OpenApiClient
         }
     }
 
+    private static boolean hasRequestBody(PathItem.HttpMethod method)
+    {
+        return method == PathItem.HttpMethod.POST || method == PathItem.HttpMethod.PUT || method == PathItem.HttpMethod.PATCH;
+    }
+
     public void insertRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        writeRows(table, table.getTableHandle().getInsertPaths(), page, position);
+        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position);
     }
 
     public void updateRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        writeRows(table, table.getTableHandle().getUpdatePaths(), page, position);
+        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position);
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
+        table.getTableHandle().checkHasPaths("DELETE", table.getTableHandle().getDeletePaths());
         // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
@@ -238,8 +244,9 @@ public class OpenApiClient
                 new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
     }
 
-    private void writeRows(OpenApiOutputTableHandle table, List<HttpPath> paths, Page page, int position)
+    private void writeRows(OpenApiOutputTableHandle table, String statement, List<HttpPath> paths, Page page, int position)
     {
+        table.getTableHandle().checkHasPaths(statement, paths);
         Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table.getTableHandle(), paths, rowValues);
         HttpPath httpPath = pathWithParams.getKey();

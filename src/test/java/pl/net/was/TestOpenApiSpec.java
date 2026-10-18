@@ -169,7 +169,7 @@ class TestOpenApiSpec
         String paramsPath = "/orgs/{org}";
         Assertions.assertThat(orgsTableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, "/orgs/{org}"));
         Assertions.assertThat(orgsTableHandle.getInsertPaths()).isEmpty();
-        Assertions.assertThat(orgsTableHandle.getUpdatePaths()).isEmpty();
+        Assertions.assertThat(orgsTableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PATCH, "/orgs/{org}"));
         Assertions.assertThat(orgsTableHandle.getDeletePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.DELETE, "/orgs/{org}"));
         List<OpenApiColumn> orgColumns = tables.get("orgs").stream()
                 .map(column -> {
@@ -650,9 +650,10 @@ class TestOpenApiSpec
 
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "rest_api_3_search"));
         String path = "/rest/api/3/search";
+        // the POST operation is a search, but without the sqlOperation extension, the connector can't tell it apart from one creating resources
         Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, path));
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
-        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
+        Assertions.assertThat(tableHandle.getUpdatePaths()).isEmpty();
         Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> columns = tables.get("rest_api_3_search").stream()
                 .map(column -> {
@@ -872,7 +873,8 @@ class TestOpenApiSpec
         String onePath = "/pet/{petId}";
         Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, onePath));
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, listPath), new HttpPath(PathItem.HttpMethod.POST, onePath));
-        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, listPath), new HttpPath(PathItem.HttpMethod.POST, onePath));
+        // the PUT operation without path parameters identifies the pet by the ID in the request body
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PUT, listPath));
         Assertions.assertThat(tableHandle.getDeletePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.DELETE, onePath));
         List<OpenApiColumn> petColumns = tables.get("pet").stream()
                 .map(column -> {
@@ -1049,9 +1051,10 @@ class TestOpenApiSpec
         Assertions.assertThat(tables.keySet()).containsAll(expected);
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "api_v2_query_timeseries"));
         String path = "/api/v2/query/timeseries";
-        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
+        // the query uses POST, which is used for SELECT only when marked with the sqlOperation extension
+        Assertions.assertThat(tableHandle.getSelectPaths()).isEmpty();
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
-        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, path));
+        Assertions.assertThat(tableHandle.getUpdatePaths()).isEmpty();
         Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
         List<OpenApiColumn> columns = tables.get("api_v2_query_timeseries").stream()
                 .map(column -> {
@@ -1152,7 +1155,7 @@ class TestOpenApiSpec
         String onePath = "/zones/{identifier}";
         Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, listPath), new HttpPath(PathItem.HttpMethod.GET, onePath));
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, listPath));
-        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, listPath));
+        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PATCH, onePath));
         Assertions.assertThat(tableHandle.getDeletePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.DELETE, onePath));
         List<OpenApiColumn> columns = tables.get("zones").stream()
                 .map(column -> {
@@ -1656,9 +1659,10 @@ class TestOpenApiSpec
 
         String postPath = "/namespaces/{namespace}/indexes/{index}/search";
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "namespaces_indexes_search"));
-        Assertions.assertThat(tableHandle.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, postPath));
+        // a POST search without the sqlOperation extension can't be told apart from an operation with side effects, so it's not used for SELECT
+        Assertions.assertThat(tableHandle.getSelectPaths()).isEmpty();
         Assertions.assertThat(tableHandle.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, postPath));
-        Assertions.assertThat(tableHandle.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, postPath));
+        Assertions.assertThat(tableHandle.getUpdatePaths()).isEmpty();
         Assertions.assertThat(tableHandle.getDeletePaths()).isEmpty();
 
         Set<String> expected = Set.of("namespaces_indexes_search");
@@ -2387,6 +2391,225 @@ class TestOpenApiSpec
                         Assertions.tuple("id", false),
                         Assertions.tuple("text", false),
                         Assertions.tuple("note_id", true));
+    }
+
+    @Test
+    public void testSqlOperationExtension()
+    {
+        OpenApiSpec spec = parseSpec(sqlOperationsSpec("select", "[insert, update]", "\"Insert, update\""));
+
+        OpenApiTableHandle search = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "search"));
+        Assertions.assertThat(search.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/search"));
+        Assertions.assertThat(search.getInsertPaths()).isEmpty();
+        Assertions.assertThat(search.getUpdatePaths()).isEmpty();
+        Assertions.assertThat(search.getDeletePaths()).isEmpty();
+
+        // an upsert is used for both INSERT and UPDATE, and the other operations keep their default statements
+        OpenApiTableHandle items = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"));
+        Assertions.assertThat(items.getSelectPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.GET, "/items/{id}"));
+        Assertions.assertThat(items.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PUT, "/items/{id}"));
+        Assertions.assertThat(items.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.PUT, "/items/{id}"));
+        Assertions.assertThat(items.getDeletePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.DELETE, "/items/{id}"));
+
+        OpenApiTableHandle tags = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "tags"));
+        Assertions.assertThat(tags.getSelectPaths()).isEmpty();
+        Assertions.assertThat(tags.getInsertPaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/tags"));
+        Assertions.assertThat(tags.getUpdatePaths()).containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/tags"));
+        Assertions.assertThat(tags.getDeletePaths()).isEmpty();
+    }
+
+    @Test
+    public void testInvalidSqlOperationExtension()
+    {
+        Assertions.assertThatThrownBy(() -> parseSpec(sqlOperationsSpec("upsert", "update", "insert")))
+                .hasMessage("Invalid value of sqlOperation in POST /search: 'upsert', must be one of: select, insert, update, delete");
+        Assertions.assertThatThrownBy(() -> parseSpec(sqlOperationsSpec("select", "[insert, merge]", "insert")))
+                .hasMessage("Invalid value of sqlOperation in PUT /items/{id}: 'merge', must be one of: select, insert, update, delete");
+        Assertions.assertThatThrownBy(() -> parseSpec(sqlOperationsSpec("select", "[]", "insert")))
+                .hasMessage("Invalid value of sqlOperation in PUT /items/{id}: it must not be empty");
+        Assertions.assertThatThrownBy(() -> parseSpec(sqlOperationsSpec("select", "update", "\"insert,\"")))
+                .hasMessage("Invalid value of sqlOperation in POST /tags: '', must be one of: select, insert, update, delete");
+    }
+
+    private static String sqlOperationsSpec(String searchOperation, String itemsOperation, String tagsOperation)
+    {
+        return """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /search:
+                    post:
+                      x-trino:
+                        sqlOperation: %s
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              type: object
+                              properties:
+                                query:
+                                  type: string
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Items'
+                  /items/{id}:
+                    parameters:
+                    - in: path
+                      name: id
+                      required: true
+                      schema:
+                        type: integer
+                    get:
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Items'
+                    put:
+                      x-trino:
+                        sqlOperation: %s
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Items'
+                    delete:
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Items'
+                  /tags:
+                    post:
+                      x-trino:
+                        sqlOperation: %s
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Items'
+                components:
+                  requestBodies:
+                    Item:
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Item'
+                  responses:
+                    Items:
+                      description: Items
+                      content:
+                        application/json:
+                          schema:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Item'
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                """.formatted(searchOperation, itemsOperation, tagsOperation);
+    }
+
+    @Test
+    public void testPatchIsPreferredForUpdate()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    put:
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                  /items/{id}:
+                    parameters:
+                    - in: path
+                      name: id
+                      required: true
+                      schema:
+                        type: integer
+                    get:
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                    put:
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                    patch:
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                  /tags/{id}:
+                    parameters:
+                    - in: path
+                      name: id
+                      required: true
+                      schema:
+                        type: integer
+                    get:
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                    put:
+                      x-trino:
+                        sqlOperation: update
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                    patch:
+                      requestBody:
+                        $ref: '#/components/requestBodies/Item'
+                      responses:
+                        "200":
+                          $ref: '#/components/responses/Item'
+                components:
+                  requestBodies:
+                    Item:
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Item'
+                  responses:
+                    Item:
+                      description: Item
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Item'
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        // only the path with both methods prefers PATCH, and the PUT without path parameters identifies items by the ID in the request body
+        Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items")).getUpdatePaths()).containsExactly(
+                new HttpPath(PathItem.HttpMethod.PUT, "/items"),
+                new HttpPath(PathItem.HttpMethod.PATCH, "/items/{id}"));
+        // PUT is used when it's the only one marked for UPDATE
+        Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "tags")).getUpdatePaths()).containsExactly(
+                new HttpPath(PathItem.HttpMethod.PUT, "/tags/{id}"));
     }
 
     @Test

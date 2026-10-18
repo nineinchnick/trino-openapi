@@ -638,6 +638,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectFromTableWithoutSelectOperation()
+    {
+        // POST operations are used for SELECT only when marked with the sqlOperation extension
+        assertQueryFails(
+                "SELECT * FROM echo.default.echo_union_write",
+                "Table echo_union_write has no operation for SELECT. Set sqlOperation in the x-trino extension of an operation to use it for SELECT");
+    }
+
+    @Test
     public void queryParameterWithReservedCharacters()
     {
         assertQuery(
