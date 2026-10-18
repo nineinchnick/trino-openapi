@@ -421,7 +421,7 @@ public class OpenApiSpec
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
-            getResultsSchema(schema, resultsPointer)
+            getSchemaProperties(getResultsSchema(schema, resultsPointer))
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             propEntry.getKey(),
@@ -612,7 +612,7 @@ public class OpenApiSpec
         return properties;
     }
 
-    private static Map<String, Schema> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
+    private static Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
     {
         while (resultsPointer != JsonPointer.empty()) {
             if (resultsPointer.getMatchingIndex() != -1) {
@@ -628,7 +628,7 @@ public class OpenApiSpec
             // TODO validate that the schema is an array?
             resultsPointer = resultsPointer.tail();
         }
-        return getSchemaProperties(schema);
+        return schema;
     }
 
     private static boolean hasAmbiguousName(OpenApiColumn column, ListMultimap<String, OpenApiColumn.PrimaryKey> keys)
