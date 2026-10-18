@@ -193,6 +193,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnionEcho'
+  /echo_map:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapEcho'
+      responses:
+        '200':
+          description: The request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapEcho'
 components:
   responses:
     Echo:
@@ -248,3 +263,10 @@ components:
                 - type: object
                   additionalProperties:
                     type: integer
+    MapEcho:
+      type: object
+      properties:
+        labels:
+          type: object
+          additionalProperties:
+            type: integer

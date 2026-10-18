@@ -445,7 +445,7 @@ public class JsonTrinoConverter
         return arrayNode;
     }
 
-    private static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
+    public static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ObjectNode mapNode = objectMapper.createObjectNode();
         // JSON object keys are always strings, so map types are created only with VARCHAR keys
