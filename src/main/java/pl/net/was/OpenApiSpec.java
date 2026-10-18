@@ -27,13 +27,6 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
-import io.swagger.v3.oas.models.media.BooleanSchema;
-import io.swagger.v3.oas.models.media.DateSchema;
-import io.swagger.v3.oas.models.media.DateTimeSchema;
-import io.swagger.v3.oas.models.media.IntegerSchema;
-import io.swagger.v3.oas.models.media.MapSchema;
-import io.swagger.v3.oas.models.media.NumberSchema;
-import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -756,73 +749,25 @@ public class OpenApiSpec
             // TODO allOf and anyOf types could be merged into a single type
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
-        if (property instanceof ArraySchema) {
-            return convertArray(property);
-        }
-        if (property instanceof MapSchema && property.getAdditionalProperties() instanceof Schema<?> valueSchema) {
-            return convertMap(property, valueSchema);
-        }
-        Optional<String> format = Optional.ofNullable(property.getFormat());
-        if (property instanceof IntegerSchema) {
-            if (format.filter("int32"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(INTEGER, property));
-            }
-            return Optional.of(new TypeTuple(BIGINT, property));
-        }
-        if (property instanceof NumberSchema) {
-            return Optional.of(new TypeTuple(convertNumber(property.getFormat()), property));
-        }
-        if (property instanceof StringSchema) {
-            return Optional.of(new TypeTuple(VARCHAR, property));
-        }
-        if (property instanceof DateSchema) {
-            return Optional.of(new TypeTuple(DATE, property));
-        }
-        if (property instanceof DateTimeSchema) {
-            // according to ISO-8601 can be any precision actually so might not fit
-            return Optional.of(new TypeTuple(TIMESTAMP_MILLIS, property));
-        }
-        if (property instanceof BooleanSchema) {
-            return Optional.of(new TypeTuple(BOOLEAN, property));
-        }
-        if (property instanceof ObjectSchema) {
-            return convertRow(property);
-        }
+        // OpenAPI 3.1 schemas are parsed into generic schemas, not subclasses like IntegerSchema or ObjectSchema,
+        // so schemas of all versions are mapped using only their type name and format
         String type = getTypeName(property);
         if (type == null) {
             return Optional.of(FALLBACK_TYPE);
         }
-        if (type.equals("string")) {
-            if (format.filter("date"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(DATE, property));
-            }
-            if (format.filter("date-time"::equals).isPresent()) {
-                return Optional.of(new TypeTuple(TIMESTAMP_MILLIS, property));
-            }
-            return Optional.of(new TypeTuple(VARCHAR, property));
-        }
-        if (type.equals("object") && property.getAdditionalProperties() instanceof Schema<?> valueSchema) {
-            return convertMap(property, valueSchema);
-        }
-        if (type.equals("array")) {
-            return convertArray(property);
-        }
-        if (type.equals("number")) {
-            // arbitrary scale and precision but should fit most numbers
-            return Optional.of(new TypeTuple(createDecimalType(18, 8), property));
-        }
-        if (type.equals("float")) {
-            return Optional.of(new TypeTuple(REAL, property));
-        }
-        if (type.equals("int") || type.equals("integer")) {
-            return Optional.of(new TypeTuple(INTEGER, property));
-        }
-        Optional<Schema<?>> referenced = getComponentSchema(type);
-        if (referenced.isPresent()) {
-            return convertType(referenced.get()).map(convertedType -> new TypeTuple(convertedType.type(), referenced.get()));
-        }
-        // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
-        return Optional.of(FALLBACK_TYPE);
+        String format = property.getFormat();
+        return switch (type) {
+            case "array" -> convertArray(property);
+            case "object" -> convertObject(property);
+            case "integer" -> Optional.of(new TypeTuple("int32".equals(format) ? INTEGER : BIGINT, property));
+            case "number" -> Optional.of(new TypeTuple(convertNumber(format), property));
+            case "string" -> Optional.of(new TypeTuple(convertString(format), property));
+            case "boolean" -> Optional.of(new TypeTuple(BOOLEAN, property));
+            // non-standard types used by some specs
+            case "int" -> Optional.of(new TypeTuple(INTEGER, property));
+            case "float" -> Optional.of(new TypeTuple(REAL, property));
+            default -> convertComponentType(type);
+        };
     }
 
     private static String getTypeName(Schema<?> property)
@@ -841,6 +786,23 @@ public class OpenApiSpec
         return convertType(array.getItems()).map(elementType -> new TypeTuple(
                 new ArrayType(elementType.type()),
                 array.items(elementType.schema())));
+    }
+
+    private Optional<TypeTuple> convertObject(Schema<?> object)
+    {
+        Object additionalProperties = object.getAdditionalProperties();
+        // OpenAPI 3.1 parses boolean schemas, like `additionalProperties: true`, into schemas holding only that boolean value
+        if (additionalProperties instanceof Schema<?> booleanSchema && booleanSchema.getBooleanSchemaValue() != null) {
+            additionalProperties = booleanSchema.getBooleanSchemaValue();
+        }
+        if (additionalProperties instanceof Schema<?> valueSchema) {
+            return convertMap(object, valueSchema);
+        }
+        if (TRUE.equals(additionalProperties)) {
+            // values of any type can only be kept as serialized JSON
+            return Optional.of(FALLBACK_TYPE);
+        }
+        return convertRow(object);
     }
 
     private Optional<TypeTuple> convertMap(Schema<?> map, Schema<?> valueSchema)
@@ -863,6 +825,16 @@ public class OpenApiSpec
             case "double" -> DOUBLE;
             // arbitrary scale and precision but should fit most numbers
             case null, default -> createDecimalType(18, 8);
+        };
+    }
+
+    private static Type convertString(String format)
+    {
+        return switch (format) {
+            case "date" -> DATE;
+            // according to ISO-8601 can be any precision actually so might not fit
+            case "date-time" -> TIMESTAMP_MILLIS;
+            case null, default -> VARCHAR;
         };
     }
 
@@ -894,6 +866,16 @@ public class OpenApiSpec
                         (a, b) -> a,
                         LinkedHashMap::new));
         return Optional.of(new TypeTuple(RowType.from(fields), object.properties(newProperties)));
+    }
+
+    private Optional<TypeTuple> convertComponentType(String name)
+    {
+        Optional<Schema<?>> referenced = getComponentSchema(name);
+        if (referenced.isEmpty()) {
+            // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
+            return Optional.of(FALLBACK_TYPE);
+        }
+        return convertType(referenced.get()).map(convertedType -> new TypeTuple(convertedType.type(), referenced.get()));
     }
 
     private Optional<Schema<?>> getComponentSchema(String name)

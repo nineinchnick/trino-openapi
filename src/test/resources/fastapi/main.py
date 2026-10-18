@@ -6,7 +6,7 @@ from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Re
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 
@@ -136,6 +136,21 @@ class MapEcho(BaseModel):
 
 class UnionValueEcho(BaseModel):
     value: int | dict[str, int]
+
+
+class Dimensions(BaseModel):
+    width: int
+    height: int
+    unit: str
+
+
+# pydantic doesn't set formats of numbers, so they're declared explicitly
+class Gadget(BaseModel):
+    in_stock: bool
+    serial_number: Annotated[int, Field(json_schema_extra={"format": "int64"})]
+    weight: Annotated[float, Field(json_schema_extra={"format": "float"})]
+    density: Annotated[float, Field(json_schema_extra={"format": "double"})]
+    dimensions: Dimensions
 
 
 class Results(BaseModel):
@@ -355,6 +370,11 @@ def echo_map(body: MapEcho) -> MapEcho:
 @router.post("/echo_union_value")
 def echo_union_value(body: UnionValueEcho) -> UnionValueEcho:
     # validating the body rejects union values sent as quoted JSON strings
+    return body
+
+
+@router.post("/echo_gadget")
+def echo_gadget(body: Gadget) -> Gadget:
     return body
 
 
