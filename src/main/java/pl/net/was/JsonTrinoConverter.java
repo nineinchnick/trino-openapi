@@ -198,7 +198,7 @@ public class JsonTrinoConverter
     {
         MapBlockBuilder blockBuilder = mapType.createBlockBuilder(null, node.size());
         blockBuilder.buildEntry((keyBuilder, valueBuilder) -> {
-            node.fields().forEachRemaining(entry -> {
+            node.properties().forEach(entry -> {
                 VARCHAR.writeString(keyBuilder, entry.getKey());
                 Object value = convert(entry.getValue(), mapType.getValueType(), (Schema<?>) schemaType.getAdditionalProperties());
                 writeTo(valueBuilder, value, mapType.getValueType());
