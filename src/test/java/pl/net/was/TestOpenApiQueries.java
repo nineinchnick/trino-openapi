@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -169,11 +171,37 @@ public class TestOpenApiQueries
     @Test
     public void selectRealValues()
     {
-        List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values FROM fastapi.default.numbers WHERE id = 1").getMaterializedRows();
-        assertThat(rows).size().isEqualTo(1);
-        assertThat(rows.getFirst().getFields()).containsExactly(
+        assertThat(selectNumbers(1, "real_value, real_values")).containsExactly(
                 -1.5f,
                 List.of(1.5f, -2.25f));
+    }
+
+    @Test
+    public void insertRealAndDecimalValues()
+    {
+        assertUpdate("INSERT INTO fastapi.default.numbers (id, real_value, decimal_value, real_values, decimal_values, decimal_map) " +
+                "VALUES (2, REAL '-0.5', 12.5, ARRAY[REAL '2.5', NULL], ARRAY[0.25, NULL], MAP(ARRAY['a', 'b'], ARRAY[7.75, NULL]))", 1);
+        Map<String, BigDecimal> expectedMap = new HashMap<>();
+        expectedMap.put("a", new BigDecimal("7.75000000"));
+        expectedMap.put("b", null);
+        assertThat(selectNumbers(2, "real_value, decimal_value, real_values, decimal_values, decimal_map")).containsExactly(
+                -0.5f,
+                new BigDecimal("12.50000000"),
+                Arrays.asList(2.5f, null),
+                Arrays.asList(new BigDecimal("0.25000000"), null),
+                expectedMap);
+    }
+
+    @Test
+    public void selectWithRealAndDecimalsInRequestBody()
+    {
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values, decimal_values FROM fastapi.default.echo_numbers " +
+                "WHERE real_value = REAL '-0.5' AND real_values = ARRAY[REAL '2.5', REAL '-1.25'] AND decimal_values = CAST(ARRAY[0.25, -12.5] AS ARRAY(DECIMAL(18, 8)))").getMaterializedRows();
+        assertThat(rows).size().isEqualTo(1);
+        assertThat(rows.getFirst().getFields()).containsExactly(
+                -0.5f,
+                List.of(2.5f, -1.25f),
+                List.of(new BigDecimal("0.25000000"), new BigDecimal("-12.50000000")));
     }
 
     @Test
@@ -288,6 +316,17 @@ public class TestOpenApiQueries
     public void errors()
     {
         assertQueryFails("SELECT * FROM fastapi.default.error", "Server responded with error 418: \"Oops! Inevitable error happened. There goes a rainbow...\"");
+    }
+
+    private List<Object> selectNumbers(long id, String columns)
+    {
+        // all request body fields of the numbers table are predicates, so the connector doesn't apply a filter on id to responses
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT id, %s FROM fastapi.default.numbers".formatted(columns)).getMaterializedRows().stream()
+                .filter(row -> ((Number) row.getField(0)).longValue() == id)
+                .toList();
+        assertThat(rows).hasSize(1);
+        List<Object> fields = rows.getFirst().getFields();
+        return fields.subList(1, fields.size());
     }
 
     private TestTable generateDataset(String namePrefix, int elements)

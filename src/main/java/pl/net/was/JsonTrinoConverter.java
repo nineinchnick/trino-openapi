@@ -40,6 +40,7 @@ import io.trino.spi.type.DateTimeEncoding;
 import io.trino.spi.type.DateType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.DoubleType;
+import io.trino.spi.type.Int128;
 import io.trino.spi.type.IntegerType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RealType;
@@ -51,6 +52,7 @@ import io.trino.spi.type.TinyintType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -320,8 +322,15 @@ public class JsonTrinoConverter
         if (type instanceof TinyintType || type instanceof SmallintType || type instanceof IntegerType || type instanceof BigintType) {
             return type.getLong(block, position);
         }
-        if (type instanceof DoubleType || type instanceof RealType) {
+        if (type instanceof RealType realType) {
+            return realType.getFloat(block, position);
+        }
+        if (type instanceof DoubleType) {
             return type.getDouble(block, position);
+        }
+        if (type instanceof DecimalType decimalType) {
+            Object unscaledValue = decimalType.isShort() ? decimalType.getLong(block, position) : decimalType.getObject(block, position);
+            return toBigDecimal(unscaledValue, decimalType);
         }
         if (type instanceof VarcharType) {
             return type.getSlice(block, position).toStringUtf8();
@@ -358,6 +367,19 @@ public class JsonTrinoConverter
         throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
     }
 
+    /**
+     * Converts the unscaled value of a short ({@code long}) or long ({@link Int128}) decimal into an exact {@link BigDecimal}.
+     */
+    public static BigDecimal toBigDecimal(Object unscaledValue, DecimalType type)
+    {
+        BigInteger unscaled = switch (unscaledValue) {
+            case Long longValue -> BigInteger.valueOf(longValue);
+            case Int128 int128Value -> int128Value.toBigInteger();
+            default -> throw new IllegalArgumentException(format("Unsupported unscaled value of class %s for %s", unscaledValue.getClass(), type));
+        };
+        return new BigDecimal(unscaled, type.getScale());
+    }
+
     private static ArrayNode convertArray(Block arrayBlock, int start, int length, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ArrayNode arrayNode = objectMapper.createArrayNode();
@@ -372,8 +394,14 @@ public class JsonTrinoConverter
             else if (itemValue instanceof Long longValue) {
                 arrayNode.add(longValue);
             }
+            else if (itemValue instanceof Float floatValue) {
+                arrayNode.add(floatValue);
+            }
             else if (itemValue instanceof Double doubleValue) {
                 arrayNode.add(doubleValue);
+            }
+            else if (itemValue instanceof BigDecimal decimalValue) {
+                arrayNode.add(decimalValue);
             }
             else if (itemValue instanceof String stringValue) {
                 arrayNode.add(stringValue);
@@ -408,8 +436,14 @@ public class JsonTrinoConverter
             else if (itemValue instanceof Long longValue) {
                 mapNode.put(key, longValue);
             }
+            else if (itemValue instanceof Float floatValue) {
+                mapNode.put(key, floatValue);
+            }
             else if (itemValue instanceof Double doubleValue) {
                 mapNode.put(key, doubleValue);
+            }
+            else if (itemValue instanceof BigDecimal decimalValue) {
+                mapNode.put(key, decimalValue);
             }
             else if (itemValue instanceof String stringValue) {
                 mapNode.put(key, stringValue);
@@ -442,8 +476,14 @@ public class JsonTrinoConverter
             else if (value instanceof Long longValue) {
                 rowNode.put(key, longValue);
             }
+            else if (value instanceof Float floatValue) {
+                rowNode.put(key, floatValue);
+            }
             else if (value instanceof Double doubleValue) {
                 rowNode.put(key, doubleValue);
+            }
+            else if (value instanceof BigDecimal decimalValue) {
+                rowNode.put(key, decimalValue);
             }
             else if (value instanceof String stringValue) {
                 rowNode.put(key, stringValue);

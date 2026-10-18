@@ -246,6 +246,17 @@ def list_numbers() -> Response:
     return Response(content="[" + ",".join(numbers) + "]", media_type="application/json")
 
 
+@router.post("/numbers")
+async def create_numbers(request: Request) -> Response:
+    numbers.append((await request.body()).decode())
+    return Response(content="{}", media_type="application/json")
+
+
+@router.post("/echo_numbers")
+async def echo_numbers(request: Request) -> Response:
+    return Response(content=await request.body(), media_type="application/json")
+
+
 @router.get("/error")
 def error() -> Item:
     raise UnicornException(name="Inevitable error")
@@ -303,6 +314,12 @@ def custom_openapi():
     numbers_ref = {"$ref": "#/components/schemas/Numbers"}
     openapi_schema["paths"]["/numbers"]["get"]["responses"]["200"]["content"] = {
         "application/json": {"schema": {"type": "array", "items": numbers_ref}},
+    }
+    numbers_body = {"required": True, "content": {"application/json": {"schema": numbers_ref}}}
+    openapi_schema["paths"]["/numbers"]["post"]["requestBody"] = numbers_body
+    openapi_schema["paths"]["/echo_numbers"]["post"]["requestBody"] = numbers_body
+    openapi_schema["paths"]["/echo_numbers"]["post"]["responses"]["200"]["content"] = {
+        "application/json": {"schema": numbers_ref},
     }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
