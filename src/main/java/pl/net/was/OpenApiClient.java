@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
@@ -219,12 +220,12 @@ public class OpenApiClient
 
     public void insertRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position);
+        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position, Optional.empty());
     }
 
-    public void updateRows(OpenApiOutputTableHandle table, Page page, int position)
+    public void updateRows(OpenApiOutputTableHandle table, Page page, int position, Set<OpenApiColumnHandle> updatedColumns)
     {
-        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position);
+        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position, Optional.of(updatedColumns));
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
@@ -244,19 +245,23 @@ public class OpenApiClient
                 new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
     }
 
-    private void writeRows(OpenApiOutputTableHandle table, String statement, List<HttpPath> paths, Page page, int position)
+    private void writeRows(OpenApiOutputTableHandle table, String statement, List<HttpPath> paths, Page page, int position, Optional<Set<OpenApiColumnHandle>> updatedColumns)
     {
         table.getTableHandle().checkHasPaths(statement, paths);
         Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table.getTableHandle(), paths, rowValues);
         HttpPath httpPath = pathWithParams.getKey();
+        // a PATCH changes only the fields it includes, and other methods usually replace the whole resource
+        ObjectNode body = updatedColumns.isPresent() && httpPath.method() == PathItem.HttpMethod.PATCH
+                ? serializeUpdatedColumns(table, httpPath, page, position, updatedColumns.get())
+                : serializePage(table, httpPath, page, position);
         try {
             makeRequest(
                     table.getTableHandle(),
                     httpPath,
                     pathWithParams.getValue(),
                     rowValues,
-                    createStaticBodyGenerator(toBytes(serializePage(table, httpPath, page, position))),
+                    createStaticBodyGenerator(toBytes(body)),
                     new AnyResponseHandler(openApiSpec.getErrorPointers(table.getTableHandle().getSchemaTableName()).get(httpPath)));
         }
         catch (IOException e) {
@@ -563,6 +568,31 @@ public class OpenApiClient
                 continue;
             }
             Object value = JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
+        }
+        return node;
+    }
+
+    private ObjectNode serializeUpdatedColumns(OpenApiOutputTableHandle table, HttpPath httpPath, Page page, int position, Set<OpenApiColumnHandle> updatedColumns)
+    {
+        ObjectNode node = OBJECT_MAPPER.createObjectNode();
+        String tableName = table.getTableHandle().getSchemaTableName().getTableName();
+        Map<OpenApiColumnHandle, OpenApiColumn> columns = openApiSpec.getTables().get(tableName).stream()
+                .collect(toImmutableMap(OpenApiColumn::getHandle, identity()));
+        for (int channel = 0; channel < table.getColumns().size(); channel++) {
+            OpenApiColumnHandle columnHandle = table.getColumns().get(channel);
+            OpenApiColumn column = columns.get(columnHandle);
+            if (!isPredicate(column, httpPath, ParameterLocation.BODY)) {
+                continue;
+            }
+            boolean isUpdated = updatedColumns.contains(columnHandle);
+            Block block = page.getBlock(channel);
+            // required fields, like identifiers, must be sent even if they're not updated
+            if (!isUpdated && (block.isNull(position) || !isRequiredPredicate(column, httpPath, ParameterLocation.BODY))) {
+                continue;
+            }
+            // updating a column to NULL sends an explicit null, which clears the field
+            Object value = block.isNull(position) ? null : JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
             JsonTrinoConverter.putValue(node, column.getSourceName(), value);
         }
         return node;

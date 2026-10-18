@@ -162,10 +162,19 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT id, text FROM fastapi.default.notes WHERE note_id = 1",
                 "VALUES (1, 'first')");
+        // notes can be updated using PATCH and PUT, and PATCH requests only include the updated columns
         assertUpdate("UPDATE fastapi.default.notes SET text = 'second' WHERE note_id = 1", 1);
         assertQuery(
-                "SELECT id, text FROM fastapi.default.notes WHERE note_id = 1",
-                "VALUES (1, 'second')");
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "VALUES (1, 'second', NULL, 'text')");
+        assertUpdate("UPDATE fastapi.default.notes SET priority = 2 WHERE note_id = 1", 1);
+        assertQuery(
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "VALUES (1, 'second', 2, 'priority')");
+        assertUpdate("UPDATE fastapi.default.notes SET priority = NULL WHERE note_id = 1", 1);
+        assertQuery(
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "VALUES (1, 'second', NULL, 'priority')");
         assertUpdate("DELETE FROM fastapi.default.notes WHERE note_id = 1", 1);
         assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 1");
     }
