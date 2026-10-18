@@ -49,7 +49,8 @@
 
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
-        <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector</air.test.jvm.additional-arguments>
+        <!-- same as Trino tests: Trino requires the vector module, Guice uses sun.misc.Unsafe, and brotli4j loads a native library -->
+        <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</air.test.jvm.additional-arguments>
 
         <dep.trino.version>483</dep.trino.version>
         <dep.airlift.version>439</dep.airlift.version>
