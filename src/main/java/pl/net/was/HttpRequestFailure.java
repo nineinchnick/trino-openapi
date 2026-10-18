@@ -18,8 +18,15 @@ import io.airlift.http.client.Response;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.DateTimeException;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Optional;
 
+import static io.airlift.http.client.HeaderNames.RETRY_AFTER;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
@@ -45,13 +52,15 @@ abstract sealed class HttpRequestFailure
         private final int statusCode;
         private final String responseBody;
         private final boolean responseBodyTruncated;
+        private final Optional<Duration> retryAfter;
 
-        private ErrorResponse(int statusCode, String responseBody, boolean responseBodyTruncated)
+        private ErrorResponse(int statusCode, String responseBody, boolean responseBodyTruncated, Optional<Duration> retryAfter)
         {
             super("Server responded with error " + statusCode, null);
             this.statusCode = statusCode;
             this.responseBody = requireNonNull(responseBody, "responseBody is null");
             this.responseBodyTruncated = responseBodyTruncated;
+            this.retryAfter = requireNonNull(retryAfter, "retryAfter is null");
         }
 
         static ErrorResponse read(Response response)
@@ -67,7 +76,7 @@ abstract sealed class HttpRequestFailure
             if (truncated) {
                 body = Arrays.copyOf(body, MAX_ERROR_BODY_BYTES);
             }
-            return new ErrorResponse(response.getStatusCode(), new String(body, UTF_8), truncated);
+            return new ErrorResponse(response.getStatusCode(), new String(body, UTF_8), truncated, response.getHeader(RETRY_AFTER).flatMap(value -> parseRetryAfter(value, Instant.now())));
         }
 
         int getStatusCode()
@@ -83,6 +92,34 @@ abstract sealed class HttpRequestFailure
         boolean isResponseBodyTruncated()
         {
             return responseBodyTruncated;
+        }
+
+        Optional<Duration> getRetryAfter()
+        {
+            return retryAfter;
+        }
+
+        // the value is either a number of seconds, or an HTTP date, see RFC 9110, section 10.2.3
+        private static Optional<Duration> parseRetryAfter(String value, Instant now)
+        {
+            String trimmed = value.trim();
+            try {
+                long seconds = Long.parseLong(trimmed);
+                if (seconds < 0) {
+                    return Optional.empty();
+                }
+                return Optional.of(Duration.ofSeconds(seconds));
+            }
+            catch (NumberFormatException _) {
+                // not a number of seconds, so try parsing it as a date
+            }
+            try {
+                Instant at = ZonedDateTime.parse(trimmed, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
+                return Optional.of(at.isBefore(now) ? Duration.ZERO : Duration.between(now, at));
+            }
+            catch (DateTimeException _) {
+                return Optional.empty();
+            }
         }
     }
 

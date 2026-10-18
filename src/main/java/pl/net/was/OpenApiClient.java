@@ -117,6 +117,7 @@ public class OpenApiClient
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
     private final RateLimiter rateLimiter;
+    private final RetryPolicy retryPolicy;
 
     @Inject
     public OpenApiClient(OpenApiConfig config, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
@@ -130,6 +131,7 @@ public class OpenApiClient
         else {
             rateLimiter = null;
         }
+        this.retryPolicy = RetryPolicy.fromConfig(config);
     }
 
     public Iterable<List<?>> getRows(OpenApiTableHandle table)
@@ -324,37 +326,42 @@ public class OpenApiClient
 
         Request request = builder.build();
         log.debug(request.toString());
-        if (rateLimiter != null) {
-            rateLimiter.acquire();
-        }
-        try {
-            return httpClient.execute(request, responseHandler);
-        }
-        catch (HttpRequestFailure failure) {
-            throw toTrinoException(table, httpPath, request, failure);
-        }
+        return retryPolicy.execute(
+                request,
+                () -> {
+                    // retries are requests too, and servers count them against their rate limits
+                    if (rateLimiter != null) {
+                        rateLimiter.acquire();
+                    }
+                    return httpClient.execute(request, responseHandler);
+                },
+                (failure, attempts, notRetriedReason) -> toTrinoException(table, httpPath, request, failure, attempts, notRetriedReason));
     }
 
-    private TrinoException toTrinoException(OpenApiTableHandle table, HttpPath httpPath, Request request, HttpRequestFailure failure)
+    private TrinoException toTrinoException(OpenApiTableHandle table, HttpPath httpPath, Request request, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)
     {
         String operation = openApiSpec.getOperationId(httpPath)
                 .map(operationId -> "operation " + operationId)
                 .orElse("path " + httpPath.path());
         // the query string can contain filter values and API keys
         String context = format("Request %s %s for %s failed", request.getMethod(), withoutQuery(request.getUri()), operation);
+        String attemptsSuffix = attempts > 1 ? format(" after %d attempts", attempts) : "";
         return switch (failure) {
             case HttpRequestFailure.TransportError error -> new TrinoException(
                     GENERIC_INTERNAL_ERROR,
-                    format("%s: %s", context, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
+                    format("%s%s: %s", context, attemptsSuffix, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
                     error.getCause());
             case HttpRequestFailure.ErrorResponse error -> {
-                log.debug("%s with HTTP %d, response body%s: %s", context, error.getStatusCode(), error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
-                String message = format("%s with HTTP %d", context, error.getStatusCode());
+                log.debug("%s with HTTP %d%s, response body%s: %s", context, error.getStatusCode(), attemptsSuffix, error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
+                String message = format("%s with HTTP %d%s", context, error.getStatusCode(), attemptsSuffix);
                 JsonPointer errorPointer = openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath);
                 // the response body is not included, because it might not be readable, and it might contain sensitive information
-                yield new TrinoException(GENERIC_INTERNAL_ERROR, getErrorMessage(error, errorPointer)
+                String messageWithError = getErrorMessage(error, errorPointer)
                         .map(errorMessage -> message + ": " + errorMessage)
-                        .orElse(message));
+                        .orElse(message);
+                yield new TrinoException(GENERIC_INTERNAL_ERROR, notRetriedReason
+                        .map(reason -> messageWithError + "; " + reason)
+                        .orElse(messageWithError));
             }
         };
     }
@@ -376,7 +383,7 @@ public class OpenApiClient
         }
     }
 
-    private static String withoutQuery(URI uri)
+    static String withoutQuery(URI uri)
     {
         String port = uri.getPort() == -1 ? "" : ":" + uri.getPort();
         return uri.getScheme() + "://" + uri.getHost() + port + uri.getRawPath();

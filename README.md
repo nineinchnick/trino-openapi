@@ -132,6 +132,9 @@ Restart Trino. Every catalog can point to a different API.
 | `authentication.client-secret` | `OPENAPI_CLIENT_SECRET`           |           | OAuth client secret                                                                                         |
 | `max-requests-per-second`      | `OPENAPI_MAX_REQUESTS_PER_SECOND` | unlimited | Maximum number of HTTP requests per second from a single Trino node                                         |
 | `max-splits-per-second`        | `OPENAPI_MAX_SPLITS_PER_SECOND`   | unlimited | Maximum number of splits per second generated for a query                                                   |
+| `max-retries`                  | `OPENAPI_MAX_RETRIES`             | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries       |
+| `retry-initial-delay`          | `OPENAPI_RETRY_INITIAL_DELAY`     | `1s`      | Delay before the first retry, doubled for every next retry                                                  |
+| `retry-max-delay`              | `OPENAPI_RETRY_MAX_DELAY`         | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                   |
 | `domain-expansion-limit`       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`  | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause |
 
 ## Authentication
@@ -167,6 +170,36 @@ openApi.http-client.request-timeout=30s
 openApi.http-client.log.enabled=true
 openApi.http-client.log.path=logs
 ```
+
+## Retries
+
+Requests that fail with a transient error are retried up to `max-retries`
+times. A transient error is a network error, like a timeout or a closed
+connection, or a response with one of these HTTP status codes:
+
+* `429 Too Many Requests`, `502 Bad Gateway`, `503 Service Unavailable`, and
+  `504 Gateway Timeout`;
+* `403 Forbidden` with a `Retry-After` header, which some APIs, like GitHub,
+  use for exceeded rate limits.
+
+Only requests that have the same effect when they're repeated are retried:
+`GET`, `HEAD`, `OPTIONS`, `PUT`, and `DELETE`. Requests using `POST`, like
+`INSERT` statements and searches, and `PATCH`, like most `UPDATE` statements,
+are never retried, because repeating them can create duplicates or apply a
+change twice.
+
+The delay before a retry starts at `retry-initial-delay` and doubles after
+every retry, up to `retry-max-delay`. The connector waits a random time between
+half of that delay and the whole delay, so many queries or splits that failed at
+the same time don't retry at the same time. Every retry is logged at the `INFO`
+level.
+
+If the response has a `Retry-After` header, the connector waits exactly as long
+as it asks for instead. If that's longer than `retry-max-delay`, the query fails
+right away, because retrying earlier than the server allows can get the client
+blocked, for example by GitHub. Increase `retry-max-delay` to wait longer.
+
+Retries count against `max-requests-per-second`, like any other request.
 
 # Usage
 
@@ -470,7 +503,9 @@ how they're made.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another ([#94](https://github.com/nineinchnick/trino-openapi/issues/94)).
-* Requests are not retried, so a temporary error fails the query
+* `POST` and `PATCH` requests are not retried, so a temporary error in an
+  `INSERT`, an `UPDATE` that uses `PATCH`, or a search that uses `POST`, fails
+  the query
   ([#249](https://github.com/nineinchnick/trino-openapi/issues/249)), and
   responses are not cached ([#12](https://github.com/nineinchnick/trino-openapi/issues/12)).
 * Only JSON request and response bodies are supported, not form-encoded or

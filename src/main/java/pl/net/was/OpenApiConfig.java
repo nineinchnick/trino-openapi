@@ -19,6 +19,9 @@ import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
 import io.airlift.configuration.InvalidConfigurationException;
+import io.airlift.units.Duration;
+import io.airlift.units.MinDuration;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
@@ -28,6 +31,8 @@ import java.net.URI;
 import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class OpenApiConfig
 {
@@ -50,6 +55,11 @@ public class OpenApiConfig
 
     private double maxRequestsPerSecond = Double.MAX_VALUE;
     private double maxSplitsPerSecond = Double.MAX_VALUE;
+
+    private int maxRetries = 3;
+    private Duration retryInitialDelay = new Duration(1, SECONDS);
+    // long enough to wait for rate limits, which servers usually reset every minute
+    private Duration retryMaxDelay = new Duration(1, MINUTES);
 
     // Pushed domains are transformed into SQL IN lists
     // (or sequence of range predicates).
@@ -261,6 +271,56 @@ public class OpenApiConfig
     {
         this.maxSplitsPerSecond = maxSplitsPerSecond;
         return this;
+    }
+
+    @Min(0)
+    public int getMaxRetries()
+    {
+        return maxRetries;
+    }
+
+    @Config("max-retries")
+    @ConfigDescription("Maximum number of times a request that failed with a transient error is retried, 0 disables retries")
+    public OpenApiConfig setMaxRetries(int maxRetries)
+    {
+        this.maxRetries = maxRetries;
+        return this;
+    }
+
+    @NotNull
+    @MinDuration("0ms")
+    public Duration getRetryInitialDelay()
+    {
+        return retryInitialDelay;
+    }
+
+    @Config("retry-initial-delay")
+    @ConfigDescription("Delay before the first retry, doubled for every next one")
+    public OpenApiConfig setRetryInitialDelay(Duration retryInitialDelay)
+    {
+        this.retryInitialDelay = retryInitialDelay;
+        return this;
+    }
+
+    @NotNull
+    @MinDuration("0ms")
+    public Duration getRetryMaxDelay()
+    {
+        return retryMaxDelay;
+    }
+
+    @Config("retry-max-delay")
+    @ConfigDescription("Maximum delay between retries; requests are not retried if the server asks to wait longer with Retry-After")
+    public OpenApiConfig setRetryMaxDelay(Duration retryMaxDelay)
+    {
+        this.retryMaxDelay = retryMaxDelay;
+        return this;
+    }
+
+    @AssertTrue(message = "retry-max-delay must be greater than or equal to retry-initial-delay")
+    public boolean isRetryMaxDelayValid()
+    {
+        return retryInitialDelay == null || retryMaxDelay == null || retryMaxDelay.compareTo(retryInitialDelay) >= 0;
     }
 
     @Min(1)
