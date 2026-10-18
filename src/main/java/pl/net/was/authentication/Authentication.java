@@ -18,6 +18,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.inject.Inject;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpRequestFilter;
@@ -37,6 +38,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.io.BaseEncoding.base64Url;
@@ -55,6 +57,10 @@ import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 public class Authentication
         implements HttpRequestFilter
 {
+    // RFC 6749 only recommends that token responses include expires_in, so when it's missing,
+    // assume one hour, which is a common default lifetime of access tokens
+    private static final long DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
+
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
@@ -225,12 +231,23 @@ public class Authentication
     {
         // TODO pick one of supported securitySchema.getFlows(), instead of hardcoding clientCredentials
         // TODO use options as scopes
-        TokenWithExpiry tokenWithExpiry = tokens.getUnchecked(tokenUrl);
+        TokenWithExpiry tokenWithExpiry = getToken(tokenUrl);
         if (tokenWithExpiry.isExpiringSoon()) {
             tokens.invalidate(tokenUrl);
-            tokenWithExpiry = tokens.getUnchecked(tokenUrl);
+            tokenWithExpiry = getToken(tokenUrl);
         }
         return builder.addHeader("Authorization", "Bearer " + tokenWithExpiry.token());
+    }
+
+    private TokenWithExpiry getToken(String tokenUrl)
+    {
+        try {
+            return tokens.get(tokenUrl);
+        }
+        catch (ExecutionException e) {
+            // the loader doesn't throw checked exceptions, so this only keeps the same behavior as getUnchecked()
+            throw new UncheckedExecutionException(e.getCause());
+        }
     }
 
     private static String getAuthHeader(String scheme, String username, String password)
@@ -254,7 +271,7 @@ public class Authentication
                                 UTF_8))
                         .build(),
                 createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
-        long expiresIn = response.expiresIn() != null ? response.expiresIn() : 3600L;
+        long expiresIn = response.expiresIn() != null ? response.expiresIn() : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
         return new TokenWithExpiry(response.accessToken(), Instant.now().plusSeconds(expiresIn));
     }
 
