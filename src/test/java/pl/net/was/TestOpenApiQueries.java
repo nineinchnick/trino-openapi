@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
+import io.trino.Session;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedRow;
 import io.trino.testing.QueryRunner;
@@ -470,6 +471,22 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsEndingWithShortPage()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.clamped_sized_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsWithPageSizeAboveMaximum()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.capped_items WHERE size = 5").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();
@@ -498,6 +515,14 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT %s FROM fastapi.default.numbers WHERE id = %d".formatted(columns, id)).getMaterializedRows();
         assertThat(rows).hasSize(1);
         return rows.getFirst().getFields();
+    }
+
+    // fail instead of hanging when pagination never ends
+    private Session withMaxRunTime()
+    {
+        return Session.builder(getSession())
+                .setSystemProperty("query_max_run_time", "1m")
+                .build();
     }
 
     private TestTable generateDataset(String namePrefix, int elements)

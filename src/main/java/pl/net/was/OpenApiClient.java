@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -160,7 +161,35 @@ public class OpenApiClient
                 },
                 0,
                 Long.MAX_VALUE,
-                1);
+                1,
+                getPageSize(table, httpPath));
+    }
+
+    private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        Optional<String> limitParam = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).limitParam();
+        if (limitParam.isEmpty()) {
+            return OptionalLong.empty();
+        }
+        Optional<OpenApiColumn> limitColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(column -> column.getSourceName().equals(limitParam.get()) && isPredicate(column, httpPath, null))
+                .findFirst();
+        if (limitColumn.isEmpty()) {
+            return OptionalLong.empty();
+        }
+        Schema<?> schema = limitColumn.get().getSourceType();
+        Object limit = getFilter(limitColumn.get(), table.getConstraint());
+        if (limit == null) {
+            limit = schema.getDefault();
+        }
+        if (!(limit instanceof Number limitNumber)) {
+            return OptionalLong.empty();
+        }
+        // servers often return fewer results than requested when the limit is too high, so it must not exceed the declared maximum
+        if (schema.getMaximum() != null) {
+            return OptionalLong.of(min(limitNumber.longValue(), schema.getMaximum().longValue()));
+        }
+        return OptionalLong.of(limitNumber.longValue());
     }
 
     private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath)
@@ -840,13 +869,15 @@ public class OpenApiClient
             IntFunction<ResultsPage> getter,
             int offset,
             long limit,
-            int pageIncrement)
+            int pageIncrement,
+            OptionalLong pageSize)
     {
         return () -> new Iterator<>()
         {
             long resultSize;
             long resultLimit = limit;
             int page = offset + 1;
+            boolean isLastPage;
             Iterator<List<?>> rows;
 
             @Override
@@ -855,13 +886,16 @@ public class OpenApiClient
                 if (rows != null && rows.hasNext()) {
                     return true;
                 }
-                if (resultSize >= resultLimit) {
+                if (isLastPage || resultSize >= resultLimit) {
                     return false;
                 }
                 ResultsPage resultsPage = getter.apply(page);
                 page += pageIncrement;
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
+                if (pageSize.isPresent() && Iterables.size(resultsPage.rows()) < pageSize.getAsLong()) {
+                    isLastPage = true;
+                }
                 rows = resultsPage.rows().iterator();
                 return rows.hasNext();
             }
