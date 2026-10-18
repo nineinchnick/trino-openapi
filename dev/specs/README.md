@@ -69,14 +69,16 @@ jq --indent 2 --slurpfile patch dev/specs/cloudflare.patch.json -f dev/specs/mer
 
 ## Unpatched copies
 
-These test resources are upstream specs without changes, formatted like the
-GitHub one, for example:
+These test resources are upstream specs without changes. JSON specs are
+formatted like the GitHub one, and YAML specs are saved as they are, for
+example:
 
 ```shell
 curl -fsSL https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json | jq --indent 2 . > src/test/resources/jira.json
 ```
 
-| Output                           | Upstream                                                               |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| `src/test/resources/jira.json`   | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
-| `src/test/resources/galaxy.json` | https://galaxy.starburst.io/public/openapi/v1/json                     |
+| Output                             | Upstream                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `src/test/resources/jira.json`     | https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json |
+| `src/test/resources/galaxy.json`   | https://galaxy.starburst.io/public/openapi/v1/json                     |
+| `src/test/resources/petstore.yaml` | https://petstore3.swagger.io/api/v3/openapi.yaml                       |
