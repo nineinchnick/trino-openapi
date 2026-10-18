@@ -16,8 +16,10 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamWriteFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.RawValue;
@@ -57,6 +59,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
@@ -103,7 +106,10 @@ import static pl.net.was.OpenApiSpec.ROW_ID;
 public class OpenApiClient
 {
     private static final Logger log = Logger.get(OpenApiRecordSetProvider.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    // small decimals would otherwise be written in the scientific notation, like 1E-8, which some servers can't parse
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+            .enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
+            .build();
     public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
 
     private final URI baseUri;
@@ -627,8 +633,14 @@ public class OpenApiClient
             // includes all integer types
             node.put(name, longValue);
         }
+        else if (value instanceof Float floatValue) {
+            node.put(name, floatValue);
+        }
         else if (value instanceof Double doubleValue) {
             node.put(name, doubleValue);
+        }
+        else if (value instanceof BigDecimal decimalValue) {
+            node.put(name, decimalValue);
         }
         else if (value instanceof String stringValue) {
             // also includes dates and timestamps
