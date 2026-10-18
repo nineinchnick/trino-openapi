@@ -25,6 +25,13 @@ Run the commands from the repository root. Unpatched copies are formatted with
 * Patch: [`github.patch.json`](github.patch.json)
 * Output: `specs/github.json`, and the unpatched `src/test/resources/github.json`
 
+The patch sets `parameterDefaults` so queries read all data the API can
+return, in fewer requests: `per_page` to the maximum of every paginated
+operation, which is 100 for most of them, from the parameter's schema or
+description, and `state: all` and `filter: all` where their enums include
+`all`, like for issues and pull requests, or jobs and check runs, which
+otherwise return only the latest attempt.
+
 ```shell
 curl -fsSL -o /tmp/github.json https://github.com/github/rest-api-description/raw/main/descriptions/api.github.com/api.github.com.json
 jq --indent 2 . /tmp/github.json > src/test/resources/github.json

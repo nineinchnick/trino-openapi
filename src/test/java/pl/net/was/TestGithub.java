@@ -648,6 +648,13 @@ public class TestGithub
     }
 
     @Test
+    public void selectWithParameterDefaults()
+    {
+        // without the state=all default, GitHub would return only open pull requests, 30 on every page
+        assertQuery("SELECT bool_or(state = 'closed'), min(per_page), max(per_page) FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES (true, 100, 100)");
+    }
+
+    @Test
     public void selectTopNSortedByApi()
     {
         // the path to get a single pull request can't filter by state, but the connector would filter its rows, so the filter doesn't prevent the pushdown

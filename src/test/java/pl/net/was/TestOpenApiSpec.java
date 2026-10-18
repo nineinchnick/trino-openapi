@@ -695,6 +695,7 @@ class TestOpenApiSpec
                                 .setName("per_page").setSourceName("per_page")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
+                                .setParameterDefaults(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), 100L))
                                 .setIsNullable(true)
                                 .setIsHidden(true)
                                 .build(),
@@ -789,7 +790,16 @@ class TestOpenApiSpec
                             Assertions.assertThat(column.getOptionalPredicate()).containsEntry(httpPath, ParameterLocation.QUERY);
                         });
             }
-            // loading the spec already checks that range filters map response fields to parameters of the operation
+            // loading the spec already checks that range filters map response fields to parameters of the operation,
+            // and that parameter defaults match the parameters' schemas
+            for (Map.Entry<String, JsonNode> parameterDefault : extension.path("parameterDefaults").properties()) {
+                Assertions.assertThat(columns)
+                        .as("default of %s in %s", parameterDefault.getKey(), httpPath)
+                        .anySatisfy(column -> {
+                            Assertions.assertThat(column.getSourceName()).isEqualTo(parameterDefault.getKey());
+                            Assertions.assertThat(column.getParameterDefaults()).containsKey(httpPath);
+                        });
+            }
             if (!extension.has("sortParam")) {
                 continue;
             }
