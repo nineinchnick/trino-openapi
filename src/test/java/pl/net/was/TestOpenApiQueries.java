@@ -381,6 +381,33 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void joinWithPushedDownPredicates()
+    {
+        try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 3")) {
+            assertQuery(
+                    "SELECT c.text FROM fastapi.default.comments c JOIN %s t ON c.comment_id = t.id WHERE c.comment_id IN (1, 2)".formatted(table.getName()),
+                    "VALUES 'First'");
+            assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.comments WHERE comment_id IN (SELECT id FROM %s WHERE id > 5)".formatted(table.getName()));
+        }
+    }
+
+    @Test
+    public void joinProvidingRangesOfRequiredPredicates()
+    {
+        // comparisons in join conditions produce dynamic filters with ranges, which are expanded to single values
+        String query = "SELECT c.text FROM fastapi.default.comments c JOIN %s t ON c.comment_id >= t.id AND c.comment_id <= t.id";
+        try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 3")) {
+            assertQuery(query.formatted(table.getName()), "VALUES 'First', 'Third'");
+        }
+        try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 1000")) {
+            assertQueryFails(
+                    query.formatted(table.getName()),
+                    "Missing required constraints for every path: GET /comments requires author; GET /comments/\\{comment_id} requires comment_id. " +
+                            "Dynamic filters from joins for comment_id have values that can't be sent, like ranges with more than 256 values \\(domain-expansion-limit\\)");
+        }
+    }
+
+    @Test
     public void itemCategories()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.item_categories").getMaterializedRows();
