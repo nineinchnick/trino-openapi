@@ -70,6 +70,7 @@ import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.toIntExact;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 
 class JsonTrinoConverterTest
 {
@@ -195,11 +196,13 @@ class JsonTrinoConverterTest
         var type = TimestampType.createTimestampType(3);
 
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("2025-04-18 12:30:45"), type, new Schema<>().format("date-time")))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read '2025-04-18 12:30:45' as timestamp(3)");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as timestamp(3)")
+                .hasNoCause();
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("18.04.2025"), DateType.DATE, new Schema<>().format("date")))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read '18.04.2025' as date");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as date")
+                .hasNoCause();
     }
 
     @Test
@@ -500,7 +503,7 @@ class JsonTrinoConverterTest
 
         assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("10000000000")), type, new NumberSchema()))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("Value 10000000000 doesn't fit in decimal(18,8)");
+                .hasMessage("Value doesn't fit in decimal(18,8)");
     }
 
     @Test
@@ -530,13 +533,13 @@ class JsonTrinoConverterTest
 
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), type, new NumberSchema()))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read 'abc' as decimal(18,8)");
+                .hasMessage("Cannot read a JSON string as decimal(18,8)");
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf(""), type, new NumberSchema()))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read '' as decimal(18,8)");
+                .hasMessage("Cannot read a JSON string as decimal(18,8)");
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("10000000000"), type, new NumberSchema()))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("Value 10000000000 doesn't fit in decimal(18,8)");
+                .hasMessage("Value doesn't fit in decimal(18,8)");
     }
 
     @Test
@@ -559,20 +562,34 @@ class JsonTrinoConverterTest
     }
 
     @Test
+    void shouldRejectNonArraysForArrayColumns()
+    {
+        var type = new ArrayType(VARCHAR);
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("secret"), type, new ArraySchema().items(new StringSchema())))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON STRING as array(varchar)");
+    }
+
+    @Test
     void shouldRejectInvalidNumberStrings()
     {
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), INTEGER, new IntegerSchema()))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read 'abc' as integer");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as integer")
+                .hasNoCause();
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("1.5"), BIGINT, new IntegerSchema()))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read '1.5' as bigint");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as bigint")
+                .hasNoCause();
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), REAL, new NumberSchema().format("float")))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read 'abc' as real");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as real")
+                .hasNoCause();
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("abc"), DOUBLE, new NumberSchema().format("double")))
-                .isInstanceOf(TrinoException.class)
-                .hasMessage("Cannot read 'abc' as double");
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON string as double")
+                .hasNoCause();
     }
 
     @Test

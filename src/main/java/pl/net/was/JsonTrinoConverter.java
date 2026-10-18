@@ -60,7 +60,6 @@ import java.util.stream.IntStream;
 import static com.google.common.base.Verify.verify;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
-import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.type.Decimals.encodeScaledValue;
 import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
@@ -69,6 +68,7 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Boolean.TRUE;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.String.format;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static java.math.RoundingMode.HALF_UP;
 
 public class JsonTrinoConverter
@@ -143,7 +143,10 @@ public class JsonTrinoConverter
             return buildMap(jsonNode, mapType, schemaType);
         }
         if (type instanceof ArrayType arrayType) {
-            return buildArray((ArrayNode) jsonNode, arrayType, schemaType);
+            if (!(jsonNode instanceof ArrayNode arrayNode)) {
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON %s as %s", jsonNode.getNodeType(), type));
+            }
+            return buildArray(arrayNode, arrayType, schemaType);
         }
         if (type instanceof RowType rowType) {
             PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(rowType));
@@ -161,8 +164,9 @@ public class JsonTrinoConverter
         try {
             return parser.apply(jsonNode.textValue());
         }
-        catch (NumberFormatException e) {
-            throw new TrinoException(TYPE_MISMATCH, format("Cannot read '%s' as %s", jsonNode.textValue(), type), e);
+        catch (NumberFormatException _) {
+            // neither the value, nor the parser's exception that quotes it, are included, because the value might be sensitive
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON string as %s", type));
         }
     }
 
@@ -170,7 +174,7 @@ public class JsonTrinoConverter
     {
         BigDecimal rescaled = value.setScale(type.getScale(), HALF_UP);
         if (overflows(rescaled, type.getPrecision())) {
-            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Value %s doesn't fit in %s", value.toPlainString(), type));
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Value doesn't fit in %s", type));
         }
         if (type.isShort()) {
             return encodeShortScaledValue(rescaled, type.getScale());

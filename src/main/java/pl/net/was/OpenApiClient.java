@@ -87,6 +87,7 @@ import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.min;
@@ -98,6 +99,9 @@ import static java.util.Objects.requireNonNullElse;
 import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 
 public class OpenApiClient
@@ -348,7 +352,7 @@ public class OpenApiClient
         String attemptsSuffix = attempts > 1 ? format(" after %d attempts", attempts) : "";
         return switch (failure) {
             case HttpRequestFailure.TransportError error -> new TrinoException(
-                    GENERIC_INTERNAL_ERROR,
+                    OPENAPI_CONNECTION_ERROR,
                     format("%s%s: %s", context, attemptsSuffix, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
                     error.getCause());
             case HttpRequestFailure.ErrorResponse error -> {
@@ -359,7 +363,7 @@ public class OpenApiClient
                 String messageWithError = getErrorMessage(error, errorPointer)
                         .map(errorMessage -> message + ": " + errorMessage)
                         .orElse(message);
-                yield new TrinoException(GENERIC_INTERNAL_ERROR, notRetriedReason
+                yield new TrinoException(OPENAPI_HTTP_ERROR, notRetriedReason
                         .map(reason -> messageWithError + "; " + reason)
                         .orElse(messageWithError));
             }
@@ -736,11 +740,13 @@ public class OpenApiClient
                 jsonNode = OBJECT_MAPPER.readTree(result);
             }
             catch (JsonProcessingException ex) {
-                String message = format("Could not marshal JSON from API response: %s", result);
-                throw new TrinoException(GENERIC_INTERNAL_ERROR, message, ex);
+                String message = format("Response to %s is not valid JSON", describe(request));
+                // the parser's message quotes the response, which might contain sensitive information, so it's only logged
+                log.debug(ex, message);
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, message);
             }
             return new ResultsPage(
-                    convertJson(table, httpPath, resultsPointer, jsonNode),
+                    convertJson(request, table, httpPath, resultsPointer, jsonNode),
                     getLong(jsonNode, pagination.totalResultsPointer()),
                     getLong(jsonNode, pagination.totalPagesPointer()),
                     getBoolean(jsonNode, pagination.hasMorePointer()));
@@ -781,7 +787,7 @@ public class OpenApiClient
         }
     }
 
-    private Iterable<List<?>> convertJson(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, JsonNode jsonNode)
+    private Iterable<List<?>> convertJson(Request request, OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, JsonNode jsonNode)
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
@@ -790,26 +796,26 @@ public class OpenApiClient
 
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, rowId, recordParams, jsonRecord));
+                resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowId, recordParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, rowId, recordParams, jsonNode));
+            resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowId, recordParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, String rowId, Map<String, Object> recordParams, JsonNode jsonNode)
+    private Iterable<List<?>> convertJsonToRecords(Request request, OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, String rowId, Map<String, Object> recordParams, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
-            throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s contains a JSON %s where an object was expected", describe(request), jsonNode.getNodeType()));
         }
 
         Iterable<JsonNode> resultNodes = List.of(jsonNode);
         List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
         if (resultsPointer != null && !JsonPointer.empty().equals(resultsPointer)) {
-            resultNodes = getResultNodes(jsonNode.at(resultsPointer));
+            resultNodes = getResultNodes(request, jsonNode.at(resultsPointer));
         }
 
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
@@ -827,11 +833,7 @@ public class OpenApiClient
                     recordBuilder.add(recordParams.getOrDefault(parameterName, null));
                     continue;
                 }
-                recordBuilder.add(
-                        JsonTrinoConverter.convertToRecordValue(
-                                resultNode.get(parameterName),
-                                column.getType(),
-                                column.getSourceType()));
+                recordBuilder.add(convertToRecordValue(request, column, resultNode.get(parameterName)));
             }
             resultRecordsBuilder.add(recordBuilder);
         }
@@ -839,7 +841,28 @@ public class OpenApiClient
         return resultRecordsBuilder.build();
     }
 
-    private static Iterable<JsonNode> getResultNodes(JsonNode resultNode)
+    private static Object convertToRecordValue(Request request, OpenApiColumn column, JsonNode value)
+    {
+        try {
+            return JsonTrinoConverter.convertToRecordValue(value, column.getType(), column.getSourceType());
+        }
+        catch (TrinoException e) {
+            if (!e.getErrorCode().equals(OPENAPI_INVALID_RESPONSE.toErrorCode()) && !e.getErrorCode().equals(NUMERIC_VALUE_OUT_OF_RANGE.toErrorCode())) {
+                throw e;
+            }
+            throw new TrinoException(
+                    () -> e.getErrorCode(),
+                    format("Invalid value of column %s in the response to %s: %s", column.getName(), describe(request), e.getMessage()),
+                    e);
+        }
+    }
+
+    private static String describe(Request request)
+    {
+        return request.getMethod() + " " + withoutQuery(request.getUri());
+    }
+
+    private static Iterable<JsonNode> getResultNodes(Request request, JsonNode resultNode)
     {
         if (resultNode instanceof ArrayNode) {
             return resultNode;
@@ -848,7 +871,7 @@ public class OpenApiClient
         if (resultNode.isObject()) {
             return List.of(resultNode);
         }
-        throw new IllegalArgumentException("Result path points to a node that's not an array");
+        throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Results path in the response to %s points to a JSON %s instead of an array", describe(request), resultNode.getNodeType()));
     }
 
     private byte[] toBytes(JsonNode rootNode)
