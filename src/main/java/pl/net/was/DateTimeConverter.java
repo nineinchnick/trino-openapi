@@ -37,7 +37,6 @@ import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static io.trino.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_NANOSECOND;
@@ -49,6 +48,7 @@ import static java.lang.Math.min;
 import static java.lang.Math.multiplyExact;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static java.time.ZoneOffset.UTC;
 import static java.time.format.DateTimeFormatter.ISO_DATE_TIME;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
@@ -107,8 +107,9 @@ public class DateTimeConverter
         try {
             return converter.apply(formatter.parse(text));
         }
-        catch (DateTimeException e) {
-            throw new TrinoException(TYPE_MISMATCH, format("Cannot read '%s' as %s", text, type), e);
+        catch (DateTimeException _) {
+            // neither the value, nor the parser's exception that quotes it, are included, because the value might be sensitive
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON string as %s", type));
         }
     }
 

@@ -45,6 +45,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.google.common.base.Throwables.getStackTraceAsString;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
@@ -54,6 +55,9 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 @TestInstance(PER_CLASS)
@@ -308,7 +312,7 @@ class TestOpenApiClientRequests
         responses.add(respond(500, "{\"message\":\"Something broke\",\"details\":\"internal-details\"}"));
 
         assertThatThrownBy(() -> getRows(newConfig(), "items", "s3cr3t"))
-                .isInstanceOf(TrinoException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Request GET %s/items for operation listItems failed with HTTP 500: \"Something broke\"", baseUri)
                 .hasNoCause()
                 .message()
@@ -340,6 +344,41 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testInvalidJsonIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "not JSON, with internal-details"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", "s3cr3t"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/items is not valid JSON", baseUri)
+                .hasNoCause();
+    }
+
+    @Test
+    void testUnexpectedResponseShapeIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "[\"internal-details\"]"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/items contains a JSON STRING where an object was expected", baseUri);
+    }
+
+    @Test
+    void testValueNotMatchingSpecIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "[{\"id\":\"internal-details\"}]"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", "s3cr3t"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Invalid value of column id in the response to GET %s/items: Cannot read a JSON string as bigint", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details", "s3cr3t"));
+    }
+
+    @Test
     void testTransportErrorIncludesRequestContext()
             throws IOException
     {
@@ -351,7 +390,7 @@ class TestOpenApiClientRequests
         config.setBaseUri(unreachableUri);
 
         assertThatThrownBy(() -> getRows(config, "items", "s3cr3t"))
-                .isInstanceOf(TrinoException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_CONNECTION_ERROR.toErrorCode()))
                 .hasMessageStartingWith("Request GET %s/items for operation listItems failed after 4 attempts: ", unreachableUri)
                 .hasCauseInstanceOf(IOException.class)
                 .message()

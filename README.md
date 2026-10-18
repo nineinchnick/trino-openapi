@@ -457,6 +457,17 @@ contain the response body, because the body might not be readable, and it might
 contain sensitive information. Set `errorPath` to include a readable message
 from the response.
 
+Failed requests have an `EXTERNAL` error type, so clients can tell them apart
+from errors in the connector:
+
+* `OPENAPI_HTTP_ERROR` (`0x0700_0000`) for error responses;
+* `OPENAPI_CONNECTION_ERROR` (`0x0700_0001`) for network errors;
+* `OPENAPI_INVALID_RESPONSE` (`0x0700_0002`) for responses that are not valid
+  JSON, or don't have the shape described in the specification, like a string
+  that is not a number in an `integer` property, or a date in a different
+  format. The message names the column and the expected type, but not the
+  value.
+
 Only the first 64 KiB of an error response are read. They're logged at the
 `DEBUG` level of the `pl.net.was` logger, and `errorPath` is ignored for longer
 responses.
