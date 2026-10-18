@@ -109,6 +109,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void compressedResponses()
+    {
+        assertQuery("SELECT accept_encoding FROM fastapi.default.request_encoding", "VALUES 'gzip'");
+        // the FastAPI server compresses responses bigger than 100 bytes
+        assertQuery("SELECT count(*) FROM fastapi.default.items_by_ids WHERE item_ids = ARRAY[1, 2]", "VALUES 2");
+    }
+
+    @Test
     public void cachedResponses()
     {
         String query = "SELECT name FROM fastapi_cached.default.cached_items";

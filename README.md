@@ -174,6 +174,10 @@ openApi.http-client.log.enabled=true
 openApi.http-client.log.path=logs
 ```
 
+The connector asks servers for gzip-compressed responses, with
+`Accept-Encoding: gzip`, and decompresses them, because JSON usually compresses
+about ten times.
+
 ## Retries
 
 Requests that fail with a transient error are retried up to `max-retries`
@@ -226,6 +230,8 @@ credentials, and cached responses survive restarts.
 * When the cache is bigger than `http-cache.max-size`, the least recently used
   responses are removed. Responses bigger than `http-cache.max-entry-size` are
   not cached.
+* Compressed responses are cached as they were received, so they take less
+  space, and the size limits apply to their compressed size.
 
 The connector never guesses how long a response is fresh, so it never returns
 data older than the server allows. To make a query check every cached response
