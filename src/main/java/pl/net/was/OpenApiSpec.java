@@ -53,6 +53,7 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -119,6 +120,12 @@ public class OpenApiSpec
     private static final String SORT_DIRECTION_PARAM = "directionParam";
     private static final String SORT_ASCENDING_VALUE = "ascendingValue";
     private static final String SORT_DESCENDING_VALUE = "descendingValue";
+    private static final String RANGE_FILTERS = "rangeFilters";
+    private static final String RANGE_LOWER_PARAM = "lowerParam";
+    private static final String RANGE_LOWER_INCLUSIVE = "lowerInclusive";
+    private static final String RANGE_UPPER_PARAM = "upperParam";
+    private static final String RANGE_UPPER_INCLUSIVE = "upperInclusive";
+    private static final String RANGE_EXACT = "exact";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -536,7 +543,99 @@ public class OpenApiSpec
                     .forEach(result::add);
         }
 
-        return result.stream();
+        Map<String, RangeFilter> rangeFilters = getRangeFilters(op.getExtensions() == null ? null : op.getExtensions().get(SPEC_EXTENSION));
+        if (rangeFilters.isEmpty()) {
+            return result.stream();
+        }
+        HttpPath httpPath = new HttpPath(method, path);
+        validateRangeFilters(rangeFilters, result, httpPath);
+        return result.stream()
+                .map(column -> rangeFilters.containsKey(column.getSourceName()) && !isParameter(column)
+                        ? OpenApiColumn.builderFrom(column).setRangeFilters(Map.of(httpPath, rangeFilters.get(column.getSourceName()))).build()
+                        : column);
+    }
+
+    private static Map<String, RangeFilter> getRangeFilters(Object specExtension)
+    {
+        if (!(specExtension instanceof Map<?, ?> extension) || extension.get(RANGE_FILTERS) == null) {
+            return ImmutableMap.of();
+        }
+        checkArgument(extension.get(RANGE_FILTERS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with response fields as keys", RANGE_FILTERS);
+        return ((Map<?, ?>) extension.get(RANGE_FILTERS)).entrySet().stream()
+                .collect(toImmutableMap(entry -> entry.getKey().toString(), entry -> getRangeFilter(entry.getKey().toString(), entry.getValue())));
+    }
+
+    private static RangeFilter getRangeFilter(String field, Object value)
+    {
+        checkArgument(value instanceof Map<?, ?>, "Invalid value of %s for %s: expected an object", RANGE_FILTERS, field);
+        Map<?, ?> properties = (Map<?, ?>) value;
+        try {
+            return new RangeFilter(
+                    getRangeBound(properties, RANGE_LOWER_PARAM, RANGE_LOWER_INCLUSIVE),
+                    getRangeBound(properties, RANGE_UPPER_PARAM, RANGE_UPPER_INCLUSIVE),
+                    getBoolean(properties, RANGE_EXACT).orElse(false));
+        }
+        catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value of %s for %s: %s".formatted(RANGE_FILTERS, field, e.getMessage()), e);
+        }
+    }
+
+    private static Optional<RangeFilter.Bound> getRangeBound(Map<?, ?> properties, String parameterKey, String inclusiveKey)
+    {
+        Object parameter = properties.get(parameterKey);
+        if (parameter == null) {
+            return Optional.empty();
+        }
+        // a wrong default would make the API skip rows equal to the bound, so it must be declared
+        Optional<Boolean> inclusive = getBoolean(properties, inclusiveKey);
+        checkArgument(inclusive.isPresent(), "%s is required with %s", inclusiveKey, parameterKey);
+        return Optional.of(new RangeFilter.Bound(parameter.toString(), inclusive.get()));
+    }
+
+    private static Optional<Boolean> getBoolean(Map<?, ?> properties, String key)
+    {
+        // YAML and JSON specs can have booleans either as booleans or strings
+        Object value = properties.get(key);
+        if (value == null) {
+            return Optional.empty();
+        }
+        if (value instanceof Boolean booleanValue) {
+            return Optional.of(booleanValue);
+        }
+        checkArgument(value.equals("true") || value.equals("false"), "%s must be true or false, got %s", key, value);
+        return Optional.of(Boolean.parseBoolean(value.toString()));
+    }
+
+    private static void validateRangeFilters(Map<String, RangeFilter> rangeFilters, List<OpenApiColumn> columns, HttpPath httpPath)
+    {
+        String operation = httpPath.method() + " " + httpPath.path();
+        Set<String> boundParameters = new HashSet<>();
+        rangeFilters.forEach((field, filter) -> {
+            List<OpenApiColumn> fieldColumns = columns.stream()
+                    .filter(column -> column.getSourceName().equals(field) && !isParameter(column))
+                    .toList();
+            checkArgument(!fieldColumns.isEmpty(), "Invalid value of %s: %s is not a response field of %s", RANGE_FILTERS, field, operation);
+            Stream.of(filter.lower(), filter.upper()).flatMap(Optional::stream).forEach(bound -> {
+                checkArgument(boundParameters.add(bound.parameter()), "Invalid value of %s: parameter %s is used more than once in %s", RANGE_FILTERS, bound.parameter(), operation);
+                Optional<OpenApiColumn> parameter = columns.stream()
+                        .filter(column -> column.getSourceName().equals(bound.parameter()) && RangePushdown.isNonPathParameter(column, httpPath))
+                        .findFirst();
+                checkArgument(parameter.isPresent(), "Invalid value of %s: %s is not a query, header, cookie, or body parameter of %s", RANGE_FILTERS, bound.parameter(), operation);
+                fieldColumns.forEach(fieldColumn -> checkArgument(
+                        fieldColumn.getType().equals(parameter.get().getType()),
+                        "Invalid value of %s: parameter %s has type %s, but field %s has type %s",
+                        RANGE_FILTERS,
+                        bound.parameter(),
+                        parameter.get().getType(),
+                        field,
+                        fieldColumn.getType()));
+            });
+        });
+    }
+
+    private static boolean isParameter(OpenApiColumn column)
+    {
+        return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
     }
 
     private static List<Parameter> getParameters(List<Parameter> pathParameters, Operation op)
@@ -1229,6 +1328,10 @@ public class OpenApiSpec
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .setParameterStyles(sameColumns.stream()
                                 .map(OpenApiColumn::getParameterStyles)
+                                .flatMap(map -> map.entrySet().stream())
+                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
+                        .setRangeFilters(sameColumns.stream()
+                                .map(OpenApiColumn::getRangeFilters)
                                 .flatMap(map -> map.entrySet().stream())
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .build())

@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
 import io.trino.Session;
+import io.trino.sql.planner.plan.FilterNode;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.MaterializedRow;
@@ -545,6 +546,102 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void filterOnRangeMatchingBounds()
+    {
+        // the bounds match the comparisons, and the API applies them exactly, so Trino doesn't filter the rows again
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE updated_at >= TIMESTAMP '2024-01-04 00:00:00'"))
+                .isFullyPushedDown();
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE updated_at >= TIMESTAMP '2024-01-02 00:00:00' AND updated_at < TIMESTAMP '2024-01-04 00:00:00'"))
+                .isFullyPushedDown();
+        assertQuery(
+                "SELECT id, array_sort(split(query, '&')) FROM fastapi.default.exact_changes WHERE updated_at >= TIMESTAMP '2024-01-02 00:00:00' AND updated_at < TIMESTAMP '2024-01-04 00:00:00'",
+                "VALUES " +
+                        "(2, ARRAY['since=2024-01-02T00%3A00%3A00.000Z', 'until=2024-01-04T00%3A00%3A00.000Z']), " +
+                        "(3, ARRAY['since=2024-01-02T00%3A00%3A00.000Z', 'until=2024-01-04T00%3A00%3A00.000Z'])");
+    }
+
+    @Test
+    public void filterOnRangeNotMatchingBounds()
+    {
+        // an inclusive bound is sent for an exclusive comparison, but Trino still filters out rows equal to it
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE updated_at > TIMESTAMP '2024-01-04 00:00:00'"))
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE updated_at > TIMESTAMP '2024-01-04 00:00:00'",
+                "VALUES (5, 'since=2024-01-04T00%3A00%3A00.000Z')");
+        // an exclusive bound isn't sent for an inclusive comparison, because the API would skip rows equal to it
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE updated_at <= TIMESTAMP '2024-01-02 00:00:00'"))
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE updated_at <= TIMESTAMP '2024-01-02 00:00:00'",
+                "VALUES (1, ''), (2, '')");
+        // disjoint ranges are sent as their span
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE updated_at IN (TIMESTAMP '2024-01-02 00:00:00', TIMESTAMP '2024-01-04 00:00:00')"))
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE updated_at IN (TIMESTAMP '2024-01-02 00:00:00', TIMESTAMP '2024-01-04 00:00:00')",
+                "VALUES (2, 'since=2024-01-02T00%3A00%3A00.000Z'), (4, 'since=2024-01-02T00%3A00%3A00.000Z')");
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE updated_at < TIMESTAMP '2024-01-02 00:00:00' OR updated_at >= TIMESTAMP '2024-01-05 00:00:00'",
+                "VALUES (1, ''), (5, '')");
+        // the API can't return rows without a value
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE updated_at >= TIMESTAMP '2024-01-05 00:00:00' OR updated_at IS NULL",
+                "VALUES (5, '')");
+        // a filter on the parameter is sent instead of the bound, and the parameter's value is only known when it's sent
+        assertThat(query("SELECT id FROM fastapi.default.exact_changes WHERE since = TIMESTAMP '2024-01-04 00:00:00' AND updated_at >= TIMESTAMP '2024-01-02 00:00:00'"))
+                .skipResultsCorrectnessCheckForPushdown()
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.exact_changes WHERE since = TIMESTAMP '2024-01-04 00:00:00' AND updated_at >= TIMESTAMP '2024-01-02 00:00:00'",
+                "VALUES (4, 'since=2024-01-04T00%3A00%3A00.000Z'), (5, 'since=2024-01-04T00%3A00%3A00.000Z')");
+    }
+
+    @Test
+    public void filterOnRangeWithInexactBounds()
+    {
+        // the API ignores the time of the bound and returns more rows, which Trino filters out
+        assertThat(query("SELECT id FROM fastapi.default.approximate_changes WHERE updated_at >= TIMESTAMP '2024-01-03 12:00:00'"))
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.approximate_changes WHERE updated_at >= TIMESTAMP '2024-01-03 12:00:00'",
+                "VALUES (4, 'since=2024-01-03T12%3A00%3A00.000Z'), (5, 'since=2024-01-03T12%3A00%3A00.000Z')");
+    }
+
+    @Test
+    public void filterOnRangeNotSentBySelectedPath()
+    {
+        // the path with the change ID can't send the bounds, so its rows are always filtered by Trino
+        assertThat(query("SELECT id FROM fastapi.default.changes WHERE updated_at >= TIMESTAMP '2024-01-04 00:00:00'"))
+                .isNotFullyPushedDown(FilterNode.class);
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.changes WHERE updated_at >= TIMESTAMP '2024-01-04 00:00:00'",
+                "VALUES (4, 'since=2024-01-04T00%3A00%3A00.000Z'), (5, 'since=2024-01-04T00%3A00%3A00.000Z')");
+        assertQuery(
+                "SELECT id, query FROM fastapi.default.changes WHERE change_id IN (1, 4) AND updated_at >= TIMESTAMP '2024-01-04 00:00:00'",
+                "VALUES (4, '')");
+    }
+
+    @Test
+    public void limitWithExactRangeStopsPagination()
+    {
+        // the API returns one change per page, and Trino doesn't filter the rows of an exact range, so the limit stops pagination
+        assertPagedChanges("SELECT id FROM fastapi.default.paged_changes WHERE updated_at >= TIMESTAMP '2024-01-02 00:00:00' LIMIT 1", 1, 2L);
+        // Trino filters out the change equal to the bound, so all four pages since the bound are requested
+        assertPagedChanges("SELECT id FROM fastapi.default.paged_changes WHERE updated_at > TIMESTAMP '2024-01-02 00:00:00' LIMIT 1", 4, 3L);
+    }
+
+    @Test
+    public void joinProvidingRangeBounds()
+    {
+        try (TestTable table = new TestTable(new TrinoSqlExecutor(getQueryRunner()), "memory.default.test_change_times", "AS SELECT TIMESTAMP '2024-01-04 00:00:00.000' AS updated_at")) {
+            assertQuery(
+                    "SELECT c.id, c.query FROM fastapi.default.exact_changes c JOIN %s t ON c.updated_at = t.updated_at".formatted(table.getName()),
+                    "VALUES (4, 'since=2024-01-04T00%3A00%3A00.000Z')");
+        }
+    }
+
+    @Test
     public void itemCategories()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.item_categories").getMaterializedRows();
@@ -853,6 +950,20 @@ public class TestOpenApiQueries
         MaterializedRow requests = getCountedItemsRequests();
         assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
         return (String) requests.getField(1);
+    }
+
+    private synchronized void assertPagedChanges(String query, long expectedRequests, Long... expectedIds)
+    {
+        long requestsBefore = getPagedChangesRequests();
+        assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly((Object[]) expectedIds);
+        assertThat(getPagedChangesRequests() - requestsBefore).isEqualTo(expectedRequests);
+    }
+
+    private long getPagedChangesRequests()
+    {
+        return (long) computeScalar("SELECT requests FROM fastapi.default.paged_changes_requests");
     }
 
     private MaterializedRow getCountedItemsRequests()

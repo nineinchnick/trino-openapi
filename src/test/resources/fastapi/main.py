@@ -144,6 +144,17 @@ class DateText(BaseModel):
     next_day: date
 
 
+class Change(BaseModel):
+    id: int
+    updated_at: datetime
+    query: str
+
+
+class ChangesResults(BaseModel):
+    results: list[Change]
+    total_results: int
+
+
 class Echo(BaseModel):
     path: str
     query: str
@@ -653,6 +664,58 @@ def date_parameters(request: Request, day: date) -> DateText:
     return DateText(day_text=request.query_params["day"], next_day=day + timedelta(days=1))
 
 
+change_times = [datetime(2024, 1, day, tzinfo=timezone.utc) for day in range(1, 6)]
+
+
+def get_changes(request: Request, since: datetime = None, until: datetime = None) -> list[Change]:
+    # every change includes the query string, to check which bounds were sent
+    return [
+        Change(id=index + 1, updated_at=updated_at, query=request.scope["query_string"].decode())
+        for index, updated_at in enumerate(change_times)
+        if (since is None or updated_at >= since) and (until is None or updated_at < until)
+    ]
+
+
+@router.get("/changes")
+def list_changes(request: Request, since: datetime = None, until: datetime = None) -> list[Change]:
+    return get_changes(request, since, until)
+
+
+paged_changes_requests = 0
+
+
+@router.get("/paged_changes")
+def list_paged_changes(request: Request, page: int = 1, since: datetime = None, until: datetime = None) -> ChangesResults:
+    # count requests, so tests can check how many pages were requested using /paged_changes_requests
+    global paged_changes_requests
+    paged_changes_requests += 1
+    changes = get_changes(request, since, until)
+    return ChangesResults(results=changes[page - 1:page], total_results=len(changes))
+
+
+@router.get("/paged_changes_requests")
+def get_paged_changes_requests() -> RequestCount:
+    return RequestCount(requests=paged_changes_requests)
+
+
+@router.get("/changes/{change_id}")
+def get_change(request: Request, change_id: int) -> Change:
+    return next(change for change in get_changes(request) if change.id == change_id)
+
+
+@router.get("/exact_changes")
+def list_exact_changes(request: Request, since: datetime = None, until: datetime = None) -> list[Change]:
+    return get_changes(request, since, until)
+
+
+@router.get("/approximate_changes")
+def list_approximate_changes(request: Request, since: datetime = None) -> list[Change]:
+    # like APIs that compare only dates, the time of the bound is ignored, so more changes are returned
+    if since is not None:
+        since = since.replace(hour=0, minute=0, second=0, microsecond=0)
+    return get_changes(request, since)
+
+
 # parameter serialization is described only in echo.yml, since FastAPI can't parse most parameter styles;
 # the path converter also matches values with encoded slashes, because they're decoded before routing
 @router.get("/echo/{rest:path}")
@@ -763,6 +826,35 @@ def custom_openapi():
     }
     openapi_schema["paths"]["/contents_results/{path}"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results",
+    }
+    range_filters = {
+        "updated_at": {
+            "lowerParam": "since",
+            "lowerInclusive": True,
+            "upperParam": "until",
+            "upperInclusive": False,
+            "exact": True,
+        },
+    }
+    openapi_schema["paths"]["/changes"]["get"]["x-trino"] = {
+        "rangeFilters": range_filters,
+    }
+    openapi_schema["paths"]["/exact_changes"]["get"]["x-trino"] = {
+        "rangeFilters": range_filters,
+    }
+    openapi_schema["paths"]["/paged_changes"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
+        "rangeFilters": range_filters,
+    }
+    openapi_schema["paths"]["/approximate_changes"]["get"]["x-trino"] = {
+        "rangeFilters": {
+            "updated_at": {
+                "lowerParam": "since",
+                "lowerInclusive": True,
+            },
+        },
     }
     openapi_schema["paths"]["/paged_search"]["post"]["x-trino"] = {
         "pageParam": "page",

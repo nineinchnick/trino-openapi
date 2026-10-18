@@ -218,6 +218,7 @@ public class OpenApiTableHandle
         }
 
         TupleDomain<ColumnHandle> currentConstraint = getConstraint();
+        Map<ColumnHandle, Domain> previouslyPushedDomains = currentConstraint.getDomains().orElse(Map.of());
 
         boolean found = false;
         for (OpenApiColumn column : columns.values()) {
@@ -238,6 +239,10 @@ public class OpenApiTableHandle
             }
             if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
                 continue;
+            }
+            // Trino no longer applies an enforced range, and this value would be sent instead of its bound
+            if (RangePushdown.isBoundOfEnforcedRange(columns.values(), selectPaths, previouslyPushedDomains, column)) {
+                throw new TrinoException(INVALID_ROW_FILTER, "Cannot push down a predicate for " + column.getName() + ", which is a bound of an already pushed down range");
             }
             // merge with other pushed down constraints
             if (currentConstraint.getDomains().isEmpty()) {
@@ -260,6 +265,30 @@ public class OpenApiTableHandle
             summary = summary.filter(
                     (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
         }
+
+        Map<ColumnHandle, Domain> summaryDomains = constraint.getSummary().getDomains().get();
+        Map<ColumnHandle, Domain> pushedDomains = currentConstraint.getDomains().orElse(Map.of());
+        for (OpenApiColumn column : columns.values()) {
+            Domain domain = summaryDomains.get(column.getHandle());
+            // ranges of parameters are expanded into single values instead
+            if (domain == null || column.getRangeFilters().isEmpty() || isParameter(column)) {
+                continue;
+            }
+            Domain pushedDomain = pushedDomains.get(column.getHandle());
+            Domain newDomain = pushedDomain == null ? domain : pushedDomain.intersect(domain);
+            if (newDomain.equals(pushedDomain) || !RangePushdown.isSentBySomePath(columns.values(), selectPaths, pushedDomains, column, newDomain)) {
+                continue;
+            }
+            Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().orElse(Map.of()));
+            domains.put(column.getHandle(), newDomain);
+            currentConstraint = TupleDomain.withColumnDomains(domains);
+            found = true;
+            if (!RangePushdown.isEnforcedByAllPaths(columns.values(), selectPaths, pushedDomains, column, newDomain)) {
+                continue;
+            }
+            summary = summary.filter(
+                    (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
+        }
         if (!found) {
             return Optional.empty();
         }
@@ -269,6 +298,11 @@ public class OpenApiTableHandle
                 summary,
                 constraint.getExpression(),
                 true));
+    }
+
+    private static boolean isParameter(OpenApiColumn column)
+    {
+        return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
     }
 
     private boolean isSentByAllSelectPaths(OpenApiColumn column)

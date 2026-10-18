@@ -42,6 +42,7 @@ public class OpenApiColumn
     private final Map<HttpPath, ParameterLocation> optionalPredicate;
     private final Map<HttpPath, ParameterStyle> parameterStyles;
     private final Set<HttpPath> responseRequiredPaths;
+    private final Map<HttpPath, RangeFilter> rangeFilters;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
     private final OpenApiColumnHandle handle;
@@ -55,6 +56,7 @@ public class OpenApiColumn
             Map<HttpPath, ParameterLocation> optionalPredicate,
             Map<HttpPath, ParameterStyle> parameterStyles,
             Set<HttpPath> responseRequiredPaths,
+            Map<HttpPath, RangeFilter> rangeFilters,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
@@ -68,6 +70,7 @@ public class OpenApiColumn
         this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
         this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
         this.responseRequiredPaths = ImmutableSet.copyOf(responseRequiredPaths);
+        this.rangeFilters = ImmutableMap.copyOf(rangeFilters);
         this.metadata = ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
@@ -131,6 +134,11 @@ public class OpenApiColumn
         return !selectPaths.isEmpty() && responseRequiredPaths.containsAll(selectPaths);
     }
 
+    public Map<HttpPath, RangeFilter> getRangeFilters()
+    {
+        return rangeFilters;
+    }
+
     public ColumnMetadata getMetadata()
     {
         return metadata;
@@ -170,6 +178,7 @@ public class OpenApiColumn
                 && Objects.equals(optionalPredicate, that.optionalPredicate)
                 && Objects.equals(parameterStyles, that.parameterStyles)
                 && Objects.equals(responseRequiredPaths, that.responseRequiredPaths)
+                && Objects.equals(rangeFilters, that.rangeFilters)
                 && Objects.equals(metadata, that.metadata)
                 && isPageNumber == that.isPageNumber;
     }
@@ -186,6 +195,7 @@ public class OpenApiColumn
                 ", optionalPredicate=" + optionalPredicate +
                 ", parameterStyles=" + parameterStyles +
                 ", responseRequiredPaths=" + responseRequiredPaths +
+                ", rangeFilters=" + rangeFilters +
                 ", metadata=" + metadata +
                 ", isPageNumber=" + isPageNumber +
                 '}';
@@ -193,7 +203,7 @@ public class OpenApiColumn
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, metadata, isPageNumber);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -216,6 +226,7 @@ public class OpenApiColumn
         private final SortedMap<HttpPath, ParameterLocation> optionalPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
         private final SortedSet<HttpPath> responseRequiredPaths = new TreeSet<>();
+        private final SortedMap<HttpPath, RangeFilter> rangeFilters = new TreeMap<>();
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
@@ -233,6 +244,7 @@ public class OpenApiColumn
             this.optionalPredicate.putAll(handle.getOptionalPredicate());
             this.parameterStyles.putAll(handle.getParameterStyles());
             this.responseRequiredPaths.addAll(handle.getResponseRequiredPaths());
+            this.rangeFilters.putAll(handle.getRangeFilters());
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
@@ -288,6 +300,12 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setRangeFilters(Map<HttpPath, RangeFilter> rangeFilters)
+        {
+            this.rangeFilters.putAll(requireNonNull(rangeFilters, "rangeFilters is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setIsNullable(boolean isNullable)
         {
             this.isNullable = isNullable;
@@ -325,6 +343,7 @@ public class OpenApiColumn
                     optionalPredicate,
                     parameterStyles,
                     responseRequiredPaths,
+                    rangeFilters,
                     isNullable,
                     isHidden,
                     isPageNumber,

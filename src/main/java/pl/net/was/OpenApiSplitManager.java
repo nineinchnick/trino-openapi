@@ -149,9 +149,14 @@ public class OpenApiSplitManager
         Map<String, OpenApiColumn> columns = columnList.stream()
                 .collect(toMap(OpenApiColumn::getName, identity()));
         TupleDomain<ColumnHandle> pushedDownPredicate = originalTable.getConstraint();
+        // a value of a bound parameter would be sent instead of a range bound, which might be enforced,
+        // and dynamic filters can be ignored, because the join still applies them
+        Set<ColumnHandle> boundParameters = RangePushdown.getBoundParameters(columnList, pushedDownPredicate);
+        TupleDomain<ColumnHandle> dynamicPredicate = dynamicFilterSnapshot.currentPredicate()
+                .filter((column, _) -> !boundParameters.contains(column));
         TupleDomain<ColumnHandle> predicate = pushedDownPredicate.isNone()
-                ? dynamicFilterSnapshot.currentPredicate()
-                : pushedDownPredicate.intersect(dynamicFilterSnapshot.currentPredicate());
+                ? dynamicPredicate
+                : pushedDownPredicate.intersect(dynamicPredicate);
         if (predicate.isNone()) {
             // the join has no matching rows
             return getSplitSource(List.of());
@@ -212,6 +217,12 @@ public class OpenApiSplitManager
             // Trino still applies filters on predicates the selected path doesn't send,
             // and splits that differ only in these predicates would return the same rows
             newDomains.keySet().removeIf(column -> !isSentByPath(columns.get(((OpenApiColumnHandle) column).getName()), httpPath));
+            // ranges are the same for every split, and are sent as bounds, so they don't make more splits
+            originalDomains.forEach((column, domain) -> {
+                if (columns.get(((OpenApiColumnHandle) column).getName()).getRangeFilters().containsKey(httpPath)) {
+                    newDomains.put(column, domain);
+                }
+            });
             splitConstraints.add(TupleDomain.withColumnDomains(newDomains));
         }
         List<OpenApiSplit> splits = splitConstraints.stream()

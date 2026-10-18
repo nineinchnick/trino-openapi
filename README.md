@@ -241,6 +241,9 @@ Without the filter, the query fails with `Missing required constraint`.
 * An `IN` list makes one request per value, so it should stay short.
 * A range, like `BETWEEN 1 AND 10`, is expanded into separate values when the
   column type allows it, up to `domain-expansion-limit`.
+* A range on a response column, like `updated_at >= TIMESTAMP '2024-01-01'`, is
+  sent as lower and upper bound parameters, when the operation maps them to
+  the column with [range filters](#range-filters).
 * Filters on other columns, and filters the selected request can't send, are
   applied by Trino to the returned rows.
 
@@ -428,6 +431,7 @@ paths:
 | `maxPages`         | Maximum number of pages to request                                                                                                                  |
 | `maxResults`       | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `errorPath`        | JSON pointer to a human-readable message in error responses                                                                                         |
+| `rangeFilters`     | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`     | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
 | `sortParam`        | Parameter that selects the field to sort results by                                                                                                 |
 | `sortValues`       | Map of response field names to the `sortParam` values that sort by them                                                                             |
@@ -481,6 +485,78 @@ only when:
 Otherwise it requests all pages, and Trino sorts the rows. Declare only fields
 that the server sorts the same way as Trino. For example, servers often sort
 text ignoring case.
+
+## Range filters
+
+Many APIs accept parameters that limit the values of a response field, like
+GitHub's `since` and `until`, which return only issues updated in a time range.
+Their names don't say which field they limit, or whether they include the
+given value, so the connector only uses them when `rangeFilters` maps them to a
+response field:
+
+```yaml
+paths:
+  /issues:
+    get:
+      parameters:
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+      # ...
+      x-trino:
+        rangeFilters:
+          updated_at:
+            lowerParam: since
+            lowerInclusive: true
+            exact: false
+```
+
+Then a query like this sends `since=2024-01-01T00:00:00.000Z`:
+
+```sql
+SELECT number, title FROM github.default.issues WHERE updated_at >= TIMESTAMP '2024-01-01 00:00:00';
+```
+
+The keys of `rangeFilters` are names of response fields, and the values have
+these properties:
+
+| Property         | Description                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `lowerParam`     | Parameter with the lowest value of the field                                                              |
+| `lowerInclusive` | `true` if the API returns rows equal to the `lowerParam` value, required with `lowerParam`                |
+| `upperParam`     | Parameter with the highest value of the field                                                             |
+| `upperInclusive` | `true` if the API returns rows equal to the `upperParam` value, required with `upperParam`                |
+| `exact`          | `true` if the API returns only rows matching the bounds, so Trino doesn't filter them; `false` by default |
+
+The parameters must be query, header, cookie, or body parameters of the same
+operation, with the same type as the field. Their values are formatted as the
+parameters declare, like any other filter. A bound is sent only when the API
+returns all rows matching the query with it:
+
+* `updated_at > X` sends an inclusive parameter with `X`, but not an exclusive
+  one for `updated_at >= X`, because the API would skip rows equal to `X`.
+  If you're not sure if the API includes the value, declare it as exclusive.
+* Several ranges, like `x < 1 OR x > 5`, or `x IN (1, 5)`, are sent as one range
+  from the lowest to the highest value, so they can't be sent if that range is
+  unbounded.
+* A value that loses precision when formatted, like a timestamp in a format
+  without fractions of seconds, is sent only as a lower bound.
+* Ranges that include `NULL` are not sent.
+* A filter on the parameter itself, like `since = TIMESTAMP '2024-01-01'`, is
+  sent instead of the bound.
+* Bounds don't change which path is selected for a request, and paths without
+  the bound parameters read all rows.
+
+Trino still applies the filter to the returned rows, unless `exact` is `true`,
+the bounds match the comparisons in the query, and every path of the table can
+send them. Set `exact` only if the API compares the field values exactly like
+SQL, with the same precision. For example, an API that ignores fractions of
+seconds, or compares the time of the last change of a resource and not the
+field, can return rows the query doesn't match, which would then not be
+filtered out. Because Trino doesn't filter the rows of an exact range, a
+`LIMIT` can stop pagination, like described in [Pagination](#pagination).
 
 ## Error messages
 
@@ -541,8 +617,10 @@ how they're made.
   methods, so a `POST` search endpoint is used for `INSERT`, not for `SELECT`.
   The row ID used by `UPDATE` and `DELETE` comes from the query filters, not
   from the rows ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
-* Only equality and `IN` filters, and ranges expanded to single values, are sent
-  in requests ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
+* Only equality and `IN` filters, ranges expanded to single values, and ranges
+  of fields with [range filters](#range-filters) are sent in requests. Other
+  operators, like `LIKE`, are applied by Trino
+  ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
   `LIMIT` doesn't change the page size sent in requests, and it doesn't stop
   pagination when Trino filters the returned rows. `ORDER BY` is sent only for
   a single column declared in `sortValues` that every response includes.
