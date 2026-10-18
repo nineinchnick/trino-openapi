@@ -14,6 +14,8 @@
 package pl.net.was.authentication;
 
 import io.airlift.configuration.InvalidConfigurationException;
+import io.airlift.http.client.HttpClient;
+import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.trino.spi.TrinoException;
@@ -26,8 +28,11 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.Request.Builder.prepareGet;
+import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -232,6 +237,43 @@ class TestAuthentication
                 .hasMessage("The password flow of the oauth OAuth security scheme requires the authentication.username and authentication.password configuration properties");
     }
 
+    @Test
+    void testShortLivedOAuthTokenIsReused()
+            throws Exception
+    {
+        AtomicInteger tokenRequests = new AtomicInteger();
+        Authentication authentication = createAuthentication("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        clientCredentials:
+                          tokenUrl: http://localhost:8081/token
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES), new OpenApiConfig()
+                .setAuthenticationType(AuthenticationType.OAUTH)
+                .setClientId("client")
+                .setClientSecret("secret"), new TestingHttpClient(_ -> mockResponse(
+                HttpStatus.OK,
+                JSON_UTF_8,
+                "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":30}".formatted(tokenRequests.incrementAndGet()))));
+
+        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization")).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization")).isEqualTo("Bearer token-1");
+        assertThat(tokenRequests).hasValue(1);
+    }
+
     private Authentication createAuthentication(String specContents)
             throws IOException, InvalidConfigurationException
     {
@@ -246,12 +288,18 @@ class TestAuthentication
     private Authentication createAuthentication(String specContents, OpenApiConfig config)
             throws IOException
     {
+        return createAuthentication(specContents, config, new TestingHttpClient(_ -> {
+            throw new UnsupportedOperationException("Unexpected request to the authentication server");
+        }));
+    }
+
+    private Authentication createAuthentication(String specContents, OpenApiConfig config, HttpClient httpClient)
+            throws IOException
+    {
         Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), specContents);
         config.setSpecLocation(specFile.toString())
                 .setBaseUri(BASE_URI);
-        return new Authentication(config, new OpenApiSpec(config), new TestingHttpClient(_ -> {
-            throw new UnsupportedOperationException("Unexpected request to the authentication server");
-        }));
+        return new Authentication(config, new OpenApiSpec(config), httpClient);
     }
 
     private static Request request(String path)

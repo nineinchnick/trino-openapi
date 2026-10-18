@@ -49,6 +49,7 @@ import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerat
 import static io.airlift.json.JsonCodec.jsonCodec;
 import static io.trino.spi.StandardErrorCode.CONFIGURATION_INVALID;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
+import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -62,6 +63,7 @@ public class Authentication
     // RFC 6749 only recommends that token responses include expires_in, so when it's missing,
     // assume one hour, which is a common default lifetime of access tokens
     private static final long DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
+    private static final long MAX_TOKEN_REFRESH_MARGIN_SECONDS = 60;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -289,16 +291,16 @@ public class Authentication
                         .build(),
                 createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
         long expiresIn = response.expiresIn() != null ? response.expiresIn() : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
-        return new TokenWithExpiry(response.accessToken(), Instant.now().plusSeconds(expiresIn));
+        // a fixed margin would make tokens that expire sooner than it be fetched again on every request
+        long refreshMargin = min(MAX_TOKEN_REFRESH_MARGIN_SECONDS, expiresIn / 2);
+        return new TokenWithExpiry(response.accessToken(), Instant.now().plusSeconds(expiresIn - refreshMargin));
     }
 
-    private record TokenWithExpiry(String token, Instant expiresAt)
+    private record TokenWithExpiry(String token, Instant refreshAt)
     {
-        private static final long REFRESH_MARGIN_SECONDS = 60L;
-
         boolean isExpiringSoon()
         {
-            return Instant.now().isAfter(expiresAt.minusSeconds(REFRESH_MARGIN_SECONDS));
+            return Instant.now().isAfter(refreshAt);
         }
     }
 
