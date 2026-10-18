@@ -16,8 +16,6 @@ package pl.net.was;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.SizeOf;
 import io.trino.spi.TrinoException;
@@ -39,7 +37,6 @@ import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNull;
 
-@JsonDeserialize(builder = OpenApiTableHandle.Builder.class)
 public class OpenApiTableHandle
         implements ConnectorTableHandle, Cloneable
 {
@@ -66,6 +63,20 @@ public class OpenApiTableHandle
         this.updatePaths = ImmutableList.copyOf(requireNonNull(updatePaths, "updatePaths is null"));
         this.deletePaths = ImmutableList.copyOf(requireNonNull(deletePaths, "deletePaths is null"));
         this.constraint = requireNonNull(constraint, "constraint is null");
+    }
+
+    // Trino only shares jackson-annotations with plugins, so handles can't be deserialized through a builder;
+    // use the builder to create handles in code
+    @JsonCreator
+    public static OpenApiTableHandle fromJson(
+            @JsonProperty("schemaTableName") SchemaTableName schemaTableName,
+            @JsonProperty("selectPaths") List<HttpPath> selectPaths,
+            @JsonProperty("insertPaths") List<HttpPath> insertPaths,
+            @JsonProperty("updatePaths") List<HttpPath> updatePaths,
+            @JsonProperty("deletePaths") List<HttpPath> deletePaths,
+            @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint)
+    {
+        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint);
     }
 
     public static Builder builder(SchemaTableName schemaTableName)
@@ -265,7 +276,6 @@ public class OpenApiTableHandle
         throw new TrinoException(INVALID_ROW_FILTER, "Already pushed down a predicate for " + column.getName() + " which only supports a single value");
     }
 
-    @JsonPOJOBuilder(withPrefix = "set")
     public static class Builder
     {
         private final SchemaTableName schemaTableName;
@@ -275,41 +285,35 @@ public class OpenApiTableHandle
         private List<HttpPath> deletePaths = ImmutableList.of();
         private TupleDomain<ColumnHandle> constraint = TupleDomain.none();
 
-        @JsonCreator
-        public Builder(@JsonProperty("schemaTableName") SchemaTableName schemaTableName)
+        private Builder(SchemaTableName schemaTableName)
         {
             this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
         }
 
-        @JsonProperty
         public Builder setSelectPaths(List<HttpPath> selectPaths)
         {
             this.selectPaths = requireNonNull(selectPaths, "selectPaths is null");
             return this;
         }
 
-        @JsonProperty
         public Builder setInsertPaths(List<HttpPath> insertPaths)
         {
             this.insertPaths = requireNonNull(insertPaths, "insertPaths is null");
             return this;
         }
 
-        @JsonProperty
         public Builder setUpdatePaths(List<HttpPath> updatePaths)
         {
             this.updatePaths = requireNonNull(updatePaths, "updatePaths is null");
             return this;
         }
 
-        @JsonProperty
         public Builder setDeletePaths(List<HttpPath> deletePaths)
         {
             this.deletePaths = requireNonNull(deletePaths, "deletePaths is null");
             return this;
         }
 
-        @JsonProperty
         public Builder setConstraint(TupleDomain<ColumnHandle> constraint)
         {
             this.constraint = requireNonNull(constraint, "constraint is null");
