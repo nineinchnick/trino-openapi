@@ -50,6 +50,23 @@ curl -fsSL -o /tmp/datadog.yaml https://raw.githubusercontent.com/DataDog/datado
 yq eval-all --from-file dev/specs/merge-patch.yq /tmp/datadog.yaml dev/specs/datadog.patch.json > src/test/resources/datadog.yaml
 ```
 
+## Cloudflare
+
+* Upstream: https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
+* Patch: [`cloudflare.patch.json`](cloudflare.patch.json)
+* Output: `src/test/resources/cloudflare.json`
+
+The OpenAPI parser reports errors for some values in the upstream spec, and the
+connector refuses to load a spec with errors. The patch removes them: multipart
+encodings of parts that aren't properties of the request body schema, and
+defaults that don't match the type, like `"200"` for an array, or
+`"Now + 30 minutes"` for a date-time.
+
+```shell
+curl -fsSL -o /tmp/cloudflare.json https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
+jq --indent 2 --slurpfile patch dev/specs/cloudflare.patch.json -f dev/specs/merge-patch.jq /tmp/cloudflare.json > src/test/resources/cloudflare.json
+```
+
 ## Unpatched copies
 
 These test resources are upstream specs without changes, formatted like the
