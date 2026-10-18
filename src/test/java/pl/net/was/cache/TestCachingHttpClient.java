@@ -127,6 +127,41 @@ class TestCachingHttpClient
     }
 
     @Test
+    void testErrorResponsesKeepStoredResponse()
+    {
+        List<HttpStatus> statuses = new ArrayList<>(List.of(HttpStatus.OK, HttpStatus.TOO_MANY_REQUESTS, HttpStatus.SERVICE_UNAVAILABLE));
+        CachingHttpClient client = client(request -> request.getHeaders().containsKey(IF_NONE_MATCH) && statuses.isEmpty()
+                ? response(HttpStatus.NOT_MODIFIED, "")
+                : response(statuses.removeFirst(), "first", ETAG, "\"v1\""));
+
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        // an exceeded rate limit or a server failure says nothing about the resource
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("429 first");
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("503 first");
+        // so the next request can be a revalidation, which some APIs don't count against rate limits
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        assertThat(serverRequests).hasSize(4);
+        assertThat(serverRequests.getLast().getHeaders().get(IF_NONE_MATCH)).containsExactly("\"v1\"");
+    }
+
+    @Test
+    void testMissingResourceRemovesStoredResponse()
+    {
+        List<HttpStatus> statuses = new ArrayList<>(List.of(HttpStatus.OK, HttpStatus.NOT_FOUND, HttpStatus.OK));
+        CachingHttpClient client = client(_ -> {
+            HttpStatus status = statuses.removeFirst();
+            // a response without freshness or validators can't be stored, so it can't replace the stored one
+            return status == HttpStatus.OK ? response(status, "first", ETAG, "\"v1\"") : response(status, "missing");
+        });
+
+        client.execute(get(ITEMS), BODY);
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("404 missing");
+        client.execute(get(ITEMS), BODY);
+        assertThat(serverRequests).hasSize(3);
+        assertThat(serverRequests.getLast().getHeaders().containsKey(IF_NONE_MATCH)).isFalse();
+    }
+
+    @Test
     void testResponsesThatCantBeReusedAreNotStored()
     {
         CachingHttpClient client = client(request -> switch (request.getUri().getPath()) {

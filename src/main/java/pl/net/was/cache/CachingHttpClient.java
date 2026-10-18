@@ -90,7 +90,7 @@ public class CachingHttpClient
         if (isStorable(response)) {
             cache.put(request.getMethod(), request.getUri(), CachedResponse.fromResponse(request, response, requestTime, responseTime));
         }
-        else if (stored.isPresent()) {
+        else if (stored.isPresent() && replacesStoredResponse(response.statusCode())) {
             cache.remove(request.getMethod(), request.getUri());
         }
         return responseHandler.handle(request, response);
@@ -149,6 +149,16 @@ public class CachingHttpClient
                 return responseHandler.handle(request, response);
             }
         });
+    }
+
+    /**
+     * Returns true if a response that can't be stored still says the stored one is outdated, like a new representation, or a removed resource.
+     * Other errors, like an exceeded rate limit or a server failure, say nothing about the resource, so the stored response can still be
+     * revalidated later, which some APIs, like GitHub, don't count against rate limits. See RFC 9111, section 4.4.
+     */
+    private static boolean replacesStoredResponse(int statusCode)
+    {
+        return statusCode < 400 || statusCode == 404 || statusCode == 410;
     }
 
     private static boolean isStorable(BufferedResponse response)
