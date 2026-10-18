@@ -113,6 +113,26 @@ items = {
 
 notes: dict[int, Note] = {}
 
+# kept as raw JSON, because Python floats can't hold all decimal values exactly
+numbers = [
+    '{"id": 1, "real_value": -1.5, "decimal_value": 1234567890.12345678, '
+    '"real_values": [1.5, -2.25], "decimal_values": [0.00000001, -1234.5], '
+    '"decimal_map": {"a": 1234567890.12345678}}',
+]
+
+# the connector ignores the format of OpenAPI 3.1 number schemas, so REAL columns use the non-standard float type
+NUMBERS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "real_value": {"type": "float"},
+        "decimal_value": {"type": "number"},
+        "real_values": {"type": "array", "items": {"type": "float"}},
+        "decimal_values": {"type": "array", "items": {"type": "number"}},
+        "decimal_map": {"type": "object", "additionalProperties": {"type": "number"}},
+    },
+}
+
 
 @router.get("/")
 def root():
@@ -221,6 +241,11 @@ def get_item(item_id: int) -> Item:
     return items[item_id]
 
 
+@router.get("/numbers")
+def list_numbers() -> Response:
+    return Response(content="[" + ",".join(numbers) + "]", media_type="application/json")
+
+
 @router.get("/error")
 def error() -> Item:
     raise UnicornException(name="Inevitable error")
@@ -273,6 +298,12 @@ def custom_openapi():
     # FastAPI never generates path item parameters
     item_path = openapi_schema["paths"]["/items/{item_id}"]
     item_path["parameters"] = item_path["get"].pop("parameters")
+    # numbers are not declared with pydantic models, because they would be parsed as Python floats
+    openapi_schema["components"]["schemas"]["Numbers"] = NUMBERS_SCHEMA
+    numbers_ref = {"$ref": "#/components/schemas/Numbers"}
+    openapi_schema["paths"]["/numbers"]["get"]["responses"]["200"]["content"] = {
+        "application/json": {"schema": {"type": "array", "items": numbers_ref}},
+    }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

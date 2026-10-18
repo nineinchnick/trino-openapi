@@ -415,6 +415,17 @@ public class OpenApiClient
                 .collect(toMap(entry -> entry.getKey().getSourceName(), Map.Entry::getValue));
     }
 
+    private Map<String, Object> getRecordFilterValues(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        // records need the Trino native representation of values, not the one used to encode request parameters
+        String tableName = table.getSchemaTableName().getTableName();
+        return openApiSpec.getTables().get(tableName).stream()
+                .filter(column -> isPredicate(column, httpPath, null))
+                .map(column -> new SimpleEntry<>(column.getSourceName(), getNativeFilter(column, table.getConstraint())))
+                .filter(entry -> entry.getValue() != null)
+                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     private Map<OpenApiColumn, Object> getFilterColumnValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in, Function<OpenApiColumn, Object> valueProvider)
     {
         checkState(!ParameterLocation.PATH.equals(in), "getFilterValues cannot be used for path parameters");
@@ -461,6 +472,28 @@ public class OpenApiClient
 
     private static Object getFilter(OpenApiColumn column, TupleDomain<ColumnHandle> constraint)
     {
+        Object value = getNativeFilter(column, constraint);
+        if (value == null) {
+            return null;
+        }
+        return switch (column.getType().getBaseName()) {
+            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> value;
+            case StandardTypes.REAL -> intBitsToFloat(((Long) value).intValue());
+            case StandardTypes.DOUBLE -> (Double) value;
+            case StandardTypes.DECIMAL -> toDecimal(value, (DecimalType) column.getType());
+            case StandardTypes.VARCHAR -> ((Slice) value).toStringUtf8();
+            case StandardTypes.DATE -> toDate((Long) value, column.getSourceType());
+            case StandardTypes.TIMESTAMP -> toDatetime((Long) value, column.getSourceType());
+            case StandardTypes.BOOLEAN -> value;
+            case StandardTypes.MAP -> (SqlMap) value;
+            case StandardTypes.ARRAY -> (Block) value;
+            case StandardTypes.ROW -> (SqlRow) value;
+            default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
+        };
+    }
+
+    private static Object getNativeFilter(OpenApiColumn column, TupleDomain<ColumnHandle> constraint)
+    {
         requireNonNull(column, "column is null");
         Domain domain = null;
         if (constraint.getDomains().isPresent()) {
@@ -469,20 +502,7 @@ public class OpenApiClient
         if (domain == null || domain.isOnlyNull()) {
             return null;
         }
-        return switch (column.getType().getBaseName()) {
-            case StandardTypes.BIGINT, StandardTypes.INTEGER, StandardTypes.SMALLINT, StandardTypes.TINYINT -> domain.getSingleValue();
-            case StandardTypes.REAL -> intBitsToFloat(((Long) domain.getSingleValue()).intValue());
-            case StandardTypes.DOUBLE -> (Double) domain.getSingleValue();
-            case StandardTypes.DECIMAL -> toDecimal(domain.getSingleValue(), (DecimalType) column.getType());
-            case StandardTypes.VARCHAR -> ((Slice) domain.getSingleValue()).toStringUtf8();
-            case StandardTypes.DATE -> toDate((Long) domain.getSingleValue(), column.getSourceType());
-            case StandardTypes.TIMESTAMP -> toDatetime((Long) domain.getSingleValue(), column.getSourceType());
-            case StandardTypes.BOOLEAN -> domain.getSingleValue();
-            case StandardTypes.MAP -> (SqlMap) domain.getSingleValue();
-            case StandardTypes.ARRAY -> (Block) domain.getSingleValue();
-            case StandardTypes.ROW -> (SqlRow) domain.getSingleValue();
-            default -> throw new TrinoException(INVALID_ROW_FILTER, "Unexpected constraint for " + column.getName() + "(" + column.getType().getBaseName() + ")");
-        };
+        return domain.getSingleValue();
     }
 
     private static Object getRowValue(OpenApiOutputTableHandle table, Page page, int position, OpenApiColumn column)
@@ -713,21 +733,22 @@ public class OpenApiClient
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
-        Map<String, Object> params = getFilterValues(table, httpPath, null);
+        String rowId = getFilterValues(table, httpPath, null).values().stream().findFirst().map(Object::toString).orElse(null);
+        Map<String, Object> recordParams = getRecordFilterValues(table, httpPath);
 
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, params, jsonRecord));
+                resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, rowId, recordParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, params, jsonNode));
+            resultRecordsBuilder.addAll(convertJsonToRecords(table, httpPath, resultsPointer, rowId, recordParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, Map<String, Object> params, JsonNode jsonNode)
+    private Iterable<List<?>> convertJsonToRecords(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, String rowId, Map<String, Object> recordParams, JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("JsonNode is not an object: %s", jsonNode));
@@ -749,17 +770,17 @@ public class OpenApiClient
             for (OpenApiColumn column : columns) {
                 if (column.getName().equals(ROW_ID)) {
                     // TODO this is dangerous, make it configurable and required?
-                    recordBuilder.add(params.values().stream().findFirst().map(Object::toString).orElse(null));
+                    recordBuilder.add(rowId);
                     continue;
                 }
                 String parameterName = column.getSourceName();
                 // request parameters are usually not included in the response, so copy them from predicates
                 if (isPredicate(column, httpPath, null) && !(column.getName().equals(column.getSourceName()) && resultNode.has(parameterName))) {
-                    recordBuilder.add(params.getOrDefault(parameterName, null));
+                    recordBuilder.add(recordParams.getOrDefault(parameterName, null));
                     continue;
                 }
                 recordBuilder.add(
-                        JsonTrinoConverter.convert(
+                        JsonTrinoConverter.convertToRecordValue(
                                 resultNode.get(parameterName),
                                 column.getType(),
                                 column.getSourceType()));
