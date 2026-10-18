@@ -1503,7 +1503,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -3733,7 +3736,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -4796,7 +4802,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "automations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -13415,7 +13424,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -13490,6 +13502,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -17016,7 +17031,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -17127,6 +17145,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       },
@@ -17334,6 +17355,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -17410,6 +17434,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -17693,7 +17720,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -18020,7 +18050,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -18089,7 +18122,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -18530,7 +18566,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -18726,6 +18765,11 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all",
+            "filter": "all"
           }
         }
       }
@@ -18789,7 +18833,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19137,7 +19184,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19222,7 +19272,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19330,7 +19383,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19409,7 +19465,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19520,7 +19579,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -19607,7 +19669,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 50
+          }
         }
       },
       "put": {
@@ -21524,7 +21589,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repository_cache_usages",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -21598,7 +21666,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runners",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -23234,7 +23305,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -23635,7 +23709,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -23962,7 +24039,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "policies",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -24334,7 +24414,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runner_groups",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -24714,7 +24797,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runners",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -24786,7 +24872,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -24997,7 +25086,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runners",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -25213,7 +25305,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runners",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -25921,7 +26016,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -26212,7 +26310,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -26434,7 +26535,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       },
       "post": {
@@ -26759,7 +26863,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -26984,7 +27091,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -27275,7 +27385,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -27497,7 +27610,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       },
       "post": {
@@ -27822,7 +27938,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -29916,7 +30035,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -30128,7 +30250,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -30812,7 +30937,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -32240,7 +32368,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "codespaces",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -32560,7 +32691,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -32866,7 +33000,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -34721,7 +34858,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "seats",
-          "totalResultsPath": "total_seats"
+          "totalResultsPath": "total_seats",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -35371,7 +35511,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -36476,7 +36619,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -36787,7 +36933,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -37041,7 +37190,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -37104,7 +37256,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -37167,7 +37322,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -37884,7 +38042,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -37950,7 +38111,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -38328,7 +38492,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -38444,7 +38611,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "installations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -38883,7 +39053,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -39086,7 +39259,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -39725,6 +39901,11 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all",
+            "filter": "all"
           }
         }
       }
@@ -39818,7 +39999,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -39999,7 +40183,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "codespaces",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -40428,7 +40615,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -40831,7 +41021,10 @@
         ],
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -41231,7 +41424,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -41301,7 +41497,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -41376,7 +41575,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -41614,7 +41816,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -41843,7 +42048,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -42084,7 +42292,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -42342,7 +42553,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -42438,7 +42652,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -42676,7 +42893,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -42756,7 +42976,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "configurations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -45579,7 +45802,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "patch": {
@@ -45713,7 +45939,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -45930,7 +46159,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -46227,7 +46459,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -46450,7 +46685,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -46825,7 +47063,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -47018,7 +47259,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -47963,7 +48207,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -48160,7 +48407,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "network_configurations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -48558,7 +48808,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -48986,7 +49239,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -49064,7 +49320,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -49296,7 +49555,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -49514,7 +49776,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -50190,7 +50455,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "artifacts",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -50664,7 +50932,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "delete": {
@@ -51323,7 +51594,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -51400,7 +51674,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       }
     },
@@ -52183,7 +52460,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "policies",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -52580,7 +52860,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "runners",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -53351,7 +53634,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "workflow_runs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -53627,7 +53913,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "artifacts",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -53767,7 +54056,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "jobs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -54141,7 +54433,11 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "jobs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100,
+            "filter": "all"
+          }
         }
       }
     },
@@ -54646,7 +54942,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -54932,7 +55231,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       },
       "post": {
@@ -55228,7 +55530,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "workflows",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -55564,7 +55869,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "workflow_runs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -55808,7 +56116,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -55885,7 +56196,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       }
     },
@@ -55962,7 +56276,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -56248,7 +56565,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       },
       "post": {
@@ -56533,7 +56853,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -57236,7 +57559,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -60722,7 +61048,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -61118,7 +61447,11 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "check_runs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100,
+            "filter": "all"
+          }
         }
       }
     },
@@ -61708,7 +62041,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -62165,7 +62501,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -62282,7 +62621,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -63447,7 +63789,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "codespaces",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -63692,7 +64037,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "devcontainers",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -64043,7 +64391,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -64346,7 +64697,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -64627,7 +64981,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -64878,7 +65235,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -65154,7 +65514,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -65277,7 +65640,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -65448,7 +65814,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -65658,7 +66027,11 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "check_runs",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100,
+            "filter": "all"
+          }
         }
       }
     },
@@ -65751,7 +66124,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "check_suites",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -65877,7 +66253,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -66577,7 +66956,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -67162,7 +67544,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -67800,7 +68185,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -68123,7 +68511,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -68452,7 +68843,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "environments",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -68730,7 +69124,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "branch_policies",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -69206,7 +69603,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "available_custom_deployment_protection_rule_integrations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -69374,7 +69774,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -69675,7 +70078,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "variables",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       },
       "post": {
@@ -69964,7 +70370,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -70046,7 +70455,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -71382,7 +71794,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -73458,7 +73873,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -73802,6 +74220,10 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all"
           }
         }
       },
@@ -74138,6 +74560,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -74498,7 +74923,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -74703,7 +75131,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -75710,6 +76141,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       },
@@ -75878,7 +76312,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -76125,7 +76562,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -76194,7 +76634,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -76269,7 +76712,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -76691,7 +77137,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -77374,7 +77823,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -77588,7 +78040,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -77921,7 +78376,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -78220,7 +78678,11 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all"
+          }
         }
       }
     },
@@ -78430,7 +78892,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -78493,7 +78958,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -78734,7 +79202,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -79396,7 +79867,11 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all"
+          }
         }
       },
       "post": {
@@ -79744,7 +80219,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -79819,7 +80297,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "put": {
@@ -80307,7 +80788,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -81097,7 +81581,11 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all"
+          }
         }
       },
       "post": {
@@ -81324,6 +81812,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -81575,7 +82066,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -82120,6 +82614,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       },
@@ -82425,7 +82922,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -82500,7 +83000,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -83439,7 +83942,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -83837,7 +84343,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -84312,7 +84821,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -85086,7 +85598,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -85259,7 +85774,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -85457,7 +85975,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -85534,7 +86055,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -85749,7 +86273,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -86138,7 +86665,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -86332,7 +86862,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -86596,7 +87129,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -87897,7 +88433,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -89140,7 +89679,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -89297,7 +89839,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 30
+          }
         }
       }
     },
@@ -89736,7 +90281,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -89952,7 +90500,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -90068,7 +90619,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -90945,7 +91499,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91044,7 +91601,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91200,7 +91760,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91317,7 +91880,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91424,7 +91990,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91507,7 +92076,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -91613,7 +92185,10 @@
           "limitParam": "per_page",
           "resultsPath": "items",
           "totalResultsPath": "total_count",
-          "maxResults": 1000
+          "maxResults": 1000,
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -92796,7 +93371,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -93012,7 +93590,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "codespaces",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -93283,7 +93864,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "secrets",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -94493,7 +95077,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -94766,7 +95353,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -94832,7 +95422,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -95033,7 +95626,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -95292,7 +95888,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "installations",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -95392,7 +95991,10 @@
           "pageParam": "page",
           "limitParam": "per_page",
           "resultsPath": "repositories",
-          "totalResultsPath": "total_count"
+          "totalResultsPath": "total_count",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -95740,6 +96342,11 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100,
+            "state": "all",
+            "filter": "all"
           }
         }
       }
@@ -95809,7 +96416,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -96053,7 +96663,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -96116,7 +96729,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -96198,7 +96814,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -96405,7 +97024,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -96832,7 +97454,10 @@
         ],
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -96898,7 +97523,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -96973,7 +97601,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -97190,7 +97821,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -97395,7 +98029,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -97550,7 +98187,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -97857,7 +98497,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -98021,7 +98664,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -98266,7 +98912,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       },
       "post": {
@@ -98529,7 +99178,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -98733,7 +99385,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -98799,7 +99454,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101423,7 +102081,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101481,7 +102142,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101536,7 +102200,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101596,7 +102263,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101656,7 +102326,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -101770,6 +102443,9 @@
               "lowerInclusive": true,
               "exact": false
             }
+          },
+          "parameterDefaults": {
+            "per_page": 100
           }
         }
       }
@@ -101830,7 +102506,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -102004,7 +102683,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -102064,7 +102746,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -102148,7 +102833,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -103659,7 +104347,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -103714,7 +104405,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -103827,7 +104521,10 @@
           },
           "directionParam": "direction",
           "ascendingValue": "asc",
-          "descendingValue": "desc"
+          "descendingValue": "desc",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -104121,7 +104818,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -104181,7 +104881,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -104257,7 +104960,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
@@ -104317,7 +105023,10 @@
         },
         "x-trino": {
           "pageParam": "page",
-          "limitParam": "per_page"
+          "limitParam": "per_page",
+          "parameterDefaults": {
+            "per_page": 100
+          }
         }
       }
     },
