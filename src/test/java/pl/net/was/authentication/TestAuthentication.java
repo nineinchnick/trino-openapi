@@ -128,6 +128,33 @@ class TestAuthentication
     }
 
     @Test
+    void testGlobalAnonymousSecuritySkipsDefaultAuthentication()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication("""
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security: []
+                paths:
+                  /inherited:
+                    get:
+                %s
+                  /secured:
+                    get:
+                      security:
+                        - basicAuth: []
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
+
+        assertNoCredentials(authentication.filterRequest(request("/inherited")));
+        assertThat(authentication.filterRequest(request("/secured")).getHeader("Authorization"))
+                .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
+    }
+
+    @Test
     void testSpecWithoutSecuritySchemes()
             throws Exception
     {
