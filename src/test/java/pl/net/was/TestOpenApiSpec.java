@@ -2305,6 +2305,9 @@ class TestOpenApiSpec
                           nullable: true
                         comment:
                           type: string
+                        label:
+                          type: string
+                          nullable: false
                 """;
         OpenApiSpec spec = parseSpec(specContents);
 
@@ -2317,6 +2320,7 @@ class TestOpenApiSpec
                         Assertions.tuple("name", false),
                         Assertions.tuple("note", true),
                         Assertions.tuple("comment", true),
+                        Assertions.tuple("label", true),
                         Assertions.tuple("page", true));
         Assertions.assertThat(spec.getTables().get("nested_runs"))
                 .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
@@ -2324,11 +2328,64 @@ class TestOpenApiSpec
                         Assertions.tuple("run_id", false),
                         Assertions.tuple("name", false),
                         Assertions.tuple("note", true),
-                        Assertions.tuple("comment", true));
+                        Assertions.tuple("comment", true),
+                        Assertions.tuple("label", true));
         Assertions.assertThat(spec.getTables().get("all_runs"))
                 .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
                 .containsExactly(
                         Assertions.tuple("run_id", false),
+                        Assertions.tuple("name", false),
+                        Assertions.tuple("note", true),
+                        Assertions.tuple("comment", true),
+                        Assertions.tuple("label", true));
+    }
+
+    @Test
+    public void testOpenApi31NullableResults()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /runs:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: Runs
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                required:
+                                - results
+                                properties:
+                                  results:
+                                    type: array
+                                    items:
+                                      type: object
+                                      required:
+                                      - name
+                                      - note
+                                      properties:
+                                        name:
+                                          type: string
+                                        note:
+                                          type:
+                                          - string
+                                          - "null"
+                                        comment:
+                                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("runs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
                         Assertions.tuple("name", false),
                         Assertions.tuple("note", true),
                         Assertions.tuple("comment", true));

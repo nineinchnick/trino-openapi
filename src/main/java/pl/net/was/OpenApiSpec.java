@@ -666,7 +666,8 @@ public class OpenApiSpec
                 .setSourceName(sourceName)
                 .setType(type.type())
                 .setSourceType(type.schema())
-                .setIsNullable(isNullable(schema, isNullable))
+                // optional properties can be missing from the response, even if they're not nullable
+                .setIsNullable(isNullable || isNullable(schema, false))
                 .setIsHidden(false)
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
