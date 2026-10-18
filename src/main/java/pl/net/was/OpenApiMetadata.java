@@ -334,13 +334,14 @@ public class OpenApiMetadata
     }
 
     @Override
-    public void finishMerge(
+    public Optional<ConnectorOutputMetadata> finishMerge(
             ConnectorSession session,
             ConnectorMergeTableHandle tableHandle,
             List<ConnectorTableHandle> sourceTableHandles,
             Collection<Slice> fragments,
             Collection<ComputedStatistics> computedStatistics)
     {
+        return Optional.empty();
     }
 
     private static boolean isRequestParameter(OpenApiColumn column)
