@@ -19,7 +19,9 @@ import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
 import io.airlift.configuration.InvalidConfigurationException;
+import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.airlift.units.MinDataSize;
 import io.airlift.units.MinDuration;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
@@ -29,7 +31,10 @@ import pl.net.was.authentication.AuthenticationType;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.Optional;
 
+import static io.airlift.units.DataSize.Unit.GIGABYTE;
+import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -60,6 +65,10 @@ public class OpenApiConfig
     private Duration retryInitialDelay = new Duration(1, SECONDS);
     // long enough to wait for rate limits, which servers usually reset every minute
     private Duration retryMaxDelay = new Duration(1, MINUTES);
+
+    private String httpCacheDirectory;
+    private DataSize httpCacheMaxSize = DataSize.of(1, GIGABYTE);
+    private DataSize httpCacheMaxEntrySize = DataSize.of(10, MEGABYTE);
 
     // Pushed domains are transformed into SQL IN lists
     // (or sequence of range predicates).
@@ -321,6 +330,55 @@ public class OpenApiConfig
     public boolean isRetryMaxDelayValid()
     {
         return retryInitialDelay == null || retryMaxDelay == null || retryMaxDelay.compareTo(retryInitialDelay) >= 0;
+    }
+
+    public Optional<String> getHttpCacheDirectory()
+    {
+        // the Docker image sets every property, so an empty value means it's not set
+        return Optional.ofNullable(httpCacheDirectory).filter(directory -> !directory.isBlank());
+    }
+
+    @Config("http-cache.directory")
+    @ConfigDescription("Directory to cache HTTP responses in, in a subdirectory named after the catalog; responses are not cached if not set")
+    public OpenApiConfig setHttpCacheDirectory(String httpCacheDirectory)
+    {
+        this.httpCacheDirectory = httpCacheDirectory;
+        return this;
+    }
+
+    @NotNull
+    @MinDataSize("1MB")
+    public DataSize getHttpCacheMaxSize()
+    {
+        return httpCacheMaxSize;
+    }
+
+    @Config("http-cache.max-size")
+    @ConfigDescription("Maximum size of cached responses of a catalog; the least recently used ones are removed above it")
+    public OpenApiConfig setHttpCacheMaxSize(DataSize httpCacheMaxSize)
+    {
+        this.httpCacheMaxSize = httpCacheMaxSize;
+        return this;
+    }
+
+    @NotNull
+    public DataSize getHttpCacheMaxEntrySize()
+    {
+        return httpCacheMaxEntrySize;
+    }
+
+    @Config("http-cache.max-entry-size")
+    @ConfigDescription("Maximum size of a single cached response; larger responses are not cached")
+    public OpenApiConfig setHttpCacheMaxEntrySize(DataSize httpCacheMaxEntrySize)
+    {
+        this.httpCacheMaxEntrySize = httpCacheMaxEntrySize;
+        return this;
+    }
+
+    @AssertTrue(message = "http-cache.max-entry-size must be less than or equal to http-cache.max-size")
+    public boolean isHttpCacheMaxEntrySizeValid()
+    {
+        return httpCacheMaxSize == null || httpCacheMaxEntrySize == null || httpCacheMaxEntrySize.compareTo(httpCacheMaxSize) <= 0;
     }
 
     @Min(1)

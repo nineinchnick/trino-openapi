@@ -31,6 +31,7 @@ import io.trino.spi.type.Type;
 import java.util.List;
 
 import static java.util.stream.Collectors.toList;
+import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
 
 public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
@@ -71,7 +72,7 @@ public class OpenApiRecordSetProvider
                 })
                 .toList();
 
-        Iterable<List<?>> rows = client.getRows(((OpenApiSplit) connectorSplit).getTableHandle());
+        Iterable<List<?>> rows = client.getRows(((OpenApiSplit) connectorSplit).getTableHandle(), !isHttpCacheEnabled(connectorSession));
         Iterable<List<?>> mappedRows = Iterables.transform(rows, row -> columnIndexes
                 .stream()
                 .map(row::get)

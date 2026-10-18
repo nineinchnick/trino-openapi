@@ -326,6 +326,31 @@ def item_categories() -> Results:
         total_results=len(items))
 
 
+class CachedItemRequests(BaseModel):
+    total: int
+    revalidated: int
+
+
+cached_item_requests = CachedItemRequests(total=0, revalidated=0)
+CACHED_ITEMS_ETAG = '"items-v1"'
+
+
+@router.get("/cached_items")
+def list_cached_items(request: Request, response: Response) -> list[Item]:
+    cached_item_requests.total += 1
+    if request.headers.get("if-none-match") == CACHED_ITEMS_ETAG:
+        cached_item_requests.revalidated += 1
+        return Response(status_code=304, headers={"ETag": CACHED_ITEMS_ETAG, "Cache-Control": "max-age=300"})
+    response.headers["ETag"] = CACHED_ITEMS_ETAG
+    response.headers["Cache-Control"] = "max-age=300"
+    return list(items.values())
+
+
+@router.get("/cached_item_requests")
+def get_cached_item_requests() -> CachedItemRequests:
+    return cached_item_requests
+
+
 @router.get("/items")
 def list_item(page: int = None, per_page: int = None) -> Results:
     if page is None:

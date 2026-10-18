@@ -64,6 +64,9 @@ import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 
+import pl.net.was.cache.CachingHttpClient;
+import pl.net.was.cache.HttpCache;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -71,6 +74,8 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -87,6 +92,7 @@ import java.util.function.Predicate;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
+import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.HeaderNames.USER_AGENT;
@@ -132,10 +138,16 @@ public class OpenApiClient
     private final RetryPolicy retryPolicy;
 
     @Inject
-    public OpenApiClient(OpenApiConfig config, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
+    public OpenApiClient(OpenApiConfig config, CatalogName catalogName, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
     {
         this.baseUri = config.getBaseUri();
-        this.httpClient = httpClient;
+        this.httpClient = config.getHttpCacheDirectory()
+                .<HttpClient>map(directory -> new CachingHttpClient(
+                        httpClient,
+                        // every catalog has its own credentials, so it can't reuse responses of other catalogs
+                        new HttpCache(Path.of(directory, catalogName.name()), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
+                        Clock.systemUTC()))
+                .orElse(httpClient);
         this.openApiSpec = openApiSpec;
         if (config.getMaxRequestsPerSecond() != Double.MAX_VALUE) {
             rateLimiter = RateLimiter.create(config.getMaxRequestsPerSecond());
@@ -146,7 +158,7 @@ public class OpenApiClient
         this.retryPolicy = RetryPolicy.fromConfig(config);
     }
 
-    public Iterable<List<?>> getRows(OpenApiTableHandle table)
+    public Iterable<List<?>> getRows(OpenApiTableHandle table, boolean revalidateCachedResponses)
     {
         List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
@@ -158,7 +170,7 @@ public class OpenApiClient
                 .findFirst();
         Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty() || getFilter(pageColumn.get(), table.getConstraint()) != null) {
-            return Iterables.filter(makeRequest(table, httpPath, pathWithParams.getValue(), getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows(), rowFilter::test);
+            return Iterables.filter(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows(), rowFilter::test);
         }
         Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
         OpenApiTableHandle pagedTable = sortedTable.orElse(table);
@@ -175,7 +187,7 @@ public class OpenApiClient
                     OpenApiTableHandle pageTable = pagedTable.cloneWithConstraint(pagedTable.getConstraint().isNone() ? pageConstraint : pagedTable.getConstraint().intersect(pageConstraint));
                     // the body must be serialized for every page, since it can contain the page number,
                     // and the response handler copies the page number to every row
-                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
+                    return makeRequest(pageTable, httpPath, pathWithParams.getValue(), getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
                 },
                 0,
                 queryLimit.orElse(Long.MAX_VALUE),
@@ -367,6 +379,7 @@ public class OpenApiClient
                     httpPath,
                     pathWithParams.getValue(),
                     rowValues,
+                    false,
                     createStaticBodyGenerator(toBytes(body)),
                     new AnyResponseHandler());
         }
@@ -382,7 +395,7 @@ public class OpenApiClient
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
-        return makeRequest(table, httpPath, pathParameters, getParameterValues(table, httpPath), bodyGenerator, responseHandler);
+        return makeRequest(table, httpPath, pathParameters, getParameterValues(table, httpPath), false, bodyGenerator, responseHandler);
     }
 
     private Function<OpenApiColumn, Object> getParameterValues(OpenApiTableHandle table, HttpPath httpPath)
@@ -405,6 +418,7 @@ public class OpenApiClient
             HttpPath httpPath,
             Map<OpenApiColumn, Object> pathParameters,
             Function<OpenApiColumn, Object> valueProvider,
+            boolean revalidateCachedResponses,
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
@@ -439,6 +453,9 @@ public class OpenApiClient
                 .collect(joining("; "));
         if (!cookies.isEmpty()) {
             builder.addHeader(COOKIE, cookies);
+        }
+        if (revalidateCachedResponses) {
+            builder.addHeader(CACHE_CONTROL, "no-cache");
         }
 
         Request request = builder.build();

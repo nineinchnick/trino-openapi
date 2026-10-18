@@ -22,7 +22,10 @@ import io.trino.spi.connector.ConnectorRecordSetProvider;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.connector.ConnectorTransactionHandle;
+import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.transaction.IsolationLevel;
+
+import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 import static pl.net.was.OpenApiTransactionHandle.INSTANCE;
@@ -34,18 +37,21 @@ public class OpenApiConnector
     private final OpenApiSplitManager splitManager;
     private final OpenApiRecordSetProvider recordSetProvider;
     private final OpenApiPageSinkProvider pageSinkProvider;
+    private final List<PropertyMetadata<?>> sessionProperties;
 
     @Inject
     public OpenApiConnector(
             OpenApiMetadata metadata,
             OpenApiSplitManager splitManager,
             OpenApiRecordSetProvider recordSetProvider,
-            OpenApiPageSinkProvider pageSinkProvider)
+            OpenApiPageSinkProvider pageSinkProvider,
+            OpenApiSessionProperties sessionProperties)
     {
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.splitManager = requireNonNull(splitManager, "splitManager is null");
         this.recordSetProvider = requireNonNull(recordSetProvider, "recordSetProvider is null");
         this.pageSinkProvider = requireNonNull(pageSinkProvider, "pageSinkProvider is null");
+        this.sessionProperties = requireNonNull(sessionProperties, "sessionProperties is null").getSessionProperties();
     }
 
     @Override
@@ -76,6 +82,12 @@ public class OpenApiConnector
     public ConnectorPageSinkProvider getPageSinkProvider()
     {
         return pageSinkProvider;
+    }
+
+    @Override
+    public List<PropertyMetadata<?>> getSessionProperties()
+    {
+        return sessionProperties;
     }
 
     @Override
