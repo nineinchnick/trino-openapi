@@ -241,7 +241,8 @@ permissions would be retried too.
 
 Retries count against `max-requests-per-second`, like any other request.
 Error responses, including exceeded rate limits, are never stored in the
-[HTTP cache](#http-cache).
+[HTTP cache](#http-cache), and they don't remove a cached response, so a retry
+can revalidate it.
 
 ## HTTP cache
 
@@ -262,6 +263,10 @@ credentials, and cached responses survive restarts.
   Some APIs, like GitHub, don't count such requests against rate limits.
 * A successful `INSERT`, `UPDATE`, or `DELETE` removes cached responses of the
   same URL.
+* A response that can't be stored removes the cached one, if it's successful,
+  or says that the resource doesn't exist, with `404 Not Found` or `410 Gone`.
+  Other errors, like exceeded rate limits or server failures, say nothing about
+  the resource, so the cached response is kept, and can be revalidated later.
 * When the cache is bigger than `http-cache.max-size`, the least recently used
   responses are removed. Responses bigger than `http-cache.max-entry-size` are
   not cached.

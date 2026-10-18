@@ -51,6 +51,7 @@ import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNullElse;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -393,6 +394,30 @@ class TestOpenApiClientRequests
         // only the successful response is cached, so it's reused without a request
         assertThat(getRows(config, "items", null)).hasSize(1);
         assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testRetryAfterRateLimitRevalidatesCachedResponse()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(RATE_LIMITED_SPEC)
+                .setRetryMaxDelay(new Duration(1, MINUTES))
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(respond(200, "[{\"id\": 1}]", "ETag", "\"v1\""));
+        assertThat(getRows(config, "items", null)).hasSize(1);
+
+        Queue<String> conditionalRequests = new ConcurrentLinkedQueue<>();
+        responses.add(respond(429, "", "X-RateLimit-Remaining", "0", "X-RateLimit-Reset", String.valueOf(Instant.now().getEpochSecond())));
+        responses.add(exchange -> {
+            conditionalRequests.add(requireNonNullElse(exchange.getRequestHeaders().getFirst("If-None-Match"), "none"));
+            exchange.sendResponseHeaders(304, -1);
+            exchange.close();
+        });
+
+        // the rate limited response doesn't remove the cached one, so the retry only revalidates it, which GitHub doesn't count against the rate limit
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(conditionalRequests).containsExactly("\"v1\"");
+        assertThat(requestCount).hasValue(3);
     }
 
     @Test
