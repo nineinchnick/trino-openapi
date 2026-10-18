@@ -264,6 +264,10 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT author, text FROM fastapi.default.comments WHERE comment_id = 2",
                 "VALUES ('bob', 'Second')");
+        // every value is read in a separate split, using the path with the comment ID
+        assertQuery(
+                "SELECT author, text FROM fastapi.default.comments WHERE comment_id IN (1, 2)",
+                "VALUES ('alice', 'First'), ('bob', 'Second')");
         assertQueryFails(
                 "SELECT text FROM fastapi.default.comments",
                 "Missing required constraints for every path: GET /comments requires author; GET /comments/\\{comment_id} requires comment_id");
@@ -414,6 +418,26 @@ public class TestOpenApiQueries
             assertThat(rows)
                     .extracting(row -> row.getFields().getFirst())
                     .containsExactly("Portal Gun", "Plumbus");
+        }
+    }
+
+    @Test
+    public void joinProvidingRequiredPredicates()
+    {
+        try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 3")) {
+            // comments can only be listed by author, so without one, their IDs can only come from a dynamic filter
+            assertQuery(
+                    "SELECT author, text FROM fastapi.default.comments WHERE comment_id IN (SELECT id FROM %s)".formatted(table.getName()),
+                    "VALUES ('alice', 'First'), ('alice', 'Third')");
+            assertQuery(
+                    "SELECT c.author, c.text FROM fastapi.default.comments c JOIN %s t ON c.comment_id = t.id".formatted(table.getName()),
+                    "VALUES ('alice', 'First'), ('alice', 'Third')");
+        }
+        try (TestTable table = createIdsTable("memory.default.test_item_ids", "1, 2")) {
+            // the path listing items doesn't return item IDs, so the join wouldn't match any of its rows
+            assertQuery(
+                    "SELECT name FROM fastapi.default.items WHERE item_id IN (SELECT id FROM %s)".formatted(table.getName()),
+                    "VALUES 'Portal Gun', 'Plumbus'");
         }
     }
 
@@ -637,5 +661,10 @@ public class TestOpenApiQueries
     private TestTable generateDataset(String namePrefix, int elements)
     {
         return new TestTable(new TrinoSqlExecutor(getQueryRunner()), namePrefix, "AS SELECT CAST(sequential_number AS VARCHAR) AS item_id FROM TABLE(sequence(start=>0, stop=>%d))".formatted(elements - 1));
+    }
+
+    private TestTable createIdsTable(String namePrefix, String ids)
+    {
+        return new TestTable(new TrinoSqlExecutor(getQueryRunner()), namePrefix, "AS SELECT CAST(id AS BIGINT) AS id FROM (VALUES %s) t(id)".formatted(ids));
     }
 }

@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
@@ -25,7 +26,6 @@ import io.trino.spi.connector.ConnectorSplitSource;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.Constraint;
-import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.DynamicFilterSnapshot;
 import io.trino.spi.connector.FixedSplitSource;
 import io.trino.spi.predicate.Domain;
@@ -35,14 +35,18 @@ import io.trino.spi.predicate.ValueSet;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Predicate;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
+import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.function.UnaryOperator.identity;
@@ -134,20 +138,16 @@ public class OpenApiSplitManager
             ConnectorTableHandle tableHandle,
             TupleDomain<ColumnHandle> dynamicFilterPredicate)
     {
-        OpenApiTableHandle table = (OpenApiTableHandle) tableHandle;
-        Map<String, OpenApiColumn> columns = spec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+        OpenApiTableHandle originalTable = (OpenApiTableHandle) tableHandle;
+        List<OpenApiColumn> columnList = spec.getTables().get(originalTable.getSchemaTableName().getTableName());
+        Map<String, OpenApiColumn> columns = columnList.stream()
                 .collect(toMap(OpenApiColumn::getName, identity()));
         // merge in constraints from dynamicFilter, which may contain multivalued domains
-        Optional<ConstraintApplicationResult<ConnectorTableHandle>> result = table.applyFilter(new Constraint(dynamicFilterPredicate), columns, domainExpansionLimit);
-        if (result.isPresent()) {
-            table = (OpenApiTableHandle) result.get().getHandle();
-        }
+        OpenApiTableHandle table = originalTable.applyFilter(new Constraint(dynamicFilterPredicate), columns, domainExpansionLimit)
+                .map(result -> (OpenApiTableHandle) result.getHandle())
+                .orElse(originalTable);
 
-        TupleDomain<ColumnHandle> constraint = table.getConstraint();
-        if (constraint.getDomains().isEmpty()) {
-            List<OpenApiSplit> splits = List.of(new OpenApiSplit(table));
-            return getSplitSource(splits);
-        }
+        Map<ColumnHandle, Domain> originalDomains = table.getConstraint().getDomains().orElse(Map.of());
 
         /*
         Generate splits based on the cartesian product of all multi valued domains.
@@ -158,12 +158,14 @@ public class OpenApiSplitManager
         * job_id:12, conclusion:failure
         * job_id:34, conclusion:failure
          */
-        Map<ColumnHandle, Domain> originalDomains = constraint.getDomains().get();
         // first build a list of lists of tuples with the column and single-valued domain, for every value of a multi valued domain
         ImmutableList.Builder<List<Map.Entry<ColumnHandle, Domain>>> singleDomains = new ImmutableList.Builder<>();
         for (Map.Entry<ColumnHandle, Domain> entry : originalDomains.entrySet()) {
             OpenApiColumnHandle column = (OpenApiColumnHandle) entry.getKey();
             Domain domain = entry.getValue();
+            if (!isSentBySomePath(columns.get(column.getName()), table)) {
+                continue;
+            }
 
             List<Object> values;
             if (domain.getValues().isDiscreteSet()) {
@@ -183,17 +185,43 @@ public class OpenApiSplitManager
             }
             singleDomains.add(splitDomains.build());
         }
-        // then create copies of the original constraints, with every multivalued domain replaced with single-value sets
-        ImmutableList.Builder<OpenApiSplit> splits = new ImmutableList.Builder<>();
+        // then create constraints with every multivalued domain replaced with single-value sets
+        Set<TupleDomain<ColumnHandle>> splitConstraints = new LinkedHashSet<>();
         for (List<Map.Entry<ColumnHandle, Domain>> splitDomains : Lists.cartesianProduct(singleDomains.build())) {
-            Map<ColumnHandle, Domain> newDomains = new HashMap<>(originalDomains);
+            Map<ColumnHandle, Domain> newDomains = new HashMap<>();
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
                 newDomains.put(entry.getKey(), entry.getValue());
             }
-            splits.add(new OpenApiSplit(table.cloneWithConstraint(TupleDomain.withColumnDomains(newDomains))));
+            HttpPath httpPath = selectPath(table, columnList, newDomains);
+            // Trino still applies filters on predicates the selected path doesn't send,
+            // and splits that differ only in these predicates would return the same rows
+            newDomains.keySet().removeIf(column -> !isSentByPath(columns.get(((OpenApiColumnHandle) column).getName()), httpPath));
+            splitConstraints.add(TupleDomain.withColumnDomains(newDomains));
         }
+        List<OpenApiSplit> splits = splitConstraints.stream()
+                .map(splitConstraint -> new OpenApiSplit(table.cloneWithConstraint(splitConstraint)))
+                .collect(toImmutableList());
         // TODO when implementing limits, this is where we'd break down splits more
-        return getSplitSource(splits.build());
+        return getSplitSource(splits);
+    }
+
+    private static HttpPath selectPath(OpenApiTableHandle table, List<OpenApiColumn> columns, Map<ColumnHandle, Domain> domains)
+    {
+        Predicate<OpenApiColumn> hasValue = column -> domains.containsKey(column.getHandle());
+        String path = PathSelector.selectPath(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue)
+                .orElseThrow(() -> new TrinoException(INVALID_ROW_FILTER, PathSelector.describeMissingPredicates(columns, table.getSelectMethod(), table.getSelectPaths(), hasValue)));
+        return new HttpPath(table.getSelectMethod(), path);
+    }
+
+    private static boolean isSentBySomePath(OpenApiColumn column, OpenApiTableHandle table)
+    {
+        return table.getSelectPaths().stream()
+                .anyMatch(path -> isSentByPath(column, new HttpPath(table.getSelectMethod(), path)));
+    }
+
+    private static boolean isSentByPath(OpenApiColumn column, HttpPath httpPath)
+    {
+        return column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath);
     }
 
     private ConnectorSplitSource getSplitSource(List<OpenApiSplit> splits)
