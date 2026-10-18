@@ -194,6 +194,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void filterOnColumnNotSentBySelectedOperation()
+    {
+        // id is a request body field of the POST operation, but the GET operation used to read rows doesn't send it
+        assertUpdate("INSERT INTO fastapi.default.numbers (id) VALUES (3)", 1);
+        assertQuery("SELECT id FROM fastapi.default.numbers WHERE id = 1", "VALUES 1");
+        assertQuery("SELECT id FROM fastapi.default.numbers WHERE id IN (1, 3)", "VALUES 1, 3");
+    }
+
+    @Test
     public void selectWithRealAndDecimalsInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values, decimal_values FROM fastapi.default.echo_numbers " +
@@ -359,13 +368,9 @@ public class TestOpenApiQueries
 
     private List<Object> selectNumbers(long id, String columns)
     {
-        // all request body fields of the numbers table are predicates, so the connector doesn't apply a filter on id to responses
-        List<MaterializedRow> rows = getQueryRunner().execute("SELECT id, %s FROM fastapi.default.numbers".formatted(columns)).getMaterializedRows().stream()
-                .filter(row -> ((Number) row.getField(0)).longValue() == id)
-                .toList();
+        List<MaterializedRow> rows = getQueryRunner().execute("SELECT %s FROM fastapi.default.numbers WHERE id = %d".formatted(columns, id)).getMaterializedRows();
         assertThat(rows).hasSize(1);
-        List<Object> fields = rows.getFirst().getFields();
-        return fields.subList(1, fields.size());
+        return rows.getFirst().getFields();
     }
 
     private TestTable generateDataset(String namePrefix, int elements)
