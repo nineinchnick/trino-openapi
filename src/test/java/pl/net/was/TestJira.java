@@ -24,7 +24,7 @@ import java.util.Map;
 
 import static java.util.Objects.requireNonNullElse;
 
-@EnabledIfEnvironmentVariable(named = "JIRA_SITE", matches = ".*")
+@EnabledIfEnvironmentVariable(named = "JIRA_SITE", matches = ".+")
 public class TestJira
         extends AbstractTestQueryFramework
 {
