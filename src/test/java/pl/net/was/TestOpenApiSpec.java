@@ -1515,6 +1515,52 @@ class TestOpenApiSpec
                                 .build());
     }
 
+    @Test
+    public void testNormalizedNameCollisions()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: fooBar
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/Item'
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        foo-bar:
+                          type: string
+                        foo_bar:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getSourceName)
+                .containsExactly(
+                        Assertions.tuple("foo_bar", "foo-bar"),
+                        Assertions.tuple("foo_bar_2", "foo_bar"),
+                        Assertions.tuple("foo_bar_3", "fooBar"));
+    }
+
     private OpenApiSpec loadSpec(String name)
     {
         OpenApiConfig config = new OpenApiConfig();
