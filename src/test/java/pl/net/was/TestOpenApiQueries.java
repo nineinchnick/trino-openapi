@@ -1073,6 +1073,18 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsWithSplitStrategySessionProperties()
+    {
+        // the session property overrides the catalog property
+        assertSplits(withSession("split_strategy", "off"), "SELECT name FROM fastapi_probe.default.items", 1);
+        assertSplits(withSession("split_strategy", "probe"), "SELECT name FROM fastapi.default.items", 2);
+        // and the spec, which sets strideSplits only for some operations
+        assertSplits(withSession("split_strategy", "stride"), "SELECT name FROM fastapi.default.items", 3);
+        assertSplits(withSession("probe_limit", "0"), "SELECT name FROM fastapi_probe.default.items WHERE per_page = 1", 2);
+        assertQueryFails(withSession("probe_limit", "few"), "SELECT name FROM fastapi_probe.default.items", ".*Invalid probe limit: 'few', must be a number or none.*");
+    }
+
+    @Test
     public void errors()
     {
         assertQueryFails(
@@ -1149,7 +1161,12 @@ public class TestOpenApiQueries
 
     private void assertSplits(String sql, long expectedSplits)
     {
-        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(withMaxRunTime(), sql);
+        assertSplits(getSession(), sql, expectedSplits);
+    }
+
+    private void assertSplits(Session session, String sql, long expectedSplits)
+    {
+        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(withMaxRunTime(session), sql);
         assertThat(result.result().getMaterializedRows())
                 .extracting(row -> row.getFields().getFirst())
                 .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
@@ -1167,8 +1184,21 @@ public class TestOpenApiQueries
     // fail instead of hanging when pagination never ends
     private Session withMaxRunTime()
     {
-        return Session.builder(getSession())
+        return withMaxRunTime(getSession());
+    }
+
+    private static Session withMaxRunTime(Session session)
+    {
+        return Session.builder(session)
                 .setSystemProperty("query_max_run_time", "1m")
+                .build();
+    }
+
+    private Session withSession(String property, String value)
+    {
+        return Session.builder(getSession())
+                .setCatalogSessionProperty("fastapi", property, value)
+                .setCatalogSessionProperty("fastapi_probe", property, value)
                 .build();
     }
 
