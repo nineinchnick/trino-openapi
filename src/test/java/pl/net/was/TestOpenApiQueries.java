@@ -81,7 +81,10 @@ public class TestOpenApiQueries
                         "spec-location", "src/test/resources/openmeteo.yml",
                         "base-uri", "https://api.open-meteo.com"),
                 "petstore", petStoreProperties.buildOrThrow(),
-                "fastapi", fastApiProperties.buildOrThrow()));
+                "fastapi", fastApiProperties.buildOrThrow(),
+                "echo", Map.of(
+                        "spec-location", "src/test/resources/echo.yml",
+                        "base-uri", fastApiServer.getApiUrl())));
     }
 
     @Test
@@ -331,6 +334,48 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT name FROM fastapi.default.items_by_cookie WHERE item_id = 2",
                 "VALUES ('Plumbus')");
+    }
+
+    @Test
+    public void pathParameterWithReservedCharacters()
+    {
+        assertQuery(
+                "SELECT path FROM echo.default.echo_path WHERE value = 'a/b?c&d#e f'",
+                "VALUES '/echo/path/a%2Fb%3Fc%26d%23e%20f'");
+    }
+
+    @Test
+    public void pathParameterStyles()
+    {
+        assertQuery(
+                "SELECT path FROM echo.default.echo_path_array WHERE \"values\" = ARRAY['a/b', 'c,d']",
+                "VALUES '/echo/path_array/a%2Fb,c%2Cd'");
+        assertQuery(
+                "SELECT path FROM echo.default.echo_label WHERE \"values\" = ARRAY['a.b', 'c d']",
+                "VALUES '/echo/label/.a.b,c%20d'");
+        assertQuery(
+                "SELECT path FROM echo.default.echo_matrix WHERE \"values\" = ARRAY['a;b', 'c=d']",
+                "VALUES '/echo/matrix/;values=a%3Bb;values=c%3Dd'");
+        assertQuery(
+                "SELECT path FROM echo.default.echo_path_object WHERE color = CAST(ROW(100, 'a/b') AS ROW(r bigint, name varchar))",
+                "VALUES '/echo/path_object/r=100,name=a%2Fb'");
+    }
+
+    @Test
+    public void decimalParametersInPlainNotation()
+    {
+        assertQuery(
+                "SELECT path, query FROM echo.default.echo_decimals " +
+                        "WHERE \"values\" = CAST(ARRAY[0.00000001, -1000] AS ARRAY(DECIMAL(18, 8))) AND value = CAST(0.00000001 AS DECIMAL(18, 8))",
+                "VALUES ('/echo/decimals/0.00000001,-1000.00000000', 'value=0.00000001')");
+    }
+
+    @Test
+    public void queryParameterWithReservedCharacters()
+    {
+        assertQuery(
+                "SELECT query FROM echo.default.echo_query WHERE value = 'a/b?c&d#e f+g='",
+                "VALUES 'value=a%2Fb%3Fc%26d%23e%20f%2Bg%3D'");
     }
 
     @Test

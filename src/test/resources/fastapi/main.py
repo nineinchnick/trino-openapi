@@ -104,6 +104,13 @@ class DecimalText(BaseModel):
     decimal_text: str
 
 
+class Echo(BaseModel):
+    path: str
+    query: str
+    header: str | None = None
+    cookie: str | None = None
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -265,6 +272,18 @@ async def echo_numbers(request: Request) -> Response:
 def decimal_parameters(decimal_value: str) -> DecimalText:
     # returns the exact text of the parameter, to check how it was formatted
     return DecimalText(decimal_text=decimal_value)
+
+
+# parameter serialization is described only in echo.yml, since FastAPI can't parse most parameter styles;
+# the path converter also matches values with encoded slashes, because they're decoded before routing
+@router.get("/echo/{rest:path}")
+def echo(request: Request, rest: str) -> Echo:
+    # return the request exactly as it was received, before any percent-decoding
+    return Echo(
+        path=request.scope["raw_path"].decode(),
+        query=request.scope["query_string"].decode(),
+        header=request.headers.get("x-color"),
+        cookie=request.headers.get("cookie"))
 
 
 @router.get("/error")

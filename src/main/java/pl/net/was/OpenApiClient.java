@@ -33,7 +33,6 @@ import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
-import io.airlift.http.client.HttpUriBuilder;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
@@ -137,7 +136,7 @@ public class OpenApiClient
         PathItem.HttpMethod method = table.getSelectMethod();
         List<String> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
-        Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
+        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, method, selectPaths, (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = new HttpPath(method, pathWithParams.getKey());
         Optional<OpenApiColumn> pageColumn = openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
                 .filter(OpenApiColumn::isPageNumber)
@@ -189,7 +188,7 @@ public class OpenApiClient
     public void postRows(OpenApiOutputTableHandle table, Page page, int position)
     {
         Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
-        Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(
+        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
                 PathItem.HttpMethod.POST,
                 table.getTableHandle().getInsertPaths(),
@@ -198,7 +197,7 @@ public class OpenApiClient
         postRows(table, httpPath, pathWithParams.getValue(), rowValues, serializePage(table, httpPath, page, position));
     }
 
-    public void postRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<String, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
+    public void postRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
     {
         try {
             makeRequest(
@@ -217,7 +216,7 @@ public class OpenApiClient
     public void putRows(OpenApiOutputTableHandle table, Page page, int position)
     {
         Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
-        Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(
+        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
                 PathItem.HttpMethod.PUT,
                 table.getTableHandle().getUpdatePaths(),
@@ -226,7 +225,7 @@ public class OpenApiClient
         putRows(table, httpPath, pathWithParams.getValue(), rowValues, serializePage(table, httpPath, page, position));
     }
 
-    public void putRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<String, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
+    public void putRows(OpenApiOutputTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParams, Function<OpenApiColumn, Object> valueProvider, JsonNode data)
     {
         try {
             makeRequest(
@@ -245,7 +244,7 @@ public class OpenApiClient
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
         // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
-        Map.Entry<String, Map<String, Object>> pathWithParams = selectPath(
+        Map.Entry<String, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
                 PathItem.HttpMethod.DELETE,
                 table.getTableHandle().getDeletePaths(),
@@ -262,24 +261,26 @@ public class OpenApiClient
     public <T> T makeRequest(
             OpenApiTableHandle table,
             HttpPath httpPath,
-            Map<String, Object> parameters,
+            Map<OpenApiColumn, Object> pathParameters,
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
-        return makeRequest(table, httpPath, parameters, column -> getFilter(column, table.getConstraint()), bodyGenerator, responseHandler);
+        return makeRequest(table, httpPath, pathParameters, column -> getFilter(column, table.getConstraint()), bodyGenerator, responseHandler);
     }
 
     private <T> T makeRequest(
             OpenApiTableHandle table,
             HttpPath httpPath,
-            Map<String, Object> parameters,
+            Map<OpenApiColumn, Object> pathParameters,
             Function<OpenApiColumn, Object> valueProvider,
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
         String uriPath = httpPath.path();
-        for (Map.Entry<String, Object> entry : parameters.entrySet()) {
-            uriPath = uriPath.replace(format("{%s}", entry.getKey()), formatParamValue(entry.getValue()));
+        for (Map.Entry<OpenApiColumn, Object> entry : pathParameters.entrySet()) {
+            OpenApiColumn column = entry.getKey();
+            String value = getParameterStyle(column, httpPath, ParameterLocation.PATH).serializePathValue(column.getSourceName(), toJsonNode(column, entry.getValue()));
+            uriPath = uriPath.replace(format("{%s}", column.getSourceName()), value);
         }
         URI uri;
         try {
@@ -317,7 +318,7 @@ public class OpenApiClient
         return httpClient.execute(request, responseHandler);
     }
 
-    private Map.Entry<String, Map<String, Object>> selectPath(OpenApiTableHandle table, PathItem.HttpMethod method, List<String> paths, Function<OpenApiColumn, Object> valueProvider)
+    private Map.Entry<String, Map<OpenApiColumn, Object>> selectPath(OpenApiTableHandle table, PathItem.HttpMethod method, List<String> paths, Function<OpenApiColumn, Object> valueProvider)
     {
         String tableName = table.getSchemaTableName().getTableName();
         List<OpenApiColumn> columns = openApiSpec.getTables().get(tableName);
@@ -330,7 +331,7 @@ public class OpenApiClient
                         .map(entry -> entry.getKey().path()))
                 .toList();
         // index params (created from column predicates) by path
-        Map<HttpPath, Map<String, Object>> pathParams = columns.stream()
+        Map<HttpPath, Map<OpenApiColumn, Object>> pathParams = columns.stream()
                 .flatMap(column -> Stream.concat(
                                 column.getOptionalPredicate().entrySet().stream(),
                                 column.getRequiresPredicate().entrySet().stream())
@@ -343,7 +344,7 @@ public class OpenApiClient
                 .collect(groupingBy(
                         Map.Entry::getKey,
                         toMap(
-                                entry -> entry.getValue().getKey().getSourceName(),
+                                entry -> entry.getValue().getKey(),
                                 entry -> entry.getValue().getValue())));
 
         // pick the path that has the highest number of params present in query predicates, and the shortest if there are ties
@@ -358,21 +359,25 @@ public class OpenApiClient
         return Map.entry(selectedPath, pathParams.getOrDefault(new HttpPath(method, selectedPath), ImmutableMap.of()));
     }
 
-    private static URI buildUri(URI uri, String path, Map<String, Iterable<String>> queryParams)
+    private static URI buildUri(URI uri, String path, List<String> queryParams)
             throws URISyntaxException
     {
-        URI oldUri = uri.resolve(uri.getPath() + path);
-        HttpUriBuilder builder = HttpUriBuilder.uriBuilderFrom(oldUri);
-        queryParams.forEach(builder::addParameter);
-        return builder.build();
+        // both the path and query parameters are already percent-encoded, according to their parameter styles,
+        // and HttpUriBuilder would decode and encode them again, for example turning encoded slashes into path separators
+        URI resolved = uri.resolve(new URI(uri.getRawPath() + path));
+        if (queryParams.isEmpty()) {
+            return resolved;
+        }
+        return new URI(resolved + "?" + String.join("&", queryParams));
     }
 
-    private Map<String, Iterable<String>> getQueryParams(OpenApiTableHandle table, HttpPath httpPath, Function<OpenApiColumn, Object> valueProvider)
+    private List<String> getQueryParams(OpenApiTableHandle table, HttpPath httpPath, Function<OpenApiColumn, Object> valueProvider)
     {
         return getFilterColumnValues(table, httpPath, ParameterLocation.QUERY, valueProvider).entrySet().stream()
-                .collect(toMap(
-                        entry -> entry.getKey().getSourceName(),
-                        entry -> getParameterStyle(entry.getKey(), httpPath, ParameterLocation.QUERY).serializeQueryValues(toJsonNode(entry.getKey(), entry.getValue()))));
+                .flatMap(entry -> getParameterStyle(entry.getKey(), httpPath, ParameterLocation.QUERY)
+                        .serializeQueryParameter(entry.getKey().getSourceName(), toJsonNode(entry.getKey(), entry.getValue()))
+                        .stream())
+                .toList();
     }
 
     private static ParameterStyle getParameterStyle(OpenApiColumn column, HttpPath httpPath, ParameterLocation location)
