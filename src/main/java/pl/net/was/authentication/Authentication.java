@@ -105,18 +105,12 @@ public class Authentication
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
         Request.Builder builder = fromRequest(request);
         List<SecurityRequirement> requirements = getRequirements(request.getHeader("X-Trino-OpenAPI-Path"), method);
-        applyAuthFilters(builder, requirements, uri);
-        if ((requirements == null || requirements.isEmpty()) && defaultAuthenticationType != AuthenticationType.NONE) {
-            switch (defaultAuthenticationType) {
-                case API_KEY -> {
-                    SecurityScheme scheme = new SecurityScheme();
-                    scheme.setIn(SecurityScheme.In.HEADER);
-                    applyApiKeyAuth(builder, uri, scheme);
-                }
-                case HTTP -> applyHttpAuth(builder, null);
-                case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
-            }
+        // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
+        if (requirements != null) {
+            applyAuthFilters(builder, requirements, uri);
+            return builder.build();
         }
+        applyDefaultAuth(builder, uri);
         return builder.build();
     }
 
@@ -130,11 +124,22 @@ public class Authentication
         return securityRequirements;
     }
 
+    private void applyDefaultAuth(Request.Builder builder, URI uri)
+    {
+        switch (defaultAuthenticationType) {
+            case NONE -> {}
+            case API_KEY -> {
+                SecurityScheme scheme = new SecurityScheme();
+                scheme.setIn(SecurityScheme.In.HEADER);
+                applyApiKeyAuth(builder, uri, scheme);
+            }
+            case HTTP -> applyHttpAuth(builder, null);
+            case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
+        }
+    }
+
     private void applyAuthFilters(Request.Builder builder, List<SecurityRequirement> requirements, URI uri)
     {
-        if (requirements == null) {
-            return;
-        }
         // only one of the requirements needs to be satisfied - test which methods are configured, pick first one, and only fail if there are none
         for (SecurityRequirement requirement : requirements) {
             try {
