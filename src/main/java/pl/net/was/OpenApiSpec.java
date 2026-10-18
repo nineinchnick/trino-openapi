@@ -612,13 +612,13 @@ public class OpenApiSpec
         Set<String> boundParameters = new HashSet<>();
         rangeFilters.forEach((field, filter) -> {
             List<OpenApiColumn> fieldColumns = columns.stream()
-                    .filter(column -> column.getSourceName().equals(field) && !isParameter(column))
+                    .filter(column -> field.equals(column.getSourceName()) && !isParameter(column))
                     .toList();
             checkArgument(!fieldColumns.isEmpty(), "Invalid value of %s: %s is not a response field of %s", RANGE_FILTERS, field, operation);
             Stream.of(filter.lower(), filter.upper()).flatMap(Optional::stream).forEach(bound -> {
                 checkArgument(boundParameters.add(bound.parameter()), "Invalid value of %s: parameter %s is used more than once in %s", RANGE_FILTERS, bound.parameter(), operation);
                 Optional<OpenApiColumn> parameter = columns.stream()
-                        .filter(column -> column.getSourceName().equals(bound.parameter()) && RangePushdown.isNonPathParameter(column, httpPath))
+                        .filter(column -> bound.parameter().equals(column.getSourceName()) && RangePushdown.isNonPathParameter(column, httpPath))
                         .findFirst();
                 checkArgument(parameter.isPresent(), "Invalid value of %s: %s is not a query, header, cookie, or body parameter of %s", RANGE_FILTERS, bound.parameter(), operation);
                 fieldColumns.forEach(fieldColumn -> checkArgument(

@@ -338,6 +338,21 @@ def list_item(page: int = None, per_page: int = None) -> Results:
         total_results=len(items))
 
 
+@router.get("/writable_items")
+def list_writable_items(page: int = 1, per_page: int = 1, sort: str = None, direction: str = "asc") -> list[Item]:
+    results = list(items.values())
+    if sort is not None:
+        results.sort(key=lambda item: getattr(item, sort), reverse=direction == "desc")
+    offset = (page - 1) * per_page
+    return results[offset:offset+per_page]
+
+
+# an operation used for DELETE adds a hidden row ID column to the table
+@router.delete("/writable_items/{item_id}")
+def delete_writable_item(item_id: int):
+    return None
+
+
 @router.get("/clamped_items")
 def list_clamped_items(page: int = 1) -> Results:
     # out of range page numbers return the last page, so only the total number of results can end pagination
@@ -776,6 +791,15 @@ def custom_openapi():
         "limitParam": "per_page",
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
+    }
+    openapi_schema["paths"]["/writable_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "per_page",
+        "sortParam": "sort",
+        "sortValues": {"price": "price"},
+        "directionParam": "direction",
+        "ascendingValue": "asc",
+        "descendingValue": "desc",
     }
     openapi_schema["paths"]["/clamped_items"]["get"]["x-trino"] = {
         "pageParam": "page",
