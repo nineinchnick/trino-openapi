@@ -1089,7 +1089,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogUnionTables()
     {
-        OpenApiSpec spec = loadSpec("datadog.yaml");
+        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
 
         // rules are a oneOf of standard and signal rules, which define queries as arrays of different objects;
         // request bodies don't include the default rule ID, so they're a different type
@@ -1181,7 +1181,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogPaginatedTables()
     {
-        OpenApiSpec spec = loadSpec("datadog.yaml");
+        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
 
         // dev/specs/datadog.patch.json renames x-pagination to x-trino, so rows are read from the results path, like data
         HttpPath auditPath = new HttpPath(PathItem.HttpMethod.GET, "/api/v2/audit/events");
@@ -1211,7 +1211,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogTables()
     {
-        OpenApiSpec spec = loadSpec("datadog.yaml");
+        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
         Map<String, List<OpenApiColumn>> tables = spec.getTables();
 
         Set<String> expected = Set.of(
@@ -1326,7 +1326,7 @@ class TestOpenApiSpec
     @Test
     public void getCloudflareTables()
     {
-        OpenApiSpec spec = loadSpec("cloudflare.json");
+        OpenApiSpec spec = loadSpecFile("specs/cloudflare.json");
         Map<String, List<OpenApiColumn>> tables = spec.getTables();
 
         Set<String> expected = Set.of(

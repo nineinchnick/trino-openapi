@@ -35,7 +35,7 @@ jq --indent 2 --slurpfile patch dev/specs/github.patch.json -f dev/specs/merge-p
 
 * Upstream: https://raw.githubusercontent.com/DataDog/datadog-api-client-java/master/.generator/schemas/v2/openapi.yaml
 * Patch: [`datadog.patch.json`](datadog.patch.json)
-* Output: `src/test/resources/datadog.yaml`
+* Output: `specs/datadog.yaml`
 
 The upstream spec describes pagination in `x-pagination` extensions, which the
 patch replaces with `x-trino`, so the connector reads rows from `resultsPath`.
@@ -47,14 +47,14 @@ escapes, without changing them.
 
 ```shell
 curl -fsSL -o /tmp/datadog.yaml https://raw.githubusercontent.com/DataDog/datadog-api-client-java/master/.generator/schemas/v2/openapi.yaml
-yq eval-all --from-file dev/specs/merge-patch.yq /tmp/datadog.yaml dev/specs/datadog.patch.json > src/test/resources/datadog.yaml
+yq eval-all --from-file dev/specs/merge-patch.yq /tmp/datadog.yaml dev/specs/datadog.patch.json > specs/datadog.yaml
 ```
 
 ## Cloudflare
 
 * Upstream: https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
 * Patch: [`cloudflare.patch.json`](cloudflare.patch.json)
-* Output: `src/test/resources/cloudflare.json`
+* Output: `specs/cloudflare.json`
 
 The OpenAPI parser reports errors for some values in the upstream spec, and the
 connector refuses to load a spec with errors. The patch removes them: multipart
@@ -64,7 +64,7 @@ defaults that don't match the type, like `"200"` for an array, or
 
 ```shell
 curl -fsSL -o /tmp/cloudflare.json https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
-jq --indent 2 --slurpfile patch dev/specs/cloudflare.patch.json -f dev/specs/merge-patch.jq /tmp/cloudflare.json > src/test/resources/cloudflare.json
+jq --indent 2 --slurpfile patch dev/specs/cloudflare.patch.json -f dev/specs/merge-patch.jq /tmp/cloudflare.json > specs/cloudflare.json
 ```
 
 ## Unpatched copies

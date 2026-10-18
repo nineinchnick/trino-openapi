@@ -434,6 +434,12 @@ when the first of its environment variables is set.
 | [Jira Cloud platform](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#version) | `JIRA_URL`, `JIRA_USERNAME`, `JIRA_PASSWORD` |
 | [GitHub REST API](https://docs.github.com/en/rest)                                                | `GITHUB_TOKEN`                               |
 | [Datadog API](https://docs.datadoghq.com/api/latest/)                                             | `DATADOG_URL`, `DD_API_KEY`, `DD_APP_KEY`    |
+| [Cloudflare API](https://developers.cloudflare.com/api/)                                          | `CLOUDFLARE_API_TOKEN`                       |
+
+The GitHub, Datadog, and Cloudflare catalogs use copies of the upstream specs,
+included in the image, with `x-trino` extensions for pagination, or fixes for
+values the OpenAPI parser rejects. See [`dev/specs`](dev/specs/README.md) for
+how they're made.
 
 # Limitations
 
