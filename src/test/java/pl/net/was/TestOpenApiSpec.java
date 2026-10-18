@@ -2531,6 +2531,7 @@ class TestOpenApiSpec
                         hasMorePath: $response.body#/has_more
                         maxPages: 10
                         maxResults: 1000
+                        splitStrategy: off
                       responses:
                         "200":
                           description: Items
@@ -2559,6 +2560,7 @@ class TestOpenApiSpec
                                 .setHasMorePointer(JsonPointer.compile("/has_more"))
                                 .setMaxPages(OptionalInt.of(10))
                                 .setMaxResults(OptionalLong.of(1000))
+                                .setSplitStrategy(Optional.of(SplitStrategy.OFF))
                                 .build()));
         Assertions.assertThat(spec.getResultsPointers(schemaTableName(SCHEMA_NAME, "items")))
                 .containsExactly(Map.entry(new HttpPath(PathItem.HttpMethod.GET, "/items"), JsonPointer.compile("/results")));
@@ -2572,6 +2574,8 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of maxResults: many");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: 0")))
                 .hasMessage("maxResults must be positive");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("splitStrategy: off", "splitStrategy: sometimes")))
+                .hasMessage("Invalid value of splitStrategy: 'sometimes', must be one of: probe, off");
     }
 
     @Test

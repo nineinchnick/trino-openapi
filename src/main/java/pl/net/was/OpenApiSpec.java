@@ -54,6 +54,7 @@ import io.trino.spi.type.TypeOperators;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -117,6 +118,10 @@ public class OpenApiSpec
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
+    private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
+    private static final String SPLIT_STRATEGIES = Arrays.stream(SplitStrategy.values())
+            .map(splitStrategy -> splitStrategy.name().toLowerCase(Locale.ENGLISH))
+            .collect(joining(", "));
     private static final String SQL_OPERATION = "sqlOperation";
     private static final String SORT_PARAM = "sortParam";
     private static final String SORT_VALUES = "sortValues";
@@ -1131,6 +1136,7 @@ public class OpenApiSpec
                                     .setMaxPages(getMaxPages(rawExtension))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
+                                    .setSplitStrategy(getSplitStrategy(rawExtension))
                                     .build();
                         }));
     }
@@ -1178,6 +1184,21 @@ public class OpenApiSpec
                 .setAscendingValue(specExtension.get(SORT_ASCENDING_VALUE))
                 .setDescendingValue(specExtension.get(SORT_DESCENDING_VALUE))
                 .build());
+    }
+
+    private static Optional<SplitStrategy> getSplitStrategy(Object specExtension)
+    {
+        Object value = specExtension instanceof Map<?, ?> map ? map.get(PAGINATION_SPLIT_STRATEGY) : null;
+        if (value == null) {
+            return Optional.empty();
+        }
+        // YAML 1.1 parses an unquoted off as false
+        if (Boolean.FALSE.equals(value)) {
+            return Optional.of(SplitStrategy.OFF);
+        }
+        Optional<SplitStrategy> splitStrategy = Enums.getIfPresent(SplitStrategy.class, value.toString().trim().toUpperCase(Locale.ENGLISH)).toJavaUtil();
+        checkArgument(splitStrategy.isPresent(), "Invalid value of %s: '%s', must be one of: %s", PAGINATION_SPLIT_STRATEGY, value, SPLIT_STRATEGIES);
+        return splitStrategy;
     }
 
     private Map<HttpPath, JsonPointer> pointers(PathItem pathItem, String path, String extensionName)
