@@ -47,6 +47,7 @@ import java.util.Set;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.MoreCollectors.onlyElement;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -2702,6 +2703,130 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of rangeFilters for updated_at: lowerInclusive is required with lowerParam");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("exact: true", "exact: yes please")))
                 .hasMessage("Invalid value of rangeFilters for updated_at: exact must be true or false, got yes please");
+    }
+
+    @Test
+    public void testParameterDefaultsExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: page
+                        schema:
+                          type: integer
+                      - in: query
+                        name: per_page
+                        schema:
+                          type: integer
+                          default: 30
+                          minimum: 1
+                          maximum: 100
+                      - in: query
+                        name: state
+                        schema:
+                          type: string
+                          enum: [open, closed, all]
+                      - in: header
+                        name: x-archived
+                        schema:
+                          type: boolean
+                      - in: query
+                        name: since
+                        schema:
+                          type: string
+                          format: date-time
+                      - in: query
+                        name: owner
+                        required: true
+                        schema:
+                          type: string
+                      x-trino:
+                        pageParam: page
+                        limitParam: per_page
+                        parameterDefaults:
+                          per_page: 100
+                          state: all
+                          x-archived: false
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    state:
+                                      type: string
+                  /items/{id}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: id
+                        required: true
+                        schema:
+                          type: integer
+                      - in: query
+                        name: state
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Item
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  state:
+                                    type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        HttpPath listPath = new HttpPath(PathItem.HttpMethod.GET, "/items");
+        Map<String, OpenApiColumn> columns = spec.getTables().get("items").stream()
+                .collect(toImmutableMap(OpenApiColumn::getName, identity()));
+        Assertions.assertThat(columns.get("per_page").getParameterDefaults()).containsExactly(Map.entry(listPath, 100L));
+        // the parameter is also a response field, and getting a single item doesn't have a default
+        Assertions.assertThat(columns.get("state").getParameterDefaults()).containsExactly(Map.entry(listPath, utf8Slice("all")));
+        Assertions.assertThat(columns.get("x_archived").getParameterDefaults()).containsExactly(Map.entry(listPath, false));
+        // the default of the schema is not changed, because it's what the server uses when the parameter is not sent
+        Assertions.assertThat(columns.get("per_page").getSourceType().getDefault()).isEqualTo(30);
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("per_page: 100", "per_page: 101")))
+                .hasMessage("Invalid value of parameterDefaults: 101 for parameter per_page of GET /items is greater than its maximum 100");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("per_page: 100", "per_page: 0")))
+                .hasMessage("Invalid value of parameterDefaults: 0 for parameter per_page of GET /items is less than its minimum 1");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("per_page: 100", "per_page: \"100\"")))
+                .hasMessage("Invalid value of parameterDefaults: 100 for parameter per_page of GET /items doesn't have type bigint");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "state: any")))
+                .hasMessage("Invalid value of parameterDefaults: any for parameter state of GET /items is not one of [open, closed, all]");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "states: all")))
+                .hasMessage("Invalid value of parameterDefaults: states is not an optional query, header, or cookie parameter of GET /items");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "owner: me")))
+                .hasMessage("Invalid value of parameterDefaults: owner is not an optional query, header, or cookie parameter of GET /items");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "page: 2")))
+                .hasMessage("Invalid value of parameterDefaults: page is the page number parameter of GET /items");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "since: \"2024-01-01T00:00:00Z\"")))
+                .hasMessage("Invalid value of parameterDefaults: parameter since of GET /items has type timestamp(3), but only string, integer, and boolean parameters can have defaults");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("""
+                        parameterDefaults:
+                          per_page: 100
+                          state: all
+                          x-archived: false
+                """, """
+                        parameterDefaults: all
+                """)))
+                .hasMessage("Invalid value of parameterDefaults: expected an object with parameter names as keys");
     }
 
     @Test

@@ -43,6 +43,7 @@ public class OpenApiColumn
     private final Map<HttpPath, ParameterStyle> parameterStyles;
     private final Set<HttpPath> responseRequiredPaths;
     private final Map<HttpPath, RangeFilter> rangeFilters;
+    private final Map<HttpPath, Object> parameterDefaults;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
     private final OpenApiColumnHandle handle;
@@ -57,6 +58,7 @@ public class OpenApiColumn
             Map<HttpPath, ParameterStyle> parameterStyles,
             Set<HttpPath> responseRequiredPaths,
             Map<HttpPath, RangeFilter> rangeFilters,
+            Map<HttpPath, Object> parameterDefaults,
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
@@ -71,6 +73,7 @@ public class OpenApiColumn
         this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
         this.responseRequiredPaths = ImmutableSet.copyOf(responseRequiredPaths);
         this.rangeFilters = ImmutableMap.copyOf(rangeFilters);
+        this.parameterDefaults = ImmutableMap.copyOf(parameterDefaults);
         this.metadata = ColumnMetadata.builder()
                 .setName(name)
                 .setType(type)
@@ -139,6 +142,14 @@ public class OpenApiColumn
         return rangeFilters;
     }
 
+    /**
+     * Native values of this parameter sent by operations when the query doesn't filter on it.
+     */
+    public Map<HttpPath, Object> getParameterDefaults()
+    {
+        return parameterDefaults;
+    }
+
     public ColumnMetadata getMetadata()
     {
         return metadata;
@@ -179,6 +190,7 @@ public class OpenApiColumn
                 && Objects.equals(parameterStyles, that.parameterStyles)
                 && Objects.equals(responseRequiredPaths, that.responseRequiredPaths)
                 && Objects.equals(rangeFilters, that.rangeFilters)
+                && Objects.equals(parameterDefaults, that.parameterDefaults)
                 && Objects.equals(metadata, that.metadata)
                 && isPageNumber == that.isPageNumber;
     }
@@ -196,6 +208,7 @@ public class OpenApiColumn
                 ", parameterStyles=" + parameterStyles +
                 ", responseRequiredPaths=" + responseRequiredPaths +
                 ", rangeFilters=" + rangeFilters +
+                ", parameterDefaults=" + parameterDefaults +
                 ", metadata=" + metadata +
                 ", isPageNumber=" + isPageNumber +
                 '}';
@@ -203,7 +216,7 @@ public class OpenApiColumn
 
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, parameterDefaults, metadata, isPageNumber);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -227,6 +240,7 @@ public class OpenApiColumn
         private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
         private final SortedSet<HttpPath> responseRequiredPaths = new TreeSet<>();
         private final SortedMap<HttpPath, RangeFilter> rangeFilters = new TreeMap<>();
+        private final SortedMap<HttpPath, Object> parameterDefaults = new TreeMap<>();
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
@@ -245,6 +259,7 @@ public class OpenApiColumn
             this.parameterStyles.putAll(handle.getParameterStyles());
             this.responseRequiredPaths.addAll(handle.getResponseRequiredPaths());
             this.rangeFilters.putAll(handle.getRangeFilters());
+            this.parameterDefaults.putAll(handle.getParameterDefaults());
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
@@ -306,6 +321,12 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setParameterDefaults(Map<HttpPath, Object> parameterDefaults)
+        {
+            this.parameterDefaults.putAll(requireNonNull(parameterDefaults, "parameterDefaults is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setIsNullable(boolean isNullable)
         {
             this.isNullable = isNullable;
@@ -344,6 +365,7 @@ public class OpenApiColumn
                     parameterStyles,
                     responseRequiredPaths,
                     rangeFilters,
+                    parameterDefaults,
                     isNullable,
                     isHidden,
                     isPageNumber,

@@ -264,7 +264,9 @@ A table has columns for:
   operations.
 
 Request parameters are filters. Their values are copied from the query into
-every returned row, because most APIs don't repeat them in responses.
+every returned row, because most APIs don't repeat them in responses. If the
+query doesn't filter on a parameter that has a value in
+[`parameterDefaults`](#parameter-defaults), rows have that value.
 
 ## Queries
 
@@ -451,6 +453,9 @@ paths:
         directionParam: "direction"
         ascendingValue: "asc"
         descendingValue: "desc"
+        parameterDefaults:
+          per_page: 100
+          state: "all"
   /records/search:
     post:
       # ...
@@ -463,24 +468,25 @@ paths:
         sqlOperation: [insert, update]
 ```
 
-| Property           | Description                                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pageParam`        | Parameter with the page number; enables pagination                                                                                                  |
-| `limitParam`       | Parameter with the page size                                                                                                                        |
-| `resultsPath`      | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
-| `totalResultsPath` | JSON pointer to the total number of results                                                                                                         |
-| `totalPagesPath`   | JSON pointer to the total number of pages                                                                                                           |
-| `hasMorePath`      | JSON pointer to a boolean that is `false` on the last page                                                                                          |
-| `maxPages`         | Maximum number of pages to request                                                                                                                  |
-| `maxResults`       | Maximum number of results to read; pages past it are not requested                                                                                  |
-| `errorPath`        | JSON pointer to a human-readable message in error responses                                                                                         |
-| `rangeFilters`     | Parameters that limit values of response fields, see below                                                                                          |
-| `sqlOperation`     | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
-| `sortParam`        | Parameter that selects the field to sort results by                                                                                                 |
-| `sortValues`       | Map of response field names to the `sortParam` values that sort by them                                                                             |
-| `directionParam`   | Parameter with the sort direction; required with `sortParam`                                                                                        |
-| `ascendingValue`   | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
-| `descendingValue`  | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
+| Property            | Description                                                                                                                                         |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageParam`         | Parameter with the page number; enables pagination                                                                                                  |
+| `limitParam`        | Parameter with the page size                                                                                                                        |
+| `resultsPath`       | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
+| `totalResultsPath`  | JSON pointer to the total number of results                                                                                                         |
+| `totalPagesPath`    | JSON pointer to the total number of pages                                                                                                           |
+| `hasMorePath`       | JSON pointer to a boolean that is `false` on the last page                                                                                          |
+| `maxPages`          | Maximum number of pages to request                                                                                                                  |
+| `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
+| `errorPath`         | JSON pointer to a human-readable message in error responses                                                                                         |
+| `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
+| `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
+| `sortParam`         | Parameter that selects the field to sort results by                                                                                                 |
+| `sortValues`        | Map of response field names to the `sortParam` values that sort by them                                                                             |
+| `directionParam`    | Parameter with the sort direction; required with `sortParam`                                                                                        |
+| `ascendingValue`    | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
+| `descendingValue`   | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
+| `parameterDefaults` | Values of parameters sent when the query doesn't filter on them, see [Parameter defaults](#parameter-defaults)                                      |
 
 If you can't change the API to include the extension in its specification, save
 the specification locally and edit it.
@@ -503,7 +509,8 @@ one of these happens:
   any other filter to the returned rows. With an `IN` list, every value is
   requested separately and reads up to the limit;
 * a page has fewer results than the page size, when `limitParam` is set and its
-  value is known, either from a query filter or from the parameter's default in
+  value is known, either from a query filter, from
+  [`parameterDefaults`](#parameter-defaults), or from the parameter's default in
   the spec. The page size is limited by the parameter's `maximum`, if declared,
   because servers often return fewer results than requested when the number is
   too high.
@@ -600,6 +607,57 @@ seconds, or compares the time of the last change of a resource and not the
 field, can return rows the query doesn't match, which would then not be
 filtered out. Because Trino doesn't filter the rows of an exact range, a
 `LIMIT` can stop pagination, like described in [Pagination](#pagination).
+
+## Parameter defaults
+
+The connector sends only the parameters that the query filters on, so for all
+other parameters, the API uses its own defaults. They often return less data
+than a SQL query expects. For example, GitHub lists only open issues and pull
+requests, unless `state` is `all`, and returns 30 results per page, unless
+`per_page` is set, so reading all pages needs more requests.
+
+`parameterDefaults` maps names of parameters to values the connector sends when
+the query doesn't filter on them:
+
+```yaml
+paths:
+  /repos/{owner}/{repo}/pulls:
+    get:
+      # ...
+      x-trino:
+        pageParam: "page"
+        limitParam: "per_page"
+        parameterDefaults:
+          state: "all"
+          per_page: 100
+```
+
+Then this query reads closed pull requests too, 100 on every page:
+
+```sql
+SELECT number, title, state FROM github.default.repos_pulls WHERE owner = 'trinodb' AND repo = 'trino';
+```
+
+* The parameters must be optional query, header, or cookie parameters of the
+  same operation, but not `pageParam`. Their schemas must be strings, integers,
+  or booleans, and the values must match their type, `enum`, `minimum`, and
+  `maximum`. Loading the spec fails otherwise.
+* A filter on the parameter is sent instead of the default, including every
+  value of an `IN` list and values of dynamic filters, and so is a bound of a
+  [range filter](#range-filters). `ORDER BY` with `LIMIT` sends the sort
+  parameters instead of their defaults.
+* A default is sent only by the operation that declares it, so paths without the
+  parameter, like getting a single item, don't send it.
+* Rows read using the default have its value in the parameter's column, unless
+  the response has a field with the same name. So a query without a filter
+  returns the same rows as a query filtering on the default value, and Trino
+  applies filters it can't send, like `LIKE`, to that value.
+* The default value of `limitParam` is the page size that ends pagination, like
+  described in [Pagination](#pagination). Don't change the parameter's `default`
+  in its schema instead, because that's the value the server uses when the
+  parameter is not sent.
+* `INSERT`, `UPDATE`, and `DELETE` statements send the defaults too, when the
+  statement doesn't set the parameter.
 
 ## Error messages
 
