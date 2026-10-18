@@ -14,17 +14,16 @@
 
 package pl.net.was;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.trino.testing.containers.junit.ReportLeakedContainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URI;
 
 import static java.lang.String.format;
@@ -36,6 +35,7 @@ public class PetStoreServer
 {
     private static final boolean REUSE = requireNonNullElse(System.getenv("TESTCONTAINERS_REUSE_ENABLE"), "false").equals("true");
     private static final int API_PORT = 8080;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String BASE_PATH = "/api/v3";
     private static final String SPEC_PATH = "/api/v3/openapi.json";
     private final GenericContainer<?> dockerContainer;
@@ -57,21 +57,17 @@ public class PetStoreServer
         ReportLeakedContainers.ignoreContainerId(dockerContainer.getContainerId());
 
         try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(URI.create(getContainerSpecUrl()).toURL().openStream()));
-            StringBuilder builder = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                builder.append(line).append("\n");
-            }
-            String contents = builder.toString();
+            ObjectNode spec = (ObjectNode) OBJECT_MAPPER.readTree(URI.create(getContainerSpecUrl()).toURL());
+            ObjectNode flows = spec.withObject("/components/securitySchemes/petstore_auth/flows");
+            // the implicit flow requires a browser to log in, so replace it with a flow the connector can run on its own
+            JsonNode implicitFlow = requireNonNull(flows.remove("implicit"), "implicit flow is missing in the petstore spec");
+            ObjectNode clientCredentialsFlow = flows.putObject("clientCredentials");
+            clientCredentialsFlow.put("tokenUrl", keycloakServer.getTokenUrl());
+            clientCredentialsFlow.set("scopes", implicitFlow.get("scopes"));
 
             specFile = File.createTempFile("spec-", ".json");
             specFile.deleteOnExit();
-
-            BufferedWriter writer = new BufferedWriter(new FileWriter(specFile, true));
-            // TODO change the implicit flow to client_credentials
-            writer.write(contents.replaceAll("\"authorizationUrl\":\".*?\"", "\"authorizationUrl\":\"%s\"".formatted(keycloakServer.getTokenUrl())));
-            writer.close();
+            OBJECT_MAPPER.writeValue(specFile, spec);
         }
         catch (IOException e) {
             throw new RuntimeException(e);
