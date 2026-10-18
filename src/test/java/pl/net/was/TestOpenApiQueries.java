@@ -233,6 +233,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithUnionFieldInRequestBody()
+    {
+        assertQuery(
+                "SELECT value FROM echo.default.echo_union_value WHERE value = '{\"number\":42}'",
+                "VALUES '{\"number\":42}'");
+    }
+
+    @Test
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(

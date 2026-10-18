@@ -208,6 +208,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MapEcho'
+  /echo_union_value:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnionValueEcho'
+      responses:
+        '200':
+          description: The request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnionValueEcho'
 components:
   responses:
     Echo:
@@ -270,3 +285,12 @@ components:
           type: object
           additionalProperties:
             type: integer
+    UnionValueEcho:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - type: integer
+            - type: object
+              additionalProperties:
+                type: integer

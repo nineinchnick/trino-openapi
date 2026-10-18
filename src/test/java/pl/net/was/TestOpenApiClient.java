@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URL;
 import java.util.Map;
 
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Objects.requireNonNull;
@@ -48,6 +49,16 @@ class TestOpenApiClient
 
         assertThat(serializeMap(spec, "echo_map", Domain.singleValue(mapType, labels), column).toString())
                 .isEqualTo("{\"labels\":{\"a\":1}}");
+    }
+
+    @Test
+    void shouldSerializeUnionPredicatesInRequestBodiesAsRawJson()
+    {
+        OpenApiSpec spec = loadSpec("echo.yml");
+        OpenApiColumn column = getColumn(spec, "echo_union_value", "value");
+
+        assertThat(serializeMap(spec, "echo_union_value", Domain.singleValue(column.getType(), utf8Slice("{\"number\":42}")), column).toString())
+                .isEqualTo("{\"value\":{\"number\":42}}");
     }
 
     private static Object serializeMap(OpenApiSpec spec, String tableName, Domain domain, OpenApiColumn column)

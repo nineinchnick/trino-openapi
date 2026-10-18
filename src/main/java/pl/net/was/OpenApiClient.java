@@ -629,6 +629,9 @@ public class OpenApiClient
             if (value instanceof Block block) {
                 value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
+            else if (value instanceof String stringValue && JsonTrinoConverter.isUnion(column.getSourceType())) {
+                value = new RawValue(stringValue);
+            }
             else if (value instanceof SqlRow sqlRow) {
                 ObjectNode rowNode = OBJECT_MAPPER.createObjectNode();
                 JsonTrinoConverter.convertRow(rowNode, sqlRow, (RowType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
