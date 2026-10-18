@@ -32,6 +32,7 @@ import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
@@ -268,6 +269,28 @@ class JsonTrinoConverterTest
         assertThat(objectMapper.writeValueAsString(row)).isEqualTo("{\"real_value\":-0.5,\"decimal_value\":1234567890.12345678,\"missing\":null}");
         assertThat(objectMapper.writeValueAsString(array)).isEqualTo("[1234567890.12345678,0.00000001,null]");
         assertThat(objectMapper.writeValueAsString(map)).isEqualTo("{\"real\":2.5,\"missing\":null}");
+    }
+
+    @Test
+    void shouldConvertUnionFieldsInRowsToRawJson()
+            throws JsonProcessingException
+    {
+        var rowType = RowType.from(List.of(
+                RowType.field("name", VARCHAR),
+                RowType.field("value", VARCHAR)));
+        var rowSchema = new ObjectSchema()
+                .addProperty("name", new StringSchema())
+                .addProperty("value", new Schema<>().oneOf(List.of(new IntegerSchema(), new ObjectSchema())));
+        RowBlockBuilder rowBlockBuilder = rowType.createBlockBuilder(null, 1);
+        rowBlockBuilder.buildEntry(fieldBuilders -> {
+            VARCHAR.writeString(fieldBuilders.get(0), "answer");
+            VARCHAR.writeString(fieldBuilders.get(1), "{\"number\":42}");
+        });
+        var objectMapper = new ObjectMapper();
+
+        Object row = JsonTrinoConverter.convert(rowBlockBuilder.build(), 0, rowType, rowSchema, objectMapper);
+
+        assertThat(objectMapper.writeValueAsString(row)).isEqualTo("{\"name\":\"answer\",\"value\":{\"number\":42}}");
     }
 
     @Test

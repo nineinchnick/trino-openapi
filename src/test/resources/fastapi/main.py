@@ -111,6 +111,15 @@ class Echo(BaseModel):
     cookie: str | None = None
 
 
+class UnionWrapper(BaseModel):
+    name: str
+    value: int | dict[str, int]
+
+
+class UnionEcho(BaseModel):
+    wrapper: UnionWrapper
+
+
 class Results(BaseModel):
     results: list[Item]
     total_results: int
@@ -266,6 +275,12 @@ async def create_numbers(request: Request) -> Response:
 @router.post("/echo_numbers")
 async def echo_numbers(request: Request) -> Response:
     return Response(content=await request.body(), media_type="application/json")
+
+
+@router.post("/echo_union")
+def echo_union(body: UnionEcho) -> UnionEcho:
+    # validating the body rejects union values sent as quoted JSON strings
+    return body
 
 
 @router.get("/decimal_parameters")
