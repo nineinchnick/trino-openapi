@@ -6,18 +6,39 @@ Trino OpenAPI
 A [Trino](https://trino.io/) connector that lets you query and modify data in
 HTTP APIs with SQL, using only the API's OpenAPI specification.
 
-Most services expose their data through REST APIs. Getting that data into SQL
-usually means writing a custom connector, or a script that copies the data into
-a database. With this connector, you point Trino at an OpenAPI specification,
-and every API endpoint becomes a table you can query, filter, and join with
-data from any other Trino catalog, without writing code:
+Even with a specification, using an API means learning its domain first: which
+endpoint returns which data, which parameters each one accepts, how results are
+paged, and how errors are reported. APIs are designed with far fewer constraints
+than SQL tables, so they're often inconsistent, even within a single service.
+
+Filtering shows this best. Every endpoint accepts its own set of parameters,
+often with names that don't match any field of the response, and usually only
+for exact values. In SQL, any column of any table can be filtered, with the same
+wide set of operators and functions.
+
+With this connector, you point Trino at an OpenAPI specification, and every API
+endpoint becomes a table. That lets you:
+
+* discover what data is available with tools you already know, like
+  `SHOW TABLES`, `DESCRIBE`, `information_schema`, or the schema browser of any
+  SQL client;
+* filter, sort, and aggregate on any column with standard SQL. Filters the API
+  supports are sent in requests, and Trino applies the rest to the results;
+* read all pages of a paginated endpoint as one result;
+* join data from several APIs, or from an API and any other Trino catalog;
+* change data with `INSERT`, `UPDATE`, and `DELETE`, instead of building
+  requests.
+
+All of this without writing a custom connector, or a script that copies the data
+into a database:
 
 ```sql
--- issues from the GitHub API, joined with a table from a PostgreSQL catalog
+-- issues from the GitHub API, joined with a table from a PostgreSQL catalog;
+-- owner and repo are sent to the API, and Trino filters the titles
 SELECT i.number, i.title, t.assignee
 FROM github.default.repos_issues i
 JOIN postgresql.public.triage t ON t.issue_number = i.number
-WHERE i.owner = 'trinodb' AND i.repo = 'trino';
+WHERE i.owner = 'trinodb' AND i.repo = 'trino' AND i.title LIKE '%Iceberg%';
 ```
 
 The connector reads the specification when the catalog starts, maps paths to
