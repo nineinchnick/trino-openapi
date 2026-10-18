@@ -41,14 +41,12 @@
         <project.build.targetJdk>25</project.build.targetJdk>
         <air.java.version>25</air.java.version>
 
-        <air.main.basedir>${project.basedir}</air.main.basedir>
-
         <air.release.push-changes>true</air.release.push-changes>
+        <air.release.tag-name-format>v@{project.version}</air.release.tag-name-format>
 
         <air.check.skip-extended>true</air.check.skip-extended>
         <air.check.skip-license>false</air.check.skip-license>
 
-        <air.check.fail-checkstyle>true</air.check.fail-checkstyle>
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.build.jvmsize>4g</air.build.jvmsize>
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector</air.test.jvm.additional-arguments>
@@ -251,7 +249,6 @@
                 <artifactId>maven-release-plugin</artifactId>
                 <configuration>
                     <scmCommentPrefix>[ci skip]</scmCommentPrefix>
-                    <tagNameFormat>v@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
             <plugin>
