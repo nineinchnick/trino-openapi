@@ -17,21 +17,83 @@ package pl.net.was;
 import com.fasterxml.jackson.core.JsonPointer;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
-public record Pagination(Optional<String> limitParam, JsonPointer totalResultsPointer)
+public record Pagination(
+        Optional<String> limitParam,
+        JsonPointer totalResultsPointer,
+        JsonPointer totalPagesPointer,
+        JsonPointer hasMorePointer,
+        OptionalInt maxPages)
 {
-    private static final Pagination NONE = new Pagination(Optional.empty(), JsonPointer.empty());
+    private static final Pagination NONE = builder().build();
 
     public Pagination
     {
         requireNonNull(limitParam, "limitParam is null");
         requireNonNull(totalResultsPointer, "totalResultsPointer is null");
+        requireNonNull(totalPagesPointer, "totalPagesPointer is null");
+        requireNonNull(hasMorePointer, "hasMorePointer is null");
+        requireNonNull(maxPages, "maxPages is null");
+        maxPages.ifPresent(value -> checkArgument(value > 0, "maxPages must be positive"));
     }
 
     public static Pagination none()
     {
         return NONE;
+    }
+
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
+    public static class Builder
+    {
+        private Optional<String> limitParam = Optional.empty();
+        private JsonPointer totalResultsPointer = JsonPointer.empty();
+        private JsonPointer totalPagesPointer = JsonPointer.empty();
+        private JsonPointer hasMorePointer = JsonPointer.empty();
+        private OptionalInt maxPages = OptionalInt.empty();
+
+        private Builder() {}
+
+        public Builder setLimitParam(Optional<String> limitParam)
+        {
+            this.limitParam = requireNonNull(limitParam, "limitParam is null");
+            return this;
+        }
+
+        public Builder setTotalResultsPointer(JsonPointer totalResultsPointer)
+        {
+            this.totalResultsPointer = requireNonNull(totalResultsPointer, "totalResultsPointer is null");
+            return this;
+        }
+
+        public Builder setTotalPagesPointer(JsonPointer totalPagesPointer)
+        {
+            this.totalPagesPointer = requireNonNull(totalPagesPointer, "totalPagesPointer is null");
+            return this;
+        }
+
+        public Builder setHasMorePointer(JsonPointer hasMorePointer)
+        {
+            this.hasMorePointer = requireNonNull(hasMorePointer, "hasMorePointer is null");
+            return this;
+        }
+
+        public Builder setMaxPages(OptionalInt maxPages)
+        {
+            this.maxPages = requireNonNull(maxPages, "maxPages is null");
+            return this;
+        }
+
+        public Pagination build()
+        {
+            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages);
+        }
     }
 }

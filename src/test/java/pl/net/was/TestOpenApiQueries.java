@@ -487,6 +487,30 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsEndingWithHasMore()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.has_more_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsEndingWithTotalPages()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.total_pages_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsEndingWithMaxPages()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.max_pages_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();

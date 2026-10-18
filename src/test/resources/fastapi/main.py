@@ -96,6 +96,16 @@ class NoteBody(BaseModel):
     text: str
 
 
+class HasMoreResults(BaseModel):
+    results: list[Item]
+    has_more: bool
+
+
+class TotalPagesResults(BaseModel):
+    results: list[Item]
+    total_pages: int
+
+
 class PageFilter(BaseModel):
     page: int = 1
 
@@ -217,6 +227,32 @@ def list_capped_items(page: int = 1, size: int = 1) -> Results:
     size = min(size, 1)
     return Results(
         results=list(items.values())[(page - 1) * size:page * size],
+        total_results=len(items))
+
+
+# the following endpoints return the last page for out of range page numbers,
+# so each one needs a different signal to end pagination
+@router.get("/has_more_items")
+def list_has_more_items(page: int = 1) -> HasMoreResults:
+    page = min(max(page, 1), len(items))
+    return HasMoreResults(
+        results=list(items.values())[page - 1:page],
+        has_more=page < len(items))
+
+
+@router.get("/total_pages_items")
+def list_total_pages_items(page: int = 1) -> TotalPagesResults:
+    page = min(max(page, 1), len(items))
+    return TotalPagesResults(
+        results=list(items.values())[page - 1:page],
+        total_pages=len(items))
+
+
+@router.get("/max_pages_items")
+def list_max_pages_items(page: int = 1) -> Results:
+    page = min(max(page, 1), len(items))
+    return Results(
+        results=list(items.values())[page - 1:page],
         total_results=len(items))
 
 
@@ -406,6 +442,21 @@ def custom_openapi():
     }
     capped_size = next(parameter for parameter in openapi_schema["paths"]["/capped_items"]["get"]["parameters"] if parameter["name"] == "size")
     capped_size["schema"]["maximum"] = 1
+    openapi_schema["paths"]["/has_more_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "hasMorePath": "$response.body#/has_more",
+    }
+    openapi_schema["paths"]["/total_pages_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "totalPagesPath": "$response.body#/total_pages",
+    }
+    openapi_schema["paths"]["/max_pages_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "maxPages": len(items),
+    }
     openapi_schema["paths"]["/paged_search"]["post"]["x-trino"] = {
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
