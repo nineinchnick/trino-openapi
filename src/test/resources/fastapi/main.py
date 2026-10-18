@@ -173,14 +173,13 @@ numbers = [
     '"decimal_map": {"a": 1234567890.12345678}}',
 ]
 
-# the connector ignores the format of OpenAPI 3.1 number schemas, so REAL columns use the non-standard float type
 NUMBERS_SCHEMA = {
     "type": "object",
     "properties": {
         "id": {"type": "integer"},
-        "real_value": {"type": "float"},
+        "real_value": {"type": "number", "format": "float"},
         "decimal_value": {"type": "number"},
-        "real_values": {"type": "array", "items": {"type": "float"}},
+        "real_values": {"type": "array", "items": {"type": "number", "format": "float"}},
         "decimal_values": {"type": "array", "items": {"type": "number"}},
         "decimal_map": {"type": "object", "additionalProperties": {"type": "number"}},
     },
