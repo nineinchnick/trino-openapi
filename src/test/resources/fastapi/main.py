@@ -412,17 +412,27 @@ counted_items_requests = RequestCount(requests=0)
 
 
 @router.get("/counted_items")
-def list_counted_items(request: Request, page: int = 1, sort: str = None, direction: str = "asc") -> Results:
+def list_counted_items(request: Request, page: int = 1, sort: str = None, direction: str = "asc", name: str = None) -> Results:
     # save requests, so tests can check how many pages were requested, and with which parameters, using /counted_items_requests
     counted_items_requests.requests += 1
     counted_items_requests.last_query = request.url.query
-    results = list(items.values())
+    # only listing items can filter them by name, like listing pull requests by state
+    results = [item for item in items.values() if name is None or item.name == name]
     if sort is not None:
         # nulls are last when ascending and first when descending, unlike the Trino default of NULLS LAST
         results.sort(key=lambda item: (getattr(item, sort) is None, getattr(item, sort) or 0), reverse=direction == "desc")
     return Results(
         results=results[page - 1:page],
-        total_results=len(items))
+        total_results=len(results))
+
+
+@router.get("/counted_items/{item_id}")
+def get_counted_item(request: Request, item_id: int) -> Item:
+    counted_items_requests.requests += 1
+    counted_items_requests.last_query = request.url.query
+    if item_id not in items:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return items[item_id]
 
 
 # an INSERT operation makes response-only columns, like price, nullable, even though every response includes them

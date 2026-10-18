@@ -244,8 +244,10 @@ Without the filter, the query fails with `Missing required constraint`.
 * A range on a response column, like `updated_at >= TIMESTAMP '2024-01-01'`, is
   sent as lower and upper bound parameters, when the operation maps them to
   the column with [range filters](#range-filters).
-* Filters on other columns, and filters the selected request can't send, are
-  applied by Trino to the returned rows.
+* Filters on other columns are applied by Trino to the returned rows.
+* When a table is read using several requests, like listing items or getting
+  a single one, a filter that the selected request can't send is applied by the
+  connector to the returned rows, so it doesn't prevent pushing down `LIMIT`.
 
 Joins work too. When a filter value comes from another table, Trino passes it to
 this connector as a dynamic filter, which is sent like any other filter:
@@ -659,9 +661,10 @@ more.
   same path without parameters into one table, and why its parameters are
   required filters.
 * **Correct results before pushdown.** A filter is only removed from what Trino
-  applies when every request that can be used sends it. A filter the selected
-  request can't send is still applied by Trino, even if it means reading more
-  data.
+  applies when every request that can be used either sends it, or the connector
+  applies it to the rows the request returns, the same way Trino would. A filter
+  that can't be applied like that is still applied by Trino, even if it means
+  reading more data.
 * **Explicit signals only.** Pagination stops only on signals the server or the
   spec provides, never by guessing from page contents. SQL statements are mapped
   from HTTP methods or the `sqlOperation` extension, never from operation names
