@@ -181,6 +181,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -610,6 +612,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -748,6 +752,32 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testResponseRequiredPaths()
+    {
+        OpenApiSpec spec = loadSpecFile("specs/github.json");
+
+        // every response has the field, but the column allows nulls, because INSERT statements can omit response fields
+        for (String table : List.of("repos_pulls", "repos_issues")) {
+            OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, table));
+            Assertions.assertThat(tableHandle.getInsertPaths()).as("insert paths of %s", table).isNotEmpty();
+            Assertions.assertThat(spec.getTables().get(table))
+                    .as("updated_at of %s", table)
+                    .filteredOn(column -> column.getName().equals("updated_at"))
+                    .singleElement()
+                    .satisfies(column -> {
+                        Assertions.assertThat(column.getMetadata().isNullable()).isTrue();
+                        Assertions.assertThat(column.isResponseRequired(tableHandle.getSelectPaths())).isTrue();
+                    });
+        }
+        // merged_at is null until a pull request is merged
+        OpenApiTableHandle pullsHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_pulls"));
+        Assertions.assertThat(spec.getTables().get("repos_pulls"))
+                .filteredOn(column -> column.getName().equals("merged_at"))
+                .singleElement()
+                .satisfies(column -> Assertions.assertThat(column.isResponseRequired(pullsHandle.getSelectPaths())).isFalse());
+    }
+
+    @Test
     public void getJiraTables()
     {
         OpenApiSpec spec = loadSpec("jira.json");
@@ -773,6 +803,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -1004,6 +1036,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -1234,6 +1268,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -1349,6 +1385,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
@@ -1783,6 +1821,8 @@ class TestOpenApiSpec
                     sourceType.setType(column.getSourceType().getType());
                     return OpenApiColumn.builderFrom(column)
                             .setSourceType(sourceType)
+                            // checked in testResponseRequiredPaths
+                            .setResponseRequiredPaths(Set.of())
                             .build();
                 })
                 .toList();
