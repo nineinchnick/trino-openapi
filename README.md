@@ -140,6 +140,7 @@ Restart Trino. Every catalog can point to a different API.
 | `http-cache.max-size`          | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog; the least recently used responses are removed above it                  |
 | `http-cache.max-entry-size`    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
 | `split-strategy`               | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
+| `probe-limit`                  | `OPENAPI_PROBE_LIMIT`               | `none`    | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
 
 ## Authentication
 
@@ -522,6 +523,7 @@ paths:
 | `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `splitStrategy`     | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
 | `strideSplits`      | Number of splits reading pages with the `stride` strategy, instead of the number of worker nodes                                                    |
+| `probeLimit`        | Page size of the first page requested by the `probe` split strategy, overriding the `probe-limit` catalog property                                  |
 | `errorPath`         | JSON pointer to a human-readable message in error responses                                                                                         |
 | `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
@@ -593,7 +595,13 @@ separate splits:
   the value at `totalPagesPath`, or the value at `totalResultsPath` divided by
   the page size. When the page size isn't known, it's the number of results on
   the first page. If the first page has no total, the remaining pages are read
-  in a single split. Results with a single page are requested twice.
+  in a single split. Results with a single page are requested twice. To make
+  the extra request cheaper, set `probe-limit` or `probeLimit` to a small page
+  size, like `0` or `1`, to request only the total number of results. It's
+  used only when `limitParam` and `totalResultsPath` are set, and the regular
+  page size is known, from a filter, from `parameterDefaults`, or from the
+  parameter's default, because the totals of a smaller page can't tell the
+  number of regular pages otherwise.
 * `stride` - create a split for every worker node, or as many as set in
   `strideSplits`, without requesting any page on the coordinator. With N
   splits, the first split reads pages 1, N+1, 2N+1, and so on, the second

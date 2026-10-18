@@ -32,7 +32,8 @@ public record Pagination(
         OptionalLong maxResults,
         Optional<Sorting> sorting,
         Optional<SplitStrategy> splitStrategy,
-        OptionalInt strideSplits)
+        OptionalInt strideSplits,
+        Optional<ProbeLimit> probeLimit)
 {
     private static final Pagination NONE = builder().build();
 
@@ -50,6 +51,7 @@ public record Pagination(
         requireNonNull(splitStrategy, "splitStrategy is null");
         requireNonNull(strideSplits, "strideSplits is null");
         strideSplits.ifPresent(value -> checkArgument(value > 0, "strideSplits must be positive"));
+        requireNonNull(probeLimit, "probeLimit is null");
     }
 
     public static Pagination none()
@@ -73,6 +75,7 @@ public record Pagination(
         private Optional<Sorting> sorting = Optional.empty();
         private Optional<SplitStrategy> splitStrategy = Optional.empty();
         private OptionalInt strideSplits = OptionalInt.empty();
+        private Optional<ProbeLimit> probeLimit = Optional.empty();
 
         private Builder() {}
 
@@ -130,9 +133,15 @@ public record Pagination(
             return this;
         }
 
+        public Builder setProbeLimit(Optional<ProbeLimit> probeLimit)
+        {
+            this.probeLimit = requireNonNull(probeLimit, "probeLimit is null");
+            return this;
+        }
+
         public Pagination build()
         {
-            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, maxResults, sorting, splitStrategy, strideSplits);
+            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, maxResults, sorting, splitStrategy, strideSplits, probeLimit);
         }
     }
 }

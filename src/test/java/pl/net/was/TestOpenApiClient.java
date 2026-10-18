@@ -13,6 +13,9 @@
  */
 package pl.net.was;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
+import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.block.MapBlockBuilder;
@@ -22,12 +25,19 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.MapType;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 
+import static com.google.common.net.MediaType.JSON_UTF_8;
+import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.util.Collections.nCopies;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
@@ -59,6 +69,62 @@ class TestOpenApiClient
 
         assertThat(serializeMap(spec, "echo_union_value", Domain.singleValue(column.getType(), utf8Slice("{\"number\":42}")), column).toString())
                 .isEqualTo("{\"value\":{\"number\":42}}");
+    }
+
+    @Test
+    void shouldProbeWithLimitedPageSize()
+    {
+        List<URI> requests = new ArrayList<>();
+        OpenApiClient client = createPagedClient(requests);
+        OpenApiTableHandle table = getPagedTable();
+
+        assertThat(client.getSplitsAfterFirstPage(table, new ProbeLimit(OptionalInt.of(0)), false))
+                .extracting(split -> getFilter(split, "page"))
+                .containsExactly(2L, 3L);
+        // the order of parameters is not defined
+        assertThat(requests)
+                .extracting(uri -> ImmutableSet.copyOf(Splitter.on('&').split(uri.getQuery())))
+                .containsExactly(ImmutableSet.of("page=1", "size=0"));
+    }
+
+    @Test
+    void shouldProbeWithRegularPageSize()
+    {
+        List<URI> requests = new ArrayList<>();
+        OpenApiClient client = createPagedClient(requests);
+        OpenApiTableHandle table = getPagedTable();
+
+        assertThat(client.getSplitsAfterFirstPage(table, ProbeLimit.NONE, false))
+                .extracting(split -> getFilter(split, "page"))
+                .containsExactly(2L, 3L);
+        assertThat(requests)
+                .extracting(URI::getQuery)
+                .containsExactly("page=1");
+    }
+
+    private static OpenApiClient createPagedClient(List<URI> requests)
+    {
+        OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
+        // 25 results, with 10 on every page, so the probe must be followed by 2 more pages
+        String firstPage = "{\"total\": 25, \"results\": [%s]}".formatted(String.join(", ", nCopies(10, "{\"name\": \"a\"}")));
+        return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(request -> {
+            requests.add(request.getUri());
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage);
+        }), loadSpec("paged.yml"));
+    }
+
+    private static OpenApiTableHandle getPagedTable()
+    {
+        return loadSpec("paged.yml").getTableHandle(schemaTableName(SCHEMA_NAME, "items"));
+    }
+
+    private static Object getFilter(OpenApiSplit split, String columnName)
+    {
+        return split.getTableHandle().getConstraint().getDomains().orElseThrow().entrySet().stream()
+                .filter(entry -> ((OpenApiColumnHandle) entry.getKey()).getName().equals(columnName))
+                .map(entry -> entry.getValue().getSingleValue())
+                .findFirst()
+                .orElseThrow();
     }
 
     private static Object serializeMap(OpenApiSpec spec, String tableName, Domain domain, OpenApiColumn column)

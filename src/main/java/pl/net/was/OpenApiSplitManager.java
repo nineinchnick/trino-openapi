@@ -68,6 +68,7 @@ public class OpenApiSplitManager
     private final double maxSplitsPerSecond;
     private final int domainExpansionLimit;
     private final SplitStrategy splitStrategy;
+    private final ProbeLimit probeLimit;
 
     private final ExecutorService executor = newCachedThreadPool(daemonThreadsNamed(OpenApiSplitManager.class.getName() + "-%d"));
 
@@ -80,6 +81,7 @@ public class OpenApiSplitManager
         this.maxSplitsPerSecond = config.getMaxSplitsPerSecond();
         this.domainExpansionLimit = config.getDomainExpansionLimit();
         this.splitStrategy = config.getSplitStrategy();
+        this.probeLimit = config.getProbeLimit();
     }
 
     @Override
@@ -273,7 +275,8 @@ public class OpenApiSplitManager
             }
             // the first page tells how many pages there are, but its split doesn't wait for it to be requested
             splits.add(new OpenApiSplit(firstPage.get()));
-            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(splitTable.table(), !isHttpCacheEnabled(session))));
+            ProbeLimit probeLimit = pagination.probeLimit().orElse(this.probeLimit);
+            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
         }
         // TODO when implementing limits, this is where we'd break down splits more
         return getSplitSource(splits.build(), splitsAfterFirstPages.build());

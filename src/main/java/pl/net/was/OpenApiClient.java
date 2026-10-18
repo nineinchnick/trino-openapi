@@ -297,16 +297,32 @@ public class OpenApiClient
                 .map(pageColumn -> withPage(table, pageColumn, 1));
     }
 
-    public List<OpenApiSplit> getSplitsAfterFirstPage(OpenApiTableHandle table, boolean revalidateCachedResponses)
+    public List<OpenApiSplit> getSplitsAfterFirstPage(OpenApiTableHandle table, ProbeLimit probeLimit, boolean revalidateCachedResponses)
     {
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         OpenApiColumn pageColumn = getUnfilteredPageColumn(table, httpPath).orElseThrow();
-        // the first page is also read by its own split, because rows can't be sent in splits
-        ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), revalidateCachedResponses);
         OptionalLong pageSize = getPageSize(table, httpPath);
-        OptionalLong pageCount = getPageCount(firstPage, pageSize);
+        Optional<OpenApiColumn> limitColumn = getLimitColumn(table, httpPath);
+        OptionalLong pageCount;
+        long serverPageSize;
+        // the number of pages can be calculated from the total number of results of a smaller page only if the page size is known,
+        // and the total number of pages would be calculated for the smaller page
+        if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && !JsonPointer.empty().equals(pagination.totalResultsPointer())) {
+            OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().getAsInt());
+            ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), revalidateCachedResponses);
+            serverPageSize = pageSize.getAsLong();
+            pageCount = probe.totalResults().isPresent() && serverPageSize > 0
+                    ? OptionalLong.of(ceilDiv(probe.totalResults().getAsLong(), serverPageSize))
+                    : OptionalLong.empty();
+        }
+        else {
+            // the first page is also read by its own split, because rows can't be sent in splits
+            ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), revalidateCachedResponses);
+            serverPageSize = pageSize.orElse(Iterables.size(firstPage.rows()));
+            pageCount = getPageCount(firstPage, pageSize);
+        }
         if (pageCount.isEmpty()) {
             return List.of(new OpenApiSplit(table, 2, 1));
         }
@@ -314,7 +330,6 @@ public class OpenApiClient
                 ? min(pageCount.getAsLong(), pagination.maxPages().getAsInt())
                 : pageCount.getAsLong();
         // pages starting past the maximum number of results are never requested
-        long serverPageSize = pageSize.orElse(Iterables.size(firstPage.rows()));
         if (pagination.maxResults().isPresent() && serverPageSize > 0) {
             lastPage = min(lastPage, ceilDiv(pagination.maxResults().getAsLong(), serverPageSize));
         }
@@ -364,6 +379,13 @@ public class OpenApiClient
                 pageColumn.getHandle(),
                 NullableValue.of(pageColumn.getType(), page)));
         return table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
+    }
+
+    private static OpenApiTableHandle withLimit(OpenApiTableHandle table, OpenApiColumn limitColumn, long limit)
+    {
+        Map<ColumnHandle, Domain> domains = new HashMap<>(table.getConstraint().getDomains().orElse(Map.of()));
+        domains.put(limitColumn.getHandle(), Domain.singleValue(limitColumn.getType(), limit));
+        return table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
     }
 
     private ResultsPage getPage(OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean revalidateCachedResponses)
