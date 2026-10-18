@@ -158,7 +158,7 @@ public class OpenApiClient
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
     }
 
-    public Iterable<List<?>> getRows(OpenApiTableHandle table, boolean revalidateCachedResponses)
+    public Iterable<List<?>> getRows(OpenApiTableHandle table, int firstPage, int pageIncrement, boolean revalidateCachedResponses)
     {
         List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
@@ -176,11 +176,11 @@ public class OpenApiClient
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         return pageIterator(
                 page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), revalidateCachedResponses),
-                0,
+                firstPage - 1,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
                 pagination.maxResults().orElse(Long.MAX_VALUE),
-                1,
+                pageIncrement,
                 getPageSize(table, httpPath),
                 pagination.maxPages(),
                 rowFilter);
@@ -1103,7 +1103,6 @@ public class OpenApiClient
             long resultLimit = maxResults;
             long rowCount;
             int page = offset + 1;
-            int fetchedPages;
             boolean isLastPage;
             Iterator<List<?>> rows;
 
@@ -1130,9 +1129,7 @@ public class OpenApiClient
             private void fetchPage()
             {
                 ResultsPage resultsPage = getter.apply(page);
-                int fetchedPage = page;
                 page += pageIncrement;
-                fetchedPages++;
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
                 int pageResults = Iterables.size(resultsPage.rows());
@@ -1143,13 +1140,13 @@ public class OpenApiClient
                 if (pageSize.isPresent() && pageResults < pageSize.getAsLong()) {
                     isLastPage = true;
                 }
-                if (resultsPage.totalPages().isPresent() && fetchedPage >= resultsPage.totalPages().getAsLong()) {
+                if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().getAsLong()) {
                     isLastPage = true;
                 }
                 if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {
                     isLastPage = true;
                 }
-                if (maxPages.isPresent() && fetchedPages >= maxPages.getAsInt()) {
+                if (maxPages.isPresent() && page > maxPages.getAsInt()) {
                     isLastPage = true;
                 }
                 rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);

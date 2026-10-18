@@ -22,18 +22,33 @@ import io.trino.spi.connector.ConnectorSplit;
 
 import java.util.List;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class OpenApiSplit
         implements ConnectorSplit
 {
     private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiSplit.class);
 
     private final OpenApiTableHandle tableHandle;
+    private final int firstPage;
+    private final int pageIncrement;
+
+    public OpenApiSplit(OpenApiTableHandle tableHandle)
+    {
+        this(tableHandle, 1, 1);
+    }
 
     @JsonCreator
     public OpenApiSplit(
-            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle)
+            @JsonProperty("tableHandle") OpenApiTableHandle tableHandle,
+            @JsonProperty("firstPage") int firstPage,
+            @JsonProperty("pageIncrement") int pageIncrement)
     {
+        checkArgument(firstPage > 0, "firstPage must be positive");
+        checkArgument(pageIncrement > 0, "pageIncrement must be positive");
         this.tableHandle = tableHandle;
+        this.firstPage = firstPage;
+        this.pageIncrement = pageIncrement;
     }
 
     @Override
@@ -53,6 +68,18 @@ public class OpenApiSplit
     public OpenApiTableHandle getTableHandle()
     {
         return tableHandle;
+    }
+
+    @JsonProperty("firstPage")
+    public int getFirstPage()
+    {
+        return firstPage;
+    }
+
+    @JsonProperty("pageIncrement")
+    public int getPageIncrement()
+    {
+        return pageIncrement;
     }
 
     @Override
