@@ -78,6 +78,41 @@ paths:
       responses:
         "200":
           $ref: '#/components/responses/Echo'
+  /echo/union_query:
+    get:
+      parameters:
+        - in: query
+          name: values
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/StringOrInteger'
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo/union_write:
+    post:
+      parameters:
+        - in: query
+          name: value
+          schema:
+            $ref: '#/components/schemas/StringOrInteger'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+  /echo_last_post:
+    get:
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
   /echo/query:
     get:
       parameters:
@@ -169,6 +204,10 @@ components:
       type: array
       items:
         type: string
+    StringOrInteger:
+      oneOf:
+        - type: string
+        - type: integer
     Decimals:
       type: array
       items:

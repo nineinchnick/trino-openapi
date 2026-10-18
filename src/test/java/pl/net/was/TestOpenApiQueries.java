@@ -378,6 +378,19 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void unionParameters()
+    {
+        // union types are mapped to VARCHAR holding JSON, and plain text is sent as-is
+        assertQuery(
+                "SELECT query FROM echo.default.echo_union_query WHERE \"values\" = ARRAY['\"a b\"', '5', 'c']",
+                "VALUES 'values=a%20b&values=5&values=c'");
+        assertUpdate("INSERT INTO echo.default.echo_union_write (name, value) VALUES ('x', '\"a/b\"')", 1);
+        assertQuery(
+                "SELECT path, query FROM echo.default.echo_last_post",
+                "VALUES ('/echo/union_write', 'value=a%2Fb')");
+    }
+
+    @Test
     public void queryParameterWithReservedCharacters()
     {
         assertQuery(

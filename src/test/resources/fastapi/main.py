@@ -286,6 +286,22 @@ def echo(request: Request, rest: str) -> Echo:
         cookie=request.headers.get("cookie"))
 
 
+last_posted_echo = None
+
+
+@router.post("/echo/{rest:path}")
+def echo_post(request: Request, rest: str) -> dict:
+    # responses of writes are ignored, so save the request to check it using /echo_last_post
+    global last_posted_echo
+    last_posted_echo = echo(request, rest)
+    return {}
+
+
+@router.get("/echo_last_post")
+def echo_last_post() -> Echo:
+    return last_posted_echo
+
+
 @router.get("/error")
 def error() -> Item:
     raise UnicornException(name="Inevitable error")
