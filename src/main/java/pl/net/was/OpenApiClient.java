@@ -64,9 +64,6 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -550,8 +547,8 @@ public class OpenApiClient
             case StandardTypes.DOUBLE -> (Double) value;
             case StandardTypes.DECIMAL -> JsonTrinoConverter.toBigDecimal(value, (DecimalType) column.getType());
             case StandardTypes.VARCHAR -> ((Slice) value).toStringUtf8();
-            case StandardTypes.DATE -> toDate((Long) value, column.getSourceType());
-            case StandardTypes.TIMESTAMP -> toDatetime((Long) value, column.getSourceType());
+            case StandardTypes.DATE -> DateTimeConverter.formatDate((Long) value, column.getSourceType());
+            case StandardTypes.TIMESTAMP -> DateTimeConverter.formatTimestamp((Long) value, column.getSourceType());
             case StandardTypes.BOOLEAN -> value;
             case StandardTypes.MAP -> (SqlMap) value;
             case StandardTypes.ARRAY -> (Block) value;
@@ -595,26 +592,6 @@ public class OpenApiClient
             return null;
         }
         return JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
-    }
-
-    private static String toDate(long days, Schema<?> schema)
-    {
-        String format = schema.getFormat();
-        if (format.equals("date")) {
-            format = "yyyy-MM-dd";
-        }
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
-        return dateFormatter.format(LocalDate.ofEpochDay(days));
-    }
-
-    private static String toDatetime(long millis, Schema<?> schema)
-    {
-        String format = schema.getFormat();
-        if (format.equals("date-time")) {
-            format = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS][.SSSSSS][.SSS]XXX";
-        }
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(format);
-        return dateFormatter.format(Instant.ofEpochMilli(millis));
     }
 
     public ObjectNode serializePage(OpenApiOutputTableHandle table, HttpPath httpPath, Page page, int position)
