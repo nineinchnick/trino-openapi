@@ -297,6 +297,9 @@ public class OpenApiClient
         Schema<?> schema = limitColumn.get().getSourceType();
         Object limit = getFilter(limitColumn.get(), table.getConstraint());
         if (limit == null) {
+            limit = getParameterDefault(limitColumn.get(), httpPath);
+        }
+        if (limit == null) {
             limit = schema.getDefault();
         }
         if (!(limit instanceof Number limitNumber)) {
@@ -370,6 +373,13 @@ public class OpenApiClient
         Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table.getTableHandle(), paths, rowValues);
         HttpPath httpPath = pathWithParams.getKey();
+        Function<OpenApiColumn, Object> parameterValues = column -> {
+            Object value = rowValues.apply(column);
+            if (value != null) {
+                return value;
+            }
+            return getParameterDefault(column, httpPath);
+        };
         // a PATCH changes only the fields it includes, and other methods usually replace the whole resource
         ObjectNode body = updatedColumns.isPresent() && httpPath.method() == PathItem.HttpMethod.PATCH
                 ? serializeUpdatedColumns(table, httpPath, page, position, updatedColumns.get())
@@ -379,7 +389,7 @@ public class OpenApiClient
                     table.getTableHandle(),
                     httpPath,
                     pathWithParams.getValue(),
-                    rowValues,
+                    parameterValues,
                     false,
                     createStaticBodyGenerator(toBytes(body)),
                     new AnyResponseHandler());
@@ -407,11 +417,23 @@ public class OpenApiClient
                 table.getConstraint());
         return column -> {
             Object value = getFilter(column, table.getConstraint());
-            if (value != null || !boundValues.containsKey(column)) {
+            if (value != null) {
                 return value;
             }
-            return toParameterValue(column, boundValues.get(column));
+            if (boundValues.containsKey(column)) {
+                return toParameterValue(column, boundValues.get(column));
+            }
+            return getParameterDefault(column, httpPath);
         };
+    }
+
+    private static Object getParameterDefault(OpenApiColumn column, HttpPath httpPath)
+    {
+        Object value = column.getParameterDefaults().get(httpPath);
+        if (value == null) {
+            return null;
+        }
+        return toParameterValue(column, value);
     }
 
     private <T> T makeRequest(
@@ -635,12 +657,23 @@ public class OpenApiClient
     private Map<String, Object> getRecordFilterValues(OpenApiTableHandle table, HttpPath httpPath)
     {
         // records need the Trino native representation of values, not the one used to encode request parameters
-        String tableName = table.getSchemaTableName().getTableName();
-        return openApiSpec.getTables().get(tableName).stream()
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        Map<OpenApiColumn, Object> boundValues = RangePushdown.getBoundValues(columns, httpPath, table.getConstraint());
+        return columns.stream()
                 .filter(column -> isPredicate(column, httpPath, null))
-                .map(column -> new SimpleEntry<>(column.getSourceName(), getNativeFilter(column, table.getConstraint())))
+                .map(column -> new SimpleEntry<>(column.getSourceName(), getNativeRecordValue(column, httpPath, table.getConstraint(), boundValues)))
                 .filter(entry -> entry.getValue() != null)
                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private static Object getNativeRecordValue(OpenApiColumn column, HttpPath httpPath, TupleDomain<ColumnHandle> constraint, Map<OpenApiColumn, Object> boundValues)
+    {
+        Object value = getNativeFilter(column, constraint);
+        if (value != null || boundValues.containsKey(column)) {
+            return value;
+        }
+        // rows read using a default value are the same as rows of a query filtering on it, so they have the same value
+        return column.getParameterDefaults().get(httpPath);
     }
 
     private Map<OpenApiColumn, Object> getFilterColumnValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in, Function<OpenApiColumn, Object> valueProvider)

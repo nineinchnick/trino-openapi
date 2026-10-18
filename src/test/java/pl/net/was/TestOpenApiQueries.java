@@ -798,10 +798,48 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT query FROM echo.default.echo_union_query WHERE \"values\" = ARRAY['\"a b\"', '5', 'c']",
                 "VALUES 'values=a%20b&values=5&values=c'");
-        assertUpdate("INSERT INTO echo.default.echo_union_write (name, value) VALUES ('x', '\"a/b\"')", 1);
-        assertQuery(
-                "SELECT path, query FROM echo.default.echo_last_post",
-                "VALUES ('/echo/union_write', 'value=a%2Fb')");
+        assertThat(insertAndGetLastPost("INSERT INTO echo.default.echo_union_write (name, value) VALUES ('x', '\"a/b\"')"))
+                .containsExactly("/echo/union_write", "value=a%2Fb");
+    }
+
+    @Test
+    public void parameterDefaults()
+    {
+        // rows show the values that were sent, like they show the values of filters
+        MaterializedRow row = getOnlyElement(computeActual("SELECT query, header, cookie, \"limit\", archived, x_color, flavor FROM echo.default.echo_defaults").getMaterializedRows());
+        assertThat(((String) row.getField(0)).split("&")).containsExactlyInAnyOrder("limit=100", "archived=false");
+        assertThat(row.getFields().subList(1, row.getFieldCount())).containsExactly("green", "flavor=mint", 100L, false, "green", "mint");
+
+        row = getOnlyElement(computeActual("SELECT query, header, x_color FROM echo.default.echo_defaults WHERE \"limit\" = 5 AND x_color = 'red'").getMaterializedRows());
+        assertThat(((String) row.getField(0)).split("&")).containsExactlyInAnyOrder("limit=5", "archived=false");
+        assertThat(row.getFields().subList(1, row.getFieldCount())).containsExactly("red", "red");
+
+        assertThat(insertAndGetLastPost("INSERT INTO echo.default.echo_defaults (name) VALUES ('x')"))
+                .containsExactly("/echo/defaults", "limit=10");
+        assertThat(insertAndGetLastPost("INSERT INTO echo.default.echo_defaults (name, \"limit\") VALUES ('x', 5)"))
+                .containsExactly("/echo/defaults", "limit=5");
+    }
+
+    @Test
+    public void parameterDefaultsInPaginatedRequests()
+    {
+        // the page size is the default value, not the one declared in the parameter's schema, so a shorter page ends pagination
+        assertThat(assertDefaultedItems("SELECT name, state, per_page FROM fastapi.default.defaulted_items", 1, row("Portal Gun", "all", 3L), row("Plumbus", "all", 3L)))
+                .contains("state=all", "per_page=3");
+        // filters are sent instead of the defaults
+        assertThat(assertDefaultedItems("SELECT name, state FROM fastapi.default.defaulted_items WHERE state = 'closed'", 1, row("Plumbus", "closed")))
+                .contains("state=closed", "per_page=3");
+        assertThat(assertDefaultedItems("SELECT name, per_page FROM fastapi.default.defaulted_items WHERE per_page = 1", 3, row("Portal Gun", 1L), row("Plumbus", 1L)))
+                .contains("state=all", "per_page=1");
+        assertDefaultedItems("SELECT name, state FROM fastapi.default.defaulted_items WHERE state IN ('open', 'closed')", 2, row("Portal Gun", "open"), row("Plumbus", "closed"));
+        // a filter on the default value returns the same rows
+        assertDefaultedItems("SELECT name, state FROM fastapi.default.defaulted_items WHERE state = 'all'", 1, row("Portal Gun", "all"), row("Plumbus", "all"));
+        // getting a single item doesn't have the parameters with defaults
+        assertThat(assertDefaultedItems("SELECT name, state FROM fastapi.default.defaulted_items WHERE item_id = 2", 1, row("Plumbus", null)))
+                .isEmpty();
+        // sort parameters are sent with the defaults
+        assertThat(assertDefaultedItems("SELECT name FROM fastapi.default.defaulted_items ORDER BY price DESC LIMIT 1", 1, row("Portal Gun")))
+                .contains("sort=price", "direction=desc", "state=all", "per_page=3");
     }
 
     @Test
@@ -1014,6 +1052,35 @@ public class TestOpenApiQueries
         MaterializedRow requests = getCountedItemsRequests();
         assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
         return (String) requests.getField(1);
+    }
+
+    @SafeVarargs
+    private synchronized String assertDefaultedItems(String query, long expectedRequests, List<Object>... expectedRows)
+    {
+        long requestsBefore = (long) getDefaultedItemsRequests().getField(0);
+        assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
+                .extracting(MaterializedRow::getFields)
+                .containsExactlyInAnyOrder(expectedRows);
+        MaterializedRow requests = getDefaultedItemsRequests();
+        assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
+        return (String) requests.getField(1);
+    }
+
+    private MaterializedRow getDefaultedItemsRequests()
+    {
+        return getOnlyElement(computeActual("SELECT requests, last_query FROM fastapi.default.defaulted_items_requests").getMaterializedRows());
+    }
+
+    private static List<Object> row(Object... fields)
+    {
+        return Arrays.asList(fields);
+    }
+
+    // tests run concurrently, and the server saves only the last POST request
+    private synchronized List<Object> insertAndGetLastPost(String insert)
+    {
+        assertUpdate(insert, 1);
+        return getOnlyElement(computeActual("SELECT path, query FROM echo.default.echo_last_post").getMaterializedRows()).getFields();
     }
 
     private synchronized void assertPagedChanges(String query, long expectedRequests, Long... expectedIds)

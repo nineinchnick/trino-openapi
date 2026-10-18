@@ -52,6 +52,7 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -74,6 +75,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Sets.toImmutableEnumSet;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateType.DATE;
@@ -126,6 +128,7 @@ public class OpenApiSpec
     private static final String RANGE_UPPER_PARAM = "upperParam";
     private static final String RANGE_UPPER_INCLUSIVE = "upperInclusive";
     private static final String RANGE_EXACT = "exact";
+    private static final String PARAMETER_DEFAULTS = "parameterDefaults";
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
     // should only be used to manually resolving references
@@ -543,16 +546,98 @@ public class OpenApiSpec
                     .forEach(result::add);
         }
 
-        Map<String, RangeFilter> rangeFilters = getRangeFilters(op.getExtensions() == null ? null : op.getExtensions().get(SPEC_EXTENSION));
-        if (rangeFilters.isEmpty()) {
-            return result.stream();
-        }
         HttpPath httpPath = new HttpPath(method, path);
-        validateRangeFilters(rangeFilters, result, httpPath);
-        return result.stream()
+        Object rawExtension = op.getExtensions() == null ? null : op.getExtensions().get(SPEC_EXTENSION);
+        List<OpenApiColumn> columns = setParameterDefaults(result, getParameterDefaults(rawExtension), httpPath, specExtension.get(PAGINATION_PAGE_PARAM));
+        Map<String, RangeFilter> rangeFilters = getRangeFilters(rawExtension);
+        if (rangeFilters.isEmpty()) {
+            return columns.stream();
+        }
+        validateRangeFilters(rangeFilters, columns, httpPath);
+        return columns.stream()
                 .map(column -> rangeFilters.containsKey(column.getSourceName()) && !isParameter(column)
                         ? OpenApiColumn.builderFrom(column).setRangeFilters(Map.of(httpPath, rangeFilters.get(column.getSourceName()))).build()
                         : column);
+    }
+
+    private static Map<String, Object> getParameterDefaults(Object specExtension)
+    {
+        if (!(specExtension instanceof Map<?, ?> extension) || extension.get(PARAMETER_DEFAULTS) == null) {
+            return ImmutableMap.of();
+        }
+        checkArgument(extension.get(PARAMETER_DEFAULTS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with parameter names as keys", PARAMETER_DEFAULTS);
+        return ((Map<?, ?>) extension.get(PARAMETER_DEFAULTS)).entrySet().stream()
+                .collect(toImmutableMap(entry -> entry.getKey().toString(), entry -> {
+                    checkArgument(entry.getValue() != null, "Invalid value of %s for %s: expected a value", PARAMETER_DEFAULTS, entry.getKey());
+                    return entry.getValue();
+                }));
+    }
+
+    private static List<OpenApiColumn> setParameterDefaults(List<OpenApiColumn> columns, Map<String, Object> defaults, HttpPath httpPath, String pageParam)
+    {
+        if (defaults.isEmpty()) {
+            return columns;
+        }
+        String operation = httpPath.method() + " " + httpPath.path();
+        Map<String, Object> nativeDefaults = defaults.entrySet().stream()
+                .collect(toImmutableMap(Map.Entry::getKey, entry -> {
+                    String parameter = entry.getKey();
+                    // a page number filter makes the connector request only that page
+                    checkArgument(!parameter.equals(pageParam), "Invalid value of %s: %s is the page number parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
+                    Optional<OpenApiColumn> column = columns.stream()
+                            .filter(candidate -> parameter.equals(candidate.getSourceName()) && isDefaultableParameter(candidate, httpPath))
+                            .findFirst();
+                    checkArgument(column.isPresent(), "Invalid value of %s: %s is not an optional query, header, or cookie parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
+                    return getNativeDefault(column.get(), entry.getValue(), operation);
+                }));
+        return columns.stream()
+                .map(column -> isDefaultableParameter(column, httpPath) && nativeDefaults.containsKey(column.getSourceName())
+                        ? OpenApiColumn.builderFrom(column).setParameterDefaults(Map.of(httpPath, nativeDefaults.get(column.getSourceName()))).build()
+                        : column)
+                .toList();
+    }
+
+    private static boolean isDefaultableParameter(OpenApiColumn column, HttpPath httpPath)
+    {
+        // required parameters must be set by the query, and path parameters select resources
+        ParameterLocation location = column.getOptionalPredicate().get(httpPath);
+        return location == ParameterLocation.QUERY || location == ParameterLocation.HEADER || location == ParameterLocation.COOKIE;
+    }
+
+    private static Object getNativeDefault(OpenApiColumn column, Object value, String operation)
+    {
+        String parameter = column.getSourceName();
+        Type type = column.getType();
+        checkArgument(
+                type.equals(VARCHAR) || type.equals(BIGINT) || type.equals(INTEGER) || type.equals(BOOLEAN),
+                "Invalid value of %s: parameter %s of %s has type %s, but only string, integer, and boolean parameters can have defaults",
+                PARAMETER_DEFAULTS,
+                parameter,
+                operation,
+                type);
+        boolean matchesType = type.equals(VARCHAR) && value instanceof String
+                || (type.equals(BIGINT) || type.equals(INTEGER)) && (value instanceof Integer || value instanceof Long)
+                || type.equals(BOOLEAN) && value instanceof Boolean;
+        checkArgument(matchesType, "Invalid value of %s: %s for parameter %s of %s doesn't have type %s", PARAMETER_DEFAULTS, value, parameter, operation, type);
+        Schema<?> schema = column.getSourceType();
+        checkArgument(
+                schema.getEnum() == null || schema.getEnum().stream().anyMatch(allowed -> String.valueOf(allowed).equals(value.toString())),
+                "Invalid value of %s: %s for parameter %s of %s is not one of %s",
+                PARAMETER_DEFAULTS,
+                value,
+                parameter,
+                operation,
+                schema.getEnum());
+        if (value instanceof Number number) {
+            BigDecimal decimal = BigDecimal.valueOf(number.longValue());
+            checkArgument(schema.getMinimum() == null || decimal.compareTo(schema.getMinimum()) >= 0, "Invalid value of %s: %s for parameter %s of %s is less than its minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMinimum());
+            checkArgument(schema.getMaximum() == null || decimal.compareTo(schema.getMaximum()) <= 0, "Invalid value of %s: %s for parameter %s of %s is greater than its maximum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMaximum());
+            return number.longValue();
+        }
+        if (value instanceof String string) {
+            return utf8Slice(string);
+        }
+        return value;
     }
 
     private static Map<String, RangeFilter> getRangeFilters(Object specExtension)
@@ -1332,6 +1417,10 @@ public class OpenApiSpec
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .setRangeFilters(sameColumns.stream()
                                 .map(OpenApiColumn::getRangeFilters)
+                                .flatMap(map -> map.entrySet().stream())
+                                .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
+                        .setParameterDefaults(sameColumns.stream()
+                                .map(OpenApiColumn::getParameterDefaults)
                                 .flatMap(map -> map.entrySet().stream())
                                 .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)))
                         .build())

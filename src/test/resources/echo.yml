@@ -123,6 +123,56 @@ paths:
       responses:
         "200":
           $ref: '#/components/responses/Echo'
+  /echo/defaults:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            maximum: 100
+        - in: query
+          name: archived
+          schema:
+            type: boolean
+        - in: header
+          name: x-color
+          schema:
+            type: string
+            enum: [red, green]
+        - in: cookie
+          name: flavor
+          schema:
+            type: string
+      x-trino:
+        parameterDefaults:
+          limit: 100
+          archived: false
+          x-color: green
+          flavor: mint
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
+    post:
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      x-trino:
+        parameterDefaults:
+          limit: 10
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          $ref: '#/components/responses/Echo'
   /echo/query_reserved:
     get:
       parameters:

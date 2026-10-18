@@ -1,6 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Literal
 
 from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
@@ -489,6 +489,42 @@ def get_counted_items_requests() -> RequestCount:
     return counted_items_requests
 
 
+defaulted_items_requests = RequestCount(requests=0)
+defaulted_item_states = {1: "open", 2: "closed"}
+
+
+@router.get("/defaulted_items")
+def list_defaulted_items(
+        request: Request,
+        page: int = 1,
+        per_page: int = 1,
+        state: Literal["open", "closed", "all"] = "open",
+        sort: str = None,
+        direction: str = "asc") -> Results:
+    # like listing GitHub pull requests, without parameters only the first open item is returned on every page,
+    # so the spec sets parameterDefaults to read all items in fewer requests
+    defaulted_items_requests.requests += 1
+    defaulted_items_requests.last_query = request.url.query
+    results = [item for item_id, item in items.items() if state == "all" or defaulted_item_states[item_id] == state]
+    if sort is not None:
+        results.sort(key=lambda item: getattr(item, sort), reverse=direction == "desc")
+    return Results(
+        results=results[(page - 1) * per_page:page * per_page],
+        total_results=len(results))
+
+
+@router.get("/defaulted_items/{item_id}")
+def get_defaulted_item(request: Request, item_id: int) -> Item:
+    defaulted_items_requests.requests += 1
+    defaulted_items_requests.last_query = request.url.query
+    return items[item_id]
+
+
+@router.get("/defaulted_items_requests")
+def get_defaulted_items_requests() -> RequestCount:
+    return defaulted_items_requests
+
+
 @router.post("/paged_search")
 def paged_search(q: PageFilter) -> Results:
     return Results(
@@ -889,6 +925,18 @@ def custom_openapi():
         "directionParam": "direction",
         "ascendingValue": "asc",
         "descendingValue": "desc",
+    }
+    # the total number of results is not declared, so pagination stops on a page with fewer results than the page size
+    openapi_schema["paths"]["/defaulted_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "per_page",
+        "resultsPath": "$response.body#/results",
+        "sortParam": "sort",
+        "sortValues": {"price": "price"},
+        "directionParam": "direction",
+        "ascendingValue": "asc",
+        "descendingValue": "desc",
+        "parameterDefaults": {"state": "all", "per_page": 3},
     }
     openapi_schema["paths"]["/max_results_items"]["get"]["x-trino"] = {
         "pageParam": "page",
