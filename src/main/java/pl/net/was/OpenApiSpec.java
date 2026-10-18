@@ -777,11 +777,14 @@ public class OpenApiSpec
 
     private record TypeTuple(Type type, Schema<?> schema) {}
 
+    private record MergeKey(OpenApiColumn.PrimaryKey primaryKey, String sourceName) {}
+
     private List<OpenApiColumn> mergeColumns(List<OpenApiColumn> columns)
     {
         return columns.stream()
-                // merge all columns with same name and data type
-                .collect(groupingBy(OpenApiColumn::getPrimaryKey, LinkedHashMap::new, toList()))
+                // merge all columns with same name, data type, and source name;
+                // distinct source names can normalize to the same name, and they must remain separate columns
+                .collect(groupingBy(column -> new MergeKey(column.getPrimaryKey(), column.getSourceName()), LinkedHashMap::new, toList()))
                 .values().stream()
                 .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
                         .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))

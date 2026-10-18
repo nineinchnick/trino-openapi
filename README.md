@@ -99,9 +99,10 @@ The following rules are used to map the OpenAPI schema to SQL tables and columns
 * Fields of the request body are also mapped to columns, if a POST request is
   used for SELECT.
 * All columns are disambiguated - if a field with the same name but a different
-  data type appears in the response and parameters, it'll be mapped to multiple
-  columns, with numeric suffixes (`_2`, `_3`, etc.). Request body fields have a
-  `_req` suffix.
+  data type appears in the response and parameters, or fields with different
+  names, like `fooBar` and `foo_bar`, map to the same column name, it'll be
+  mapped to multiple columns, with numeric suffixes (`_2`, `_3`, etc.). Request
+  body fields have a `_req` suffix.
 
 ## OpenAPI Extensions
 
