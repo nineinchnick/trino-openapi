@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>395</version>
+        <version>418</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -52,8 +52,8 @@
         <!-- same as Trino tests: Trino requires the vector module, Guice uses sun.misc.Unsafe, and brotli4j loads a native library -->
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</air.test.jvm.additional-arguments>
 
-        <dep.trino.version>483</dep.trino.version>
-        <dep.airlift.version>439</dep.airlift.version>
+        <dep.trino.version>484</dep.trino.version>
+        <dep.airlift.version>451</dep.airlift.version>
         <dep.swagger-parser.version>2.1.46</dep.swagger-parser.version>
         <dep.swagger-models.version>2.2.53</dep.swagger-models.version>
 
