@@ -24,7 +24,7 @@ jobs:
           server-id: github
       # the release bumps versions in pom.xml, so exact cache keys rarely match; restore the most recent cache instead
       - name: Cache Maven artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
