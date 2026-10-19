@@ -45,6 +45,20 @@ import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 class TestOpenApiClient
 {
     @Test
+    void shouldAppendQueryParamsToFixedQueryInPath()
+            throws Exception
+    {
+        URI base = URI.create("https://api.example.com/v1");
+
+        assertThat(OpenApiClient.buildUri(base, "/occurrence/search?datasetKey=abc", List.of("limit=20", "offset=0")))
+                .hasToString("https://api.example.com/v1/occurrence/search?datasetKey=abc&limit=20&offset=0");
+        assertThat(OpenApiClient.buildUri(base, "/occurrence/search", List.of("limit=20")))
+                .hasToString("https://api.example.com/v1/occurrence/search?limit=20");
+        assertThat(OpenApiClient.buildUri(base, "/occurrence/search?datasetKey=abc", List.of()))
+                .hasToString("https://api.example.com/v1/occurrence/search?datasetKey=abc");
+    }
+
+    @Test
     void shouldSerializeMapPredicatesInRequestBodies()
     {
         OpenApiSpec spec = loadSpec("echo.yml");

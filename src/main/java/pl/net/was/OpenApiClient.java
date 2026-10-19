@@ -680,7 +680,7 @@ public class OpenApiClient
         return Map.entry(httpPath, pathParams);
     }
 
-    private static URI buildUri(URI uri, String path, List<String> queryParams)
+    static URI buildUri(URI uri, String path, List<String> queryParams)
             throws URISyntaxException
     {
         // both the path and query parameters are already percent-encoded, according to their parameter styles,
@@ -689,7 +689,9 @@ public class OpenApiClient
         if (queryParams.isEmpty()) {
             return resolved;
         }
-        return new URI(resolved + "?" + String.join("&", queryParams));
+        // a path can carry a fixed query, like /search?datasetKey=1, so append to it instead of starting a second one
+        String separator = resolved.getRawQuery() == null ? "?" : "&";
+        return new URI(resolved + separator + String.join("&", queryParams));
     }
 
     private List<String> getQueryParams(OpenApiTableHandle table, HttpPath httpPath, Function<OpenApiColumn, Object> valueProvider)
