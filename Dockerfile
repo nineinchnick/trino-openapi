@@ -39,4 +39,4 @@ ENV OPENAPI_AUTH_TYPE=none \
     OPENAPI_PROBE_LIMIT="none"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["/usr/lib/trino/bin/run-trino"]
+CMD ["/usr/lib/trino/bin/launcher", "run", "--etc-dir", "/etc/trino"]
