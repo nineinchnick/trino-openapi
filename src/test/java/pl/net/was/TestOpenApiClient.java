@@ -175,7 +175,7 @@ class TestOpenApiClient
     private static OpenApiClient newClient(OpenApiConfig config, OpenApiSpec spec, HttpClient httpClient)
     {
         OpenApiServers servers = new OpenApiServers(config, spec);
-        return new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
+        return new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(new CatalogCredentials(config), spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
     }
 
     private static OpenApiTableHandle getPagedTable()

@@ -926,7 +926,7 @@ class TestAuthentication
     private static Authentication newAuthentication(OpenApiConfig config, HttpClient httpClient)
     {
         OpenApiSpec spec = createSpec(config);
-        return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
+        return new Authentication(new CatalogCredentials(config), spec, new OpenApiServers(config, spec), httpClient);
     }
 
     private Authentication createClientCredentialsAuthentication(String tokenResponse)

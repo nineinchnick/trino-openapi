@@ -218,7 +218,7 @@ class TestKeycloakAuthentication
                 """.formatted(USERINFO_PATH, keycloakServer.getTokenUrl()));
         config.setSpecLocation(specFile.toString());
         OpenApiSpec spec = createSpec(config);
-        return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
+        return new Authentication(new CatalogCredentials(config), spec, new OpenApiServers(config, spec), httpClient);
     }
 
     private StringResponse getUserInfo(HttpClient client)

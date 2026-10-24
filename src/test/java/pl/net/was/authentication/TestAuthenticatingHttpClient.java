@@ -172,7 +172,7 @@ class TestAuthenticatingHttpClient
         OpenApiSpec spec = createSpec(config);
         try (HttpClient apiClient = new JettyHttpClient()) {
             // wrapped the same way as by the OpenAPI client
-            HttpClient client = new UnchallengedResponseHttpClient(new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE));
+            HttpClient client = new UnchallengedResponseHttpClient(new AuthenticatingHttpClient(apiClient, new Authentication(new CatalogCredentials(config), spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE));
 
             assertThat(get(client, serverUri, "/secured").getStatusCode()).isEqualTo(401);
         }
@@ -240,7 +240,7 @@ class TestAuthenticatingHttpClient
             return new TestingResponse(HttpStatus.UNAUTHORIZED, ImmutableListMultimap.of(WWW_AUTHENTICATE, challenge), new byte[0]);
         });
         OpenApiSpec spec = createSpec(config);
-        return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE);
+        return new AuthenticatingHttpClient(apiClient, new Authentication(new CatalogCredentials(config), spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE);
     }
 
     private HttpClient createTokenClient()
