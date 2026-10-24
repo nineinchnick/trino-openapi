@@ -364,6 +364,13 @@ class TestOpenApiClientRequests
                                 type: string
             """;
 
+    private static final String PAGED_ERROR_PATH_SPEC = PAGED_SPEC.replace(
+            "totalResultsPath: $response.body#/total\n",
+            """
+            totalResultsPath: $response.body#/total
+                    errorPath: $response.body#/message
+            """);
+
     private static final String PAGED_PATH_PARAMETER_SPEC = PAGED_SPEC
             .replace("  /paged:\n", "  /{tenant}/paged:\n")
             .replace(
@@ -1102,6 +1109,50 @@ class TestOpenApiClientRequests
         assertThatThrownBy(() -> getRows(newConfig(PAGED_SPEC), "paged", null))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value of totalResultsPath /total in the response to GET %s/paged is not a whole number", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+    }
+
+    @Test
+    void testErrorWithStatusOkIncludesErrorPathMessage()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"message\":\"Invalid token\",\"details\":\"internal-details\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_ERROR_PATH_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/paged for operation listPaged failed with HTTP 200: \"Invalid token\"", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+        assertThat(requestCount).hasValue(1);
+
+        // null results with an error are an error, not an empty page
+        responses.add(respond(200, "{\"results\":null,\"message\":\"Invalid token\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_ERROR_PATH_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/paged for operation listPaged failed with HTTP 200: \"Invalid token\"", baseUri);
+    }
+
+    @Test
+    void testErrorWithStatusOkWithoutErrorPath()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"message\":\"Invalid token\",\"details\":\"internal-details\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/paged has no value at resultsPath /results", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("Invalid token", "internal-details"));
+    }
+
+    @Test
+    void testScalarResultsAreExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":\"internal-details\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_ERROR_PATH_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value of resultsPath /results in the response to GET %s/paged is a JSON STRING, not an array or an object", baseUri)
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
     }
 
