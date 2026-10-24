@@ -489,15 +489,17 @@ public class OpenApiClient
 
     public void updateRows(OpenApiOutputTableHandle table, Page page, Block rowIds, int position, Set<OpenApiColumnHandle> updatedColumns)
     {
-        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(table.getTableHandle(), rowIds, position, column -> getRowValue(table, page, position, column));
-        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position, rowValues, Optional.of(updatedColumns));
+        List<HttpPath> paths = table.getTableHandle().getUpdatePaths();
+        table.getTableHandle().checkHasPaths("UPDATE", paths);
+        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(table.getTableHandle(), "UPDATE", paths, rowIds, position, column -> getRowValue(table, page, position, column));
+        writeRows(table, "UPDATE", paths, page, position, rowValues, Optional.of(updatedColumns));
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
         OpenApiTableHandle tableHandle = table.getTableHandle();
         tableHandle.checkHasPaths("DELETE", tableHandle.getDeletePaths());
-        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(tableHandle, rowIds, position, column -> getFilter(column, tableHandle.getConstraint()));
+        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(tableHandle, "DELETE", tableHandle.getDeletePaths(), rowIds, position, column -> getFilter(column, tableHandle.getConstraint()));
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(tableHandle, tableHandle.getDeletePaths(), rowValues);
         HttpPath httpPath = pathWithParams.getKey();
         makeRequest(
@@ -512,9 +514,16 @@ public class OpenApiClient
     /**
      * Returns the values of path parameters identifying the resource of a row, decoded from its row ID, and other values from the given function.
      */
-    private Function<OpenApiColumn, Object> getIdentifiedRowValues(OpenApiTableHandle table, Block rowIds, int position, Function<OpenApiColumn, Object> otherValues)
+    private Function<OpenApiColumn, Object> getIdentifiedRowValues(
+            OpenApiTableHandle table,
+            String statement,
+            List<HttpPath> paths,
+            Block rowIds,
+            int position,
+            Function<OpenApiColumn, Object> otherValues)
     {
         Map<OpenApiColumn, JsonNode> identifiers = decodeRowId(table, rowIds, position);
+        checkIdentified(table, statement, paths, identifiers);
         Set<OpenApiColumn> rowIdColumns = ImmutableSet.copyOf(getRowIdColumns(table));
         return column -> {
             // a filter can match many resources, so it doesn't identify the resource of a row
@@ -538,6 +547,30 @@ public class OpenApiClient
         return getRowIdColumns(table).stream()
                 .filter(column -> rowId.hasNonNull(column.getName()))
                 .collect(toImmutableMap(identity(), column -> rowId.get(column.getName())));
+    }
+
+    private void checkIdentified(OpenApiTableHandle table, String statement, List<HttpPath> paths, Map<OpenApiColumn, JsonNode> identifiers)
+    {
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        Map<HttpPath, List<OpenApiColumn>> missingIdentifiers = paths.stream()
+                .collect(toImmutableMap(identity(), httpPath -> columns.stream()
+                        .filter(column -> isPredicate(column, httpPath, ParameterLocation.PATH) && !identifiers.containsKey(column))
+                        .toList()));
+        if (missingIdentifiers.values().stream().anyMatch(List::isEmpty)) {
+            return;
+        }
+        // a request without them would change another resource than the one of the row, or none
+        throw new TrinoException(INVALID_ROW_FILTER, format(
+                "Cannot %s rows of table %s, because they don't have values of the path parameters that identify their resources: %s. " +
+                        "Filter on the columns of these parameters, or link the parameters to the response fields with the same values, " +
+                        "using the field property of the x-trino extension of the parameters",
+                statement,
+                table.getSchemaTableName().getTableName(),
+                missingIdentifiers.entrySet().stream()
+                        .map(entry -> entry.getValue().stream()
+                                .map(column -> format("%s (column %s)", column.getParameterName(entry.getKey()), column.getName()))
+                                .collect(joining(", ")) + " of " + entry.getKey())
+                        .collect(joining("; "))));
     }
 
     /**
@@ -1002,6 +1035,10 @@ public class OpenApiClient
         }
         if (domain == null || domain.isOnlyNull()) {
             return null;
+        }
+        // reads make a request for every value, but writes make a single request for every row, which can only send one value
+        if (!domain.isSingleValue()) {
+            throw new TrinoException(INVALID_ROW_FILTER, "Filter on %s has more than one value, but a request can only send one".formatted(column.getName()));
         }
         return domain.getSingleValue();
     }
