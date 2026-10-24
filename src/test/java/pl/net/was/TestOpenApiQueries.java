@@ -1415,6 +1415,18 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsWithoutPageNumbersInSingleSplit()
+    {
+        // every request needs the cursor, the link, or the number of results from the previous response
+        for (String catalog : List.of("fastapi_probe", "fastapi_stride")) {
+            assertSplits("SELECT name FROM %s.default.cursor_items".formatted(catalog), 1);
+            assertSplits("SELECT name FROM %s.default.header_cursor_items".formatted(catalog), 1);
+            assertSplits("SELECT name FROM %s.default.linked_items".formatted(catalog), 1);
+            assertSplits("SELECT name FROM %s.default.offset_items".formatted(catalog), 1);
+        }
+    }
+
+    @Test
     public void itemsWithSplitStrategySessionProperties()
     {
         // the session property overrides the catalog property
