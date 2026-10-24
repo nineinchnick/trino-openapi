@@ -68,6 +68,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
 class TestCachingHttpClient
@@ -291,6 +292,53 @@ class TestCachingHttpClient
         client.execute(get(OTHER_ITEMS), BODY);
         assertThat(serverRequests).extracting(request -> request.getMethod() + " " + request.getUri().getPath())
                 .containsExactly("GET /items", "GET /items", "GET /other-items", "POST /items", "GET /items", "GET /items");
+    }
+
+    @Test
+    void testPartitionsDontShareResponses()
+    {
+        HttpCache cache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        Function<Request, Response> server = _ -> response(HttpStatus.OK, "for request " + serverRequests.size(), CACHE_CONTROL, "max-age=60");
+        CachingHttpClient defaultClient = client(cache, server);
+        CachingHttpClient firstClient = client(cache.partition("first"), server);
+        CachingHttpClient secondClient = client(cache.partition("second"), server);
+
+        assertThat(defaultClient.execute(get(ITEMS), BODY)).isEqualTo("200 for request 1");
+        assertThat(firstClient.execute(get(ITEMS), BODY)).isEqualTo("200 for request 2");
+        assertThat(secondClient.execute(get(ITEMS), BODY)).isEqualTo("200 for request 3");
+        assertThat(defaultClient.execute(get(ITEMS), BODY)).isEqualTo("200 for request 1");
+        assertThat(client(cache.partition("first"), server).execute(get(ITEMS), BODY)).isEqualTo("200 for request 2");
+        assertThat(secondClient.execute(get(ITEMS), BODY)).isEqualTo("200 for request 3");
+        assertThat(serverRequests).hasSize(3);
+    }
+
+    @Test
+    void testChangeInvalidatesResponsesOfAllPartitions()
+    {
+        HttpCache cache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        Function<Request, Response> server = request -> request.getMethod().equals("POST")
+                ? response(HttpStatus.CREATED, "")
+                : response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60");
+        CachingHttpClient firstClient = client(cache.partition("first"), server);
+        CachingHttpClient secondClient = client(cache.partition("second"), server);
+
+        firstClient.execute(get(ITEMS), BODY);
+        secondClient.execute(get(ITEMS), BODY);
+        firstClient.execute(preparePost().setUri(ITEMS).build(), BODY);
+        firstClient.execute(get(ITEMS), BODY);
+        secondClient.execute(get(ITEMS), BODY);
+        assertThat(serverRequests).extracting(request -> request.getMethod() + " " + request.getUri().getPath())
+                .containsExactly("GET /items", "GET /items", "POST /items", "GET /items", "GET /items");
+    }
+
+    @Test
+    void testPartitionNameWithNewLine()
+    {
+        HttpCache cache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+
+        assertThatThrownBy(() -> cache.partition("first\nsecond"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("name contains a new line");
     }
 
     @Test
