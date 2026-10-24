@@ -68,6 +68,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -95,6 +96,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -194,8 +196,9 @@ public class OpenApiSpec
                 .filter(entry -> hasOpsWithJson(entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
-                .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))));
-        Map<String, String> tableNames = getTableNames(pathGroups.values());
+                // paths like /a/b and /a-b have the same identifier, but they're different resources, so they're not merged
+                .collect(groupingBy(entry -> stripPathParams(entry.getKey())));
+        Map<String, String> tableNames = getUniqueTableNames(pathGroups.values());
         ImmutableMap.Builder<String, List<OpenApiColumn>> tables = ImmutableMap.builder();
         ImmutableMap.Builder<String, OpenApiTableHandle> handles = ImmutableMap.builder();
         ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> errorPointers = ImmutableMap.builder();
@@ -348,6 +351,42 @@ public class OpenApiSpec
                 .map(RateLimitHeaders.ResetFormat::getSpecValue)
                 .collect(joining(", ")));
         return Optional.of(new RateLimitHeaders(resetHeader, format.get(), Optional.ofNullable(documentExtension.get(RATE_LIMIT_REMAINING_HEADER))));
+    }
+
+    private Map<String, String> getUniqueTableNames(Collection<List<Map.Entry<String, PathItem>>> pathGroups)
+    {
+        Map<String, List<String>> pathsByName = getTableNames(pathGroups).entrySet().stream()
+                .collect(groupingBy(Map.Entry::getValue, TreeMap::new, mapping(Map.Entry::getKey, toList())));
+        Set<String> usedNames = new HashSet<>(pathsByName.keySet());
+        ImmutableMap.Builder<String, String> tableNames = ImmutableMap.builder();
+        pathsByName.forEach((name, paths) -> {
+            // the order of paths in the spec can change between its versions, but sorted paths get the same names
+            List<String> sortedPaths = paths.stream().sorted().toList();
+            tableNames.put(sortedPaths.getFirst(), name);
+            if (sortedPaths.size() == 1) {
+                return;
+            }
+            List<String> names = new ArrayList<>(List.of(name));
+            // like columns, the next tables get numeric suffixes
+            sortedPaths.subList(1, sortedPaths.size()).forEach(path -> {
+                String uniqueName = getUnusedName(name, usedNames);
+                names.add(uniqueName);
+                tableNames.put(path, uniqueName);
+            });
+            log.warn("Paths %s map to the same table name, so they're mapped to separate tables: %s", sortedPaths, names);
+        });
+        return tableNames.buildOrThrow();
+    }
+
+    private static String getUnusedName(String name, Set<String> usedNames)
+    {
+        // a name with a suffix can be the name of another table, like a_b_2 of the path /a_b_2
+        for (int suffix = 2; ; suffix++) {
+            String uniqueName = name + "_" + suffix;
+            if (usedNames.add(uniqueName)) {
+                return uniqueName;
+            }
+        }
     }
 
     // keyed by the path a table is named after, which is the path that is not the base path in groups of more than one path
