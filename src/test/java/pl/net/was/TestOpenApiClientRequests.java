@@ -20,6 +20,8 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.jetty.JettyHttpClient;
+import io.airlift.log.Level;
+import io.airlift.log.Logging;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.spi.TrinoException;
@@ -1340,6 +1342,26 @@ class TestOpenApiClientRequests
         responses.add(respondGzip(200, body));
 
         assertThat(getRows(newConfig().setMaxResponseSize(DataSize.ofBytes(body.length())), "items", null)).hasSize(1000);
+    }
+
+    @Test
+    void testReadsResponsesWithLoggedBodies()
+            throws IOException
+    {
+        Logging logging = Logging.initialize();
+        logging.setLevel("trino-openapi-bodies", Level.DEBUG);
+        try {
+            responses.add(respond(200, "[{\"id\":1}]"));
+            assertThat(getRows(newConfig(), "items", null)).hasSize(1);
+
+            responses.add(respond(200, "not JSON"));
+            assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                    .hasMessage("Response to GET %s/items is not valid JSON", baseUri);
+        }
+        finally {
+            logging.setLevel("trino-openapi-bodies", Level.INFO);
+        }
     }
 
     @Test
