@@ -187,6 +187,51 @@ class TestOpenApiClientRequests
                       description: No items
             """.formatted(OK_RESPONSES);
 
+    private static final String MEDIA_TYPES_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /users:
+                get:
+                  operationId: listUsers
+            %s
+              /usage:
+                get:
+                  operationId: listUsage
+            %s
+              /items:
+                get:
+                  operationId: listItems
+            %s
+            """.formatted(
+            OK_RESPONSES.replace("application/json:", "application/scim+json:"),
+            OK_RESPONSES.replace("application/json:", "application/json;datetime-format=rfc3339:"),
+            OK_RESPONSES.replace("application/json:", "'*/*':"));
+
+    private static final String SUCCESS_STATUSES_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /mirrored:
+                get:
+                  operationId: listMirroredItems
+            %s
+              /search:
+                post:
+                  operationId: searchItems
+                  x-trino:
+                    sqlOperation: select
+            %s
+            """.formatted(
+            OK_RESPONSES.replace("'200':", "'203':"),
+            OK_RESPONSES.replace("'200':", "'201':"));
+
     private static final String NUMBER_PARAMETERS_SPEC =
             """
             openapi: 3.0.0
@@ -514,6 +559,34 @@ class TestOpenApiClientRequests
         assertThat(requestHeaders)
                 .map(headers -> headers.getFirst("Content-Type"))
                 .containsExactly(null, "application/json; charset=utf-8", null);
+    }
+
+    @Test
+    void testSendsDeclaredMediaTypes()
+            throws IOException
+    {
+        assertThat(getRows(newConfig(MEDIA_TYPES_SPEC), "users", null)).isEmpty();
+        assertThat(getRows(newConfig(MEDIA_TYPES_SPEC), "usage", null)).isEmpty();
+        assertThat(getRows(newConfig(MEDIA_TYPES_SPEC), "items", null)).isEmpty();
+        assertThat(requestHeaders)
+                .map(headers -> headers.getFirst("Accept"))
+                .containsExactly("application/scim+json", "application/json; datetime-format=rfc3339", "application/json; charset=utf-8");
+    }
+
+    @Test
+    void testReadsDeclaredSuccessStatuses()
+            throws IOException
+    {
+        responses.add(respond(203, "[{\"id\":1}]"));
+        assertThat(getRows(newConfig(SUCCESS_STATUSES_SPEC), "mirrored", null))
+                .map(List::toString)
+                .containsExactly("[1]");
+        responses.add(respond(201, "[{\"id\":2}]"));
+        assertThat(getRows(newConfig(SUCCESS_STATUSES_SPEC), "search", null))
+                .map(List::toString)
+                .containsExactly("[2]");
+        responses.add(respond(204, ""));
+        assertThat(getRows(newConfig(SUCCESS_STATUSES_SPEC), "mirrored", null)).isEmpty();
     }
 
     @Test

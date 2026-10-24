@@ -4801,6 +4801,269 @@ class TestOpenApiSpec
                         Assertions.tuple("note", VARCHAR, true, false));
     }
 
+    @Test
+    public void getDatadogTablesWithMediaTypeParameters()
+    {
+        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
+
+        // usage and cost endpoints declare application/json;datetime-format=rfc3339
+        Assertions.assertThat(spec.getTables()).containsKeys(
+                "api_v2_usage_hourly_usage",
+                "api_v2_usage_historical_cost",
+                "api_v2_usage_projected_cost");
+        Assertions.assertThat(spec.getTables().get("api_v2_usage_hourly_usage"))
+                .extracting(OpenApiColumn::getName)
+                .contains("data");
+        Assertions.assertThat(spec.getResponseMediaType(new HttpPath(PathItem.HttpMethod.GET, "/api/v2/usage/hourly_usage")))
+                .hasToString("application/json; datetime-format=rfc3339");
+    }
+
+    @Test
+    public void getCloudflareScimTables()
+    {
+        OpenApiSpec spec = loadSpecFile("specs/cloudflare.json");
+
+        Assertions.assertThat(spec.getTables()).containsKeys(
+                "accounts_scim_v2__users",
+                "accounts_scim_v2__groups",
+                "accounts_scim_v2__schemas");
+        Assertions.assertThat(spec.getTables().get("accounts_scim_v2__users"))
+                .extracting(OpenApiColumn::getName)
+                .contains("user_name", "emails");
+        Assertions.assertThat(spec.getResponseMediaType(new HttpPath(PathItem.HttpMethod.GET, "/accounts/{account_id}/scim/v2/Users")))
+                .hasToString("application/scim+json");
+    }
+
+    @Test
+    public void testWildcardMediaType()
+    {
+        // springdoc declares */* by default
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            "*/*":
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: integer
+                    post:
+                      requestBody:
+                        content:
+                          "*/*":
+                            schema:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                      responses:
+                        "200":
+                          description: Created item
+                          content:
+                            "*/*":
+                              schema:
+                                type: object
+                                properties:
+                                  id:
+                                    type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("items"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactlyInAnyOrder("id", "name");
+        Assertions.assertThat(spec.getResponseMediaType(new HttpPath(PathItem.HttpMethod.GET, "/items")))
+                .hasToString("application/json; charset=utf-8");
+        Assertions.assertThat(spec.getRequestMediaType(new HttpPath(PathItem.HttpMethod.POST, "/items")))
+                .hasToString("application/json; charset=utf-8");
+    }
+
+    @Test
+    public void testPreferredJsonMediaType()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /generic:
+                    get:
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            "*/*":
+                              schema:
+                                $ref: "#/components/schemas/Wildcard"
+                            application/vnd.items+json:
+                              schema:
+                                $ref: "#/components/schemas/Suffix"
+                            text/csv:
+                              schema:
+                                type: string
+                  /exact:
+                    get:
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/vnd.items+json:
+                              schema:
+                                $ref: "#/components/schemas/Suffix"
+                            application/json; charset=utf-8:
+                              schema:
+                                $ref: "#/components/schemas/Exact"
+                components:
+                  schemas:
+                    Wildcard:
+                      type: object
+                      properties:
+                        wildcard:
+                          type: integer
+                    Suffix:
+                      type: object
+                      properties:
+                        suffix:
+                          type: integer
+                    Exact:
+                      type: object
+                      properties:
+                        exact:
+                          type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("generic"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("suffix");
+        Assertions.assertThat(spec.getResponseMediaType(new HttpPath(PathItem.HttpMethod.GET, "/generic")))
+                .hasToString("application/vnd.items+json");
+        Assertions.assertThat(spec.getTables().get("exact"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("exact");
+        Assertions.assertThat(spec.getResponseMediaType(new HttpPath(PathItem.HttpMethod.GET, "/exact")))
+                .hasToString("application/json; charset=utf-8");
+    }
+
+    @Test
+    public void testOtherMediaTypesAreIgnored()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /report:
+                    get:
+                      responses:
+                        "200":
+                          description: Report
+                          content:
+                            text/csv:
+                              schema:
+                                type: string
+                            application/xml:
+                              schema:
+                                type: object
+                                properties:
+                                  id:
+                                    type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables()).doesNotContainKey("report");
+    }
+
+    @Test
+    public void testReadSuccessStatuses()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /mirrored:
+                    get:
+                      responses:
+                        "203":
+                          description: Items from a mirror
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Item"
+                  /search:
+                    post:
+                      x-trino:
+                        sqlOperation: select
+                      responses:
+                        "201":
+                          description: Search results
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Item"
+                  /ranged:
+                    get:
+                      responses:
+                        "2XX":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Item"
+                  /created:
+                    post:
+                      responses:
+                        "201":
+                          description: Created item
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Item"
+                  /errors:
+                    get:
+                      responses:
+                        default:
+                          description: Error
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Item"
+                components:
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().keySet())
+                .containsExactlyInAnyOrder("mirrored", "search", "ranged");
+        Assertions.assertThat(spec.getTables().get("search"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("id");
+    }
+
     private static List<Tuple> rowFields(List<OpenApiColumn> columns, String name)
     {
         RowType rowType = (RowType) columns.stream()
