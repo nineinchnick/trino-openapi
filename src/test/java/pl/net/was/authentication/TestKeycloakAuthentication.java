@@ -113,7 +113,7 @@ class TestKeycloakAuthentication
         // the tokens of this client expire after 4 seconds
         Authentication authentication = createAuthentication(clientConfig()
                 .setClientId("short-lived-client-id"));
-        HttpClient client = new AuthenticatingHttpClient(httpClient, authentication);
+        HttpClient client = new AuthenticatingHttpClient(httpClient, authentication, UserCredentials.NONE);
 
         String expiringToken = getToken(authentication);
         assertThat(getToken(authentication)).isEqualTo(expiringToken);
@@ -153,7 +153,7 @@ class TestKeycloakAuthentication
 
     private void assertRevokedTokenIsRefreshed(Authentication authentication)
     {
-        HttpClient client = new AuthenticatingHttpClient(httpClient, authentication);
+        HttpClient client = new AuthenticatingHttpClient(httpClient, authentication, UserCredentials.NONE);
         String revokedToken = getToken(authentication);
         assertThat(getUserInfo(client).getStatusCode()).isEqualTo(200);
 
@@ -257,7 +257,7 @@ class TestKeycloakAuthentication
         String authorization = authentication.filterRequest(prepareGet()
                         .setUri(URI.create("http://localhost" + USERINFO_PATH))
                         .addHeader(OPENAPI_PATH_HEADER, USERINFO_PATH)
-                        .build())
+                        .build(), UserCredentials.NONE)
                 .getHeader(AUTHORIZATION);
         assertThat(authorization).startsWith("Bearer ");
         return authorization.substring("Bearer ".length());

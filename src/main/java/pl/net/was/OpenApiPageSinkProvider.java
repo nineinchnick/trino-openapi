@@ -45,19 +45,19 @@ public class OpenApiPageSinkProvider
     @Override
     public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorOutputTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId)
     {
-        return new OpenApiPageSink(client, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
+        return new OpenApiPageSink(client, session, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
     }
 
     @Override
     public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorInsertTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId)
     {
-        return new OpenApiPageSink(client, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
+        return new OpenApiPageSink(client, session, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
     }
 
     @Override
     public ConnectorMergeSink createMergeSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorMergeTableHandle tableHandle, Optional<ConnectorTableCredentials> tableCredentials, ConnectorPageSinkId pageSinkId, MemoryContext memoryContext)
     {
-        return new OpenApiMergeSink(client, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
+        return new OpenApiMergeSink(client, session, checkSameSpec((OpenApiOutputTableHandle) tableHandle));
     }
 
     private OpenApiOutputTableHandle checkSameSpec(OpenApiOutputTableHandle tableHandle)

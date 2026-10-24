@@ -161,6 +161,12 @@
 
         <dependency>
             <groupId>io.trino</groupId>
+            <artifactId>trino-cache</artifactId>
+            <version>${dep.trino.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.trino</groupId>
             <artifactId>trino-plugin-toolkit</artifactId>
             <version>${dep.trino.version}</version>
         </dependency>

@@ -205,7 +205,7 @@ class TestAuthenticatingHttpClient
             return new TestingResponse(HttpStatus.UNAUTHORIZED, ImmutableListMultimap.of(WWW_AUTHENTICATE, challenge), new byte[0]);
         });
         OpenApiSpec spec = createSpec(config);
-        return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), tokenClient));
+        return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), tokenClient), UserCredentials.NONE);
     }
 
     private static StringResponse get(HttpClient client, String path)

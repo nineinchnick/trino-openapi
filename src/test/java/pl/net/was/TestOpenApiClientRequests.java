@@ -40,6 +40,7 @@ import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
+import pl.net.was.authentication.ExtraCredentialProvider;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -74,6 +75,7 @@ import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.lang.Float.floatToIntBits;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
@@ -1820,7 +1822,7 @@ class TestOpenApiClientRequests
     {
         OpenApiSpec spec = createSpec(config);
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (!columnDomains.isEmpty()) {
             Map<ColumnHandle, Domain> domains = spec.getTables().get(tableName).stream()
@@ -1828,7 +1830,7 @@ class TestOpenApiClientRequests
                     .collect(toImmutableMap(OpenApiColumn::getHandle, column -> columnDomains.get(column.getName())));
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
         }
-        return ImmutableList.copyOf(client.getRows(table, 1, 1, false));
+        return ImmutableList.copyOf(client.getRows(SESSION, table, 1, 1, false));
     }
 
     private void deleteRow(OpenApiConfig config, String id)
@@ -1840,10 +1842,10 @@ class TestOpenApiClientRequests
     {
         OpenApiSpec spec = createSpec(config);
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
                 .cloneWithConstraint(constraint);
-        client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);
+        client.deleteRows(SESSION, new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);
     }
 
     private static HttpHandler disconnect()

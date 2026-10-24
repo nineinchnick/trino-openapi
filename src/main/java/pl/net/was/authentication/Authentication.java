@@ -13,6 +13,7 @@
  */
 package pl.net.was.authentication;
 
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
@@ -21,28 +22,30 @@ import io.airlift.http.client.BearerTokenProvider;
 import io.airlift.http.client.ClientCredentialsTokenProvider;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
-import io.airlift.http.client.HttpRequestFilter;
 import io.airlift.http.client.Request;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.security.OAuthFlow;
 import io.swagger.v3.oas.models.security.OAuthFlows;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.trino.cache.EvictableCacheBuilder;
 import io.trino.spi.TrinoException;
 import pl.net.was.OpenApiConfig;
 import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
+import pl.net.was.authentication.UserCredentials.UsernamePassword;
 
 import java.net.URI;
 import java.net.URLEncoder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
@@ -52,6 +55,7 @@ import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
+import static io.trino.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -63,16 +67,18 @@ import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 import static pl.net.was.authentication.ClientAuthenticationMethod.CLIENT_SECRET_BASIC;
 
 public class Authentication
-        implements HttpRequestFilter
 {
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String USERNAME_PROPERTY = "authentication.username";
+    private static final String PASSWORD_PROPERTY = "authentication.password";
+    // users with their own credentials get their own tokens, so the providers are dropped after some time, and created again when needed
+    private static final int MAX_TOKEN_PROVIDERS = 1000;
+    private static final Duration TOKEN_PROVIDER_EXPIRATION = Duration.ofHours(1);
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
     private final OpenApiConfig config;
-    private final String username;
-    private final String password;
 
     private final HttpClient httpClient;
     private final String clientId;
@@ -80,7 +86,10 @@ public class Authentication
     private final Set<URI> serverUris;
     private final ClientAuthenticationMethod clientAuthenticationMethod;
     private final URI tokenUrl;
-    private final ConcurrentMap<TokenRequest, BearerTokenProvider> tokenProviders = new ConcurrentHashMap<>();
+    private final Cache<TokenRequest, BearerTokenProvider> tokenProviders = EvictableCacheBuilder.newBuilder()
+            .maximumSize(MAX_TOKEN_PROVIDERS)
+            .expireAfterWrite(TOKEN_PROVIDER_EXPIRATION)
+            .build();
 
     @Inject
     public Authentication(
@@ -96,8 +105,6 @@ public class Authentication
         this.securityRequirements = spec.getSecurityRequirements();
         this.securitySchemas = spec.getSecuritySchemas();
         this.config = config;
-        this.username = config.getUsername();
-        this.password = config.getPassword();
 
         this.httpClient = new NonRedirectingHttpClient(httpClient);
         this.clientId = config.getClientId();
@@ -107,11 +114,13 @@ public class Authentication
         this.tokenUrl = config.getTokenUrl();
     }
 
-    @Override
-    public Request filterRequest(Request request)
+    /**
+     * Adds the credentials required by the operation of the request, using the ones of the user instead of the ones of the catalog, if the user passed them.
+     */
+    public Request filterRequest(Request request, UserCredentials userCredentials)
     {
         Request.Builder builder = withoutPathHeader(request);
-        applyCredentials(builder, request, getCredentials(request));
+        applyCredentials(builder, request, getCredentials(request, userCredentials));
         return builder.build();
     }
 
@@ -121,7 +130,7 @@ public class Authentication
     public static Request addDefaultCredentials(OpenApiConfig config, Request request, String requestName)
     {
         Request.Builder builder = Request.Builder.fromRequest(request);
-        for (Credential credential : getDefaultCredentials(config, requestName)) {
+        for (Credential credential : getDefaultCredentials(config, requestName, UserCredentials.NONE)) {
             // the default API key is always sent in a header, and the default authentication type can't be OAuth
             if (!(credential instanceof HeaderCredential(HeaderName name, String value))) {
                 throw new IllegalStateException("Unexpected default credential type: " + credential.getClass().getSimpleName());
@@ -135,18 +144,18 @@ public class Authentication
      * Gets new tokens for the OAuth credentials of the request, if the authenticated request was sent with any of them.
      * Returns true if the authenticated request should be sent again with the new tokens.
      */
-    public boolean refreshRejectedTokens(Request request, Request authenticatedRequest)
+    public boolean refreshRejectedTokens(Request request, Request authenticatedRequest, UserCredentials userCredentials)
     {
         List<String> sentTokens = authenticatedRequest.getHeaders().get(AUTHORIZATION).stream()
                 .filter(value -> value.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length()))
                 .map(value -> value.substring(BEARER_PREFIX.length()))
                 .toList();
         boolean refreshed = false;
-        for (Credential credential : getCredentials(request)) {
+        for (Credential credential : getCredentials(request, userCredentials)) {
             if (!(credential instanceof OAuthCredential(TokenRequest tokenRequest))) {
                 continue;
             }
-            BearerTokenProvider tokenProvider = tokenProviders.get(tokenRequest);
+            BearerTokenProvider tokenProvider = tokenProviders.getIfPresent(tokenRequest);
             if (tokenProvider == null) {
                 continue;
             }
@@ -157,7 +166,7 @@ public class Authentication
         return refreshed;
     }
 
-    private List<Credential> getCredentials(Request request)
+    private List<Credential> getCredentials(Request request, UserCredentials userCredentials)
     {
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
         String path = request.getHeader(OPENAPI_PATH_HEADER);
@@ -165,9 +174,9 @@ public class Authentication
         String requestName = method + " " + path;
         // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
         if (requirements != null) {
-            return selectCredentials(requestName, requirements);
+            return selectCredentials(requestName, requirements, userCredentials);
         }
-        return getDefaultCredentials(config, requestName);
+        return getDefaultCredentials(config, requestName, userCredentials);
     }
 
     private static Request.Builder withoutPathHeader(Request request)
@@ -197,7 +206,7 @@ public class Authentication
         return securityRequirements;
     }
 
-    private List<Credential> selectCredentials(String requestName, List<SecurityRequirement> requirements)
+    private List<Credential> selectCredentials(String requestName, List<SecurityRequirement> requirements, UserCredentials userCredentials)
     {
         if (requirements.isEmpty()) {
             return List.of();
@@ -209,7 +218,7 @@ public class Authentication
             List<Credential> credentials = new ArrayList<>();
             List<String> requirementProblems = new ArrayList<>();
             for (String schemeName : requirement.keySet()) {
-                switch (resolveScheme(schemeName, requirement.get(schemeName))) {
+                switch (resolveScheme(schemeName, requirement.get(schemeName), userCredentials)) {
                     case Resolved(Credential credential) -> credentials.add(credential);
                     case Unresolved(String problem) -> requirementProblems.add(problem);
                 }
@@ -226,7 +235,7 @@ public class Authentication
     }
 
     // the default credentials don't depend on the spec, so they can be used before it's loaded
-    private static List<Credential> getDefaultCredentials(OpenApiConfig config, String requestName)
+    private static List<Credential> getDefaultCredentials(OpenApiConfig config, String requestName, UserCredentials userCredentials)
     {
         AuthenticationType authenticationType = config.getAuthenticationType();
         String subject = format("the %s authentication type", authenticationType.name().toLowerCase(Locale.ENGLISH));
@@ -235,9 +244,9 @@ public class Authentication
             case API_KEY -> {
                 SecurityScheme scheme = new SecurityScheme();
                 scheme.setIn(SecurityScheme.In.HEADER);
-                yield requireResolved(requestName, resolveApiKey(config, subject, scheme));
+                yield requireResolved(requestName, resolveApiKey(config, subject, scheme, userCredentials));
             }
-            case HTTP -> requireResolved(requestName, resolveHttp(config, subject, null));
+            case HTTP -> requireResolved(requestName, resolveHttp(config, subject, null, userCredentials));
             case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
         };
     }
@@ -250,7 +259,7 @@ public class Authentication
         };
     }
 
-    private Resolution resolveScheme(String schemeName, List<String> scopes)
+    private Resolution resolveScheme(String schemeName, List<String> scopes, UserCredentials userCredentials)
     {
         String subject = format("the %s security scheme", schemeName);
         SecurityScheme securitySchema = securitySchemas.get(schemeName);
@@ -258,26 +267,26 @@ public class Authentication
             return new Unresolved(format("%s is not declared in components.securitySchemes", subject));
         }
         return switch (securitySchema.getType()) {
-            case APIKEY -> resolveApiKey(config, subject, securitySchema);
-            case HTTP -> resolveHttp(config, subject, securitySchema.getScheme());
-            case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows(), scopes);
+            case APIKEY -> resolveApiKey(config, subject, securitySchema, userCredentials);
+            case HTTP -> resolveHttp(config, subject, securitySchema.getScheme(), userCredentials);
+            case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows(), scopes, userCredentials);
             default -> new Unresolved(format("%s has the unsupported %s type", subject, securitySchema.getType()));
         };
     }
 
-    private static Resolution resolveApiKey(OpenApiConfig config, String subject, SecurityScheme scheme)
+    private static Resolution resolveApiKey(OpenApiConfig config, String subject, SecurityScheme scheme, UserCredentials userCredentials)
     {
         String name = requireNonNullElse(scheme.getName(), config.getApiKeyName());
         if (name == null) {
-            return missing(subject, List.of("authentication.api-key-name"));
+            return missing(config, subject, List.of("authentication.api-key-name"));
         }
         if (scheme.getIn() == null) {
             return new Unresolved(format("%s doesn't declare where to send the API key", subject));
         }
         Map<String, String> apiKeys = config.getApiKeys();
-        String value = apiKeys.isEmpty() ? config.getApiKeyValue() : apiKeys.get(name);
+        String value = apiKeys.isEmpty() ? userCredentials.getApiKeyValue().orElse(config.getApiKeyValue()) : apiKeys.get(name);
         if (value == null) {
-            return missing(subject, List.of(apiKeys.isEmpty() ? "authentication.api-key-value" : format("%s key in the authentication.api-keys", name)));
+            return missing(config, subject, List.of(apiKeys.isEmpty() ? "authentication.api-key-value" : format("%s key in the authentication.api-keys", name)));
         }
         return new Resolved(switch (scheme.getIn()) {
             case COOKIE -> new CookieCredential(encodePair(name, value));
@@ -286,41 +295,56 @@ public class Authentication
         });
     }
 
-    private static Resolution resolveHttp(OpenApiConfig config, String subject, String scheme)
+    private static Resolution resolveHttp(OpenApiConfig config, String subject, String scheme, UserCredentials userCredentials)
     {
         scheme = requireNonNullElse(scheme, config.getAuthenticationScheme().toString());
         if (scheme.toUpperCase(Locale.ENGLISH).equals(BEARER.toString())) {
-            if (config.getBearerToken() == null) {
-                return missing(subject, List.of("authentication.bearer-token"));
+            String token = userCredentials.getBearerToken().orElse(config.getBearerToken());
+            if (token == null) {
+                return missing(config, subject, List.of("authentication.bearer-token"));
             }
-            return new Resolved(new HeaderCredential(AUTHORIZATION, "Bearer " + config.getBearerToken()));
+            return new Resolved(new HeaderCredential(AUTHORIZATION, "Bearer " + token));
+        }
+        Optional<UsernamePassword> usernamePassword = getUsernamePassword(config, userCredentials);
+        if (usernamePassword.isPresent()) {
+            return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, usernamePassword.get().username(), usernamePassword.get().password())));
         }
         List<String> missingProperties = new ArrayList<>();
         if (config.getUsername() == null) {
-            missingProperties.add("authentication.username");
+            missingProperties.add(USERNAME_PROPERTY);
         }
         if (config.getPassword() == null) {
-            missingProperties.add("authentication.password");
+            missingProperties.add(PASSWORD_PROPERTY);
         }
-        if (!missingProperties.isEmpty()) {
-            return missing(subject, missingProperties);
-        }
-        return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, config.getUsername(), config.getPassword())));
+        return missing(config, subject, missingProperties);
     }
 
-    private Resolution resolveOAuth(String subject, OAuthFlows flows, List<String> scopes)
+    // the username and password of the user are passed together, so they're never mixed with the ones of the catalog
+    private static Optional<UsernamePassword> getUsernamePassword(OpenApiConfig config, UserCredentials userCredentials)
+    {
+        if (userCredentials.getUsernamePassword().isPresent()) {
+            return userCredentials.getUsernamePassword();
+        }
+        if (config.getUsername() == null || config.getPassword() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new UsernamePassword(config.getUsername(), config.getPassword()));
+    }
+
+    private Resolution resolveOAuth(String subject, OAuthFlows flows, List<String> scopes, UserCredentials userCredentials)
     {
         // the authorizationCode and implicit flows require a user to log in using a browser, so only flows that don't need user interaction can be used
         OAuthFlow passwordFlow = flows == null ? null : flows.getPassword();
         OAuthFlow clientCredentialsFlow = flows == null ? null : flows.getClientCredentials();
-        if (passwordFlow != null && username != null && password != null) {
-            return resolveTokenRequest(subject, passwordFlow, new TokenGrant(GrantType.PASSWORD, scopes));
+        Optional<UsernamePassword> usernamePassword = getUsernamePassword(config, userCredentials);
+        if (passwordFlow != null && usernamePassword.isPresent()) {
+            return resolveTokenRequest(subject, passwordFlow, new TokenGrant(GrantType.PASSWORD, scopes, usernamePassword));
         }
         if (clientCredentialsFlow != null) {
-            return resolveTokenRequest(subject, clientCredentialsFlow, new TokenGrant(GrantType.CLIENT_CREDENTIALS, scopes));
+            return resolveTokenRequest(subject, clientCredentialsFlow, new TokenGrant(GrantType.CLIENT_CREDENTIALS, scopes, Optional.empty()));
         }
         if (passwordFlow != null) {
-            return missing("the password flow of " + subject, List.of("authentication.username", "authentication.password"));
+            return missing(config, "the password flow of " + subject, List.of(USERNAME_PROPERTY, PASSWORD_PROPERTY));
         }
         return new Unresolved(format("%s must declare a password or clientCredentials flow, because other flows require a user to log in using a browser", subject));
     }
@@ -350,9 +374,27 @@ public class Authentication
         return serverUris.stream().anyMatch(serverUri -> Objects.equals(uri.getScheme(), serverUri.getScheme()) && Objects.equals(uri.getAuthority(), serverUri.getAuthority()));
     }
 
-    private static Resolution missing(String subject, List<String> properties)
+    private static Resolution missing(OpenApiConfig config, String subject, List<String> properties)
     {
-        return new Unresolved(format("%s requires the %s configuration %s", subject, String.join(" and ", properties), properties.size() == 1 ? "property" : "properties"));
+        String requirement = format("the %s configuration %s", String.join(" and ", properties), properties.size() == 1 ? "property" : "properties");
+        List<String> credentialNames = getCredentialNames(config, properties);
+        if (credentialNames.isEmpty()) {
+            return new Unresolved(format("%s requires %s", subject, requirement));
+        }
+        return new Unresolved(format("%s requires %s, or the %s extra %s", subject, requirement, String.join(" and ", credentialNames), credentialNames.size() == 1 ? "credential" : "credentials"));
+    }
+
+    private static List<String> getCredentialNames(OpenApiConfig config, List<String> properties)
+    {
+        // the username and password of a user are only used together, so both must be passed, even when the catalog sets one of them
+        boolean needsUsernamePassword = properties.contains(USERNAME_PROPERTY) || properties.contains(PASSWORD_PROPERTY);
+        return Stream.of(
+                        needsUsernamePassword ? config.getUsernameCredentialName() : null,
+                        needsUsernamePassword ? config.getPasswordCredentialName() : null,
+                        properties.contains("authentication.bearer-token") ? config.getBearerTokenCredentialName() : null,
+                        properties.contains("authentication.api-key-value") ? config.getApiKeyValueCredentialName() : null)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private void applyCredentials(Request.Builder builder, Request request, List<Credential> credentials)
@@ -398,7 +440,7 @@ public class Authentication
 
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
-        String token = tokenProviders.computeIfAbsent(tokenRequest, this::createTokenProvider).getToken();
+        String token = uncheckedCacheGet(tokenProviders, tokenRequest, () -> createTokenProvider(tokenRequest)).getToken();
         return builder.addHeader(AUTHORIZATION, BEARER_PREFIX + token);
     }
 
@@ -449,8 +491,9 @@ public class Authentication
         ImmutableMap.Builder<String, String> params = ImmutableMap.<String, String>builder()
                 .put("grant_type", grant.type().value());
         if (grant.type() == GrantType.PASSWORD) {
-            params.put("username", username);
-            params.put("password", password);
+            UsernamePassword usernamePassword = grant.usernamePassword().orElseThrow();
+            params.put("username", usernamePassword.username());
+            params.put("password", usernamePassword.password());
         }
         if (!grant.scopes().isEmpty()) {
             params.put("scope", String.join(" ", grant.scopes()));
@@ -503,13 +546,15 @@ public class Authentication
         }
     }
 
-    // operations can require different scopes, and a token is only reused for operations requiring the same ones
-    private record TokenGrant(GrantType type, List<String> scopes)
+    // operations can require different scopes, and a token is only reused for operations requiring the same ones,
+    // and users with their own username and password get their own tokens
+    private record TokenGrant(GrantType type, List<String> scopes, Optional<UsernamePassword> usernamePassword)
     {
         TokenGrant
         {
             requireNonNull(type, "type is null");
             scopes = ImmutableList.copyOf(requireNonNullElse(scopes, List.of()));
+            requireNonNull(usernamePassword, "usernamePassword is null");
         }
     }
 

@@ -67,6 +67,10 @@ class TestOpenApiConfig
                 .setApiKeys("")
                 .setApiKeyName(null)
                 .setApiKeyValue(null)
+                .setUsernameCredentialName(null)
+                .setPasswordCredentialName(null)
+                .setBearerTokenCredentialName(null)
+                .setApiKeyValueCredentialName(null)
                 .setClientId(null)
                 .setClientSecret(null)
                 .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
@@ -102,6 +106,10 @@ class TestOpenApiConfig
                 .put("authentication.bearer-token", "token")
                 .put("authentication.api-key-name", "X-API-Key")
                 .put("authentication.api-key-value", "secret")
+                .put("authentication.username-credential-name", "openapi_username")
+                .put("authentication.password-credential-name", "openapi_password")
+                .put("authentication.bearer-token-credential-name", "openapi_token")
+                .put("authentication.api-key-value-credential-name", "openapi_api_key")
                 .put("authentication.client-id", "client")
                 .put("authentication.client-secret", "client-secret")
                 .put("authentication.client-auth-method", "client_secret_basic")
@@ -134,6 +142,10 @@ class TestOpenApiConfig
                 .setBearerToken("token")
                 .setApiKeyName("X-API-Key")
                 .setApiKeyValue("secret")
+                .setUsernameCredentialName("openapi_username")
+                .setPasswordCredentialName("openapi_password")
+                .setBearerTokenCredentialName("openapi_token")
+                .setApiKeyValueCredentialName("openapi_api_key")
                 .setClientId("client")
                 .setClientSecret("client-secret")
                 .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
@@ -238,6 +250,39 @@ class TestOpenApiConfig
                 .put("authentication.api-key-value", "secret")
                 .put("authentication.api-keys", "a=1,b=2")
                 .buildOrThrow());
+    }
+
+    @Test
+    void testApiKeysCombinedWithApiKeyValueCredentialName()
+    {
+        assertFailsValidation(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("authentication.api-key-value-credential-name", "openapi_api_key")
+                .put("authentication.api-keys", "a=1,b=2")
+                .buildOrThrow());
+    }
+
+    @Test
+    void testUsernameCredentialNameWithoutPasswordCredentialName()
+    {
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("authentication.username-credential-name", "openapi_username")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("authentication.username-credential-name and authentication.password-credential-name must be set together");
+    }
+
+    @Test
+    void testCredentialNamesOverHttp()
+    {
+        // users can send their own credentials, even when the catalog doesn't have any
+        assertThatThrownBy(() -> buildConfig(Map.of(
+                "spec-location", "spec.yaml",
+                "base-uri", "http://localhost:8080",
+                "authentication.bearer-token-credential-name", "openapi_token")))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("base-uri and authentication.token-url must use HTTPS when credentials are configured");
     }
 
     @Test
@@ -357,7 +402,7 @@ class TestOpenApiConfig
     {
         assertThatThrownBy(() -> buildConfig(properties))
                 .isInstanceOf(ConfigurationException.class)
-                .hasMessageContaining("authentication.api-keys cannot be combined with authentication.api-key-name or authentication.api-key-value");
+                .hasMessageContaining("authentication.api-keys cannot be combined with authentication.api-key-name, authentication.api-key-value, or authentication.api-key-value-credential-name");
     }
 
     private static OpenApiConfig buildConfig(Map<String, String> properties)

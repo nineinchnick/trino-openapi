@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSink;
+import io.trino.spi.connector.ConnectorSession;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
@@ -28,11 +29,13 @@ public class OpenApiPageSink
         implements ConnectorPageSink
 {
     protected final OpenApiClient client;
+    protected final ConnectorSession session;
     protected final OpenApiOutputTableHandle table;
 
-    public OpenApiPageSink(OpenApiClient client, OpenApiOutputTableHandle table)
+    public OpenApiPageSink(OpenApiClient client, ConnectorSession session, OpenApiOutputTableHandle table)
     {
         this.client = client;
+        this.session = session;
         this.table = table;
     }
 
@@ -47,7 +50,7 @@ public class OpenApiPageSink
 
     protected void insertedPage(Page page, int position)
     {
-        client.insertRows(table, page, position);
+        client.insertRows(session, table, page, position);
     }
 
     @Override
