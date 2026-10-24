@@ -101,7 +101,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
-import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -209,7 +208,7 @@ public class OpenApiClient
                     rowFilter);
         }
         return pageIterator(
-                page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses),
+                (page, _) -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses),
                 firstPage - 1,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
@@ -1709,8 +1708,14 @@ public class OpenApiClient
         }
     }
 
+    private interface PageGetter
+    {
+        // the number of results read before the page is its offset only when every page is read one after another, starting from the first one
+        ResultsPage get(int page, long readResults);
+    }
+
     private Iterable<List<?>> pageIterator(
-            IntFunction<ResultsPage> getter,
+            PageGetter getter,
             int offset,
             long rowLimit,
             long maxResults,
@@ -1754,7 +1759,7 @@ public class OpenApiClient
 
             private void fetchPage()
             {
-                ResultsPage resultsPage = getter.apply(page);
+                ResultsPage resultsPage = getter.get(page, resultSize);
                 int fetchedPage = page;
                 page += pageIncrement;
                 int pageResults = Iterables.size(resultsPage.rows());
