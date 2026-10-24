@@ -4177,6 +4177,69 @@ class TestOpenApiSpec
                 .allSatisfy(column -> Assertions.assertThat(JsonTrinoConverter.isUnion(column.getSourceType())).isFalse());
     }
 
+    @Test
+    public void testRequiredUnionsWithNullAlternativeAreNullable()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /events:
+                    get:
+                      responses:
+                        "200":
+                          description: Events
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  required:
+                                  - id
+                                  - count
+                                  - created_at
+                                  - tags
+                                  properties:
+                                    id:
+                                      type: integer
+                                    count:
+                                      anyOf:
+                                      - type: integer
+                                      - type: "null"
+                                    created_at:
+                                      oneOf:
+                                      - type: string
+                                        format: date-time
+                                      - type: "null"
+                                    tags:
+                                      anyOf:
+                                      - type: array
+                                        items:
+                                          type: string
+                                      - type: "null"
+                                    note:
+                                      anyOf:
+                                      - type: string
+                                      - type: "null"
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+        OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "events"));
+
+        // required properties can still be null, so TopN pushdown can't assume they have no NULL values
+        Assertions.assertThat(spec.getTables().get("events"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), column -> column.isResponseRequired(table.getSelectPaths()))
+                .containsExactly(
+                        Assertions.tuple("id", BIGINT, false, true),
+                        Assertions.tuple("count", BIGINT, true, false),
+                        Assertions.tuple("created_at", TIMESTAMP_MILLIS, true, false),
+                        Assertions.tuple("tags", new ArrayType(VARCHAR), true, false),
+                        Assertions.tuple("note", VARCHAR, true, false));
+    }
+
     private static List<Tuple> rowFields(List<OpenApiColumn> columns, String name)
     {
         RowType rowType = (RowType) columns.stream()

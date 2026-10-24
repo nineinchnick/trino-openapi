@@ -1068,6 +1068,9 @@ public class OpenApiSpec
         if (schema.getTypes() != null && schema.getTypes().contains("null")) {
             return true;
         }
+        if (getAlternatives(schema).stream().anyMatch(OpenApiSpec::isNullType)) {
+            return true;
+        }
         return Optional.ofNullable(schema.getNullable()).orElse(defaultValue);
     }
 
