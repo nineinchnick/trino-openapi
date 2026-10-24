@@ -45,7 +45,7 @@ import static com.google.common.io.BaseEncoding.base64;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
-import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
+import static io.airlift.http.client.JsonResponseHandler.createSuccessfulJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.json.JsonCodec.jsonCodec;
@@ -57,6 +57,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.joining;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 
 public class Authentication
@@ -360,7 +361,11 @@ public class Authentication
                         .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
                         .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
                         .build(),
-                createJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
+                // the safe handler doesn't put the response, which holds the token, in exception messages
+                createSuccessfulJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
+        if (response.accessToken() == null) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response of the token endpoint %s doesn't include an access_token", tokenRequest.tokenUrl()));
+        }
         long expiresIn = response.expiresIn() != null ? response.expiresIn() : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
         // a fixed margin would make tokens that expire sooner than it be fetched again on every request
         long refreshMargin = min(MAX_TOKEN_REFRESH_MARGIN_SECONDS, expiresIn / 2);

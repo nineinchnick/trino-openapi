@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.google.common.base.Throwables.getStackTraceAsString;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.COOKIE;
@@ -40,6 +41,7 @@ import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 
 class TestAuthentication
 {
@@ -325,6 +327,27 @@ class TestAuthentication
     }
 
     @Test
+    void testOAuthTokenResponseIsNotInErrors()
+            throws IOException
+    {
+        Authentication authentication = createClientCredentialsAuthentication("{\"access_token\":\"s3cr3t\",\"expires_in\":\"soon\"}");
+
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("s3cr3t"));
+    }
+
+    @Test
+    void testOAuthTokenResponseWithoutAccessToken()
+            throws IOException
+    {
+        Authentication authentication = createClientCredentialsAuthentication("{\"token_type\":\"Bearer\",\"expires_in\":30}");
+
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response of the token endpoint http://localhost:8081/token doesn't include an access_token");
+    }
+
+    @Test
     void testApiKeysWithReservedCharacters()
             throws Exception
     {
@@ -554,6 +577,37 @@ class TestAuthentication
         config.setSpecLocation(specFile.toString())
                 .setBaseUri(BASE_URI);
         return new Authentication(config, new OpenApiSpec(config), httpClient);
+    }
+
+    private Authentication createClientCredentialsAuthentication(String tokenResponse)
+            throws IOException
+    {
+        return createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        clientCredentials:
+                          tokenUrl: http://localhost:8081/token
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setAuthenticationType(AuthenticationType.OAUTH)
+                        .setClientId("client")
+                        .setClientSecret("secret"),
+                new TestingHttpClient(_ -> mockResponse(HttpStatus.OK, JSON_UTF_8, tokenResponse)));
     }
 
     private static Request request(String path)
