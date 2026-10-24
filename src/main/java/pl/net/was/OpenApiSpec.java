@@ -43,6 +43,7 @@ import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.parameters.RequestBody;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.parser.OpenAPIV3Parser;
@@ -155,6 +156,7 @@ public class OpenApiSpec
     private static final String PARAMETER_FIELD = "field";
     private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(ERROR_PATH, RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
+    private static final Pattern SUCCESS_STATUS_PATTERN = Pattern.compile("2(\\d\\d|XX)", Pattern.CASE_INSENSITIVE);
 
     // should only be used to manually resolving references
     private final OpenAPI openApi;
@@ -199,7 +201,7 @@ public class OpenApiSpec
          */
         Map<String, PathItem> paths = requireNonNullElse(openApi.getPaths(), ImmutableMap.of());
         Map<String, List<Map.Entry<String, PathItem>>> pathGroups = paths.entrySet().stream()
-                .filter(entry -> hasOpsWithJson(entry.getValue()))
+                .filter(entry -> hasOpsWithJson(entry.getKey(), entry.getValue()))
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
                 // paths like /a/b and /a-b have the same identifier, but they're different resources, so they're not merged
@@ -542,15 +544,16 @@ public class OpenApiSpec
         }
     }
 
-    private static boolean hasOpsWithJson(PathItem pathItem)
+    private static boolean hasOpsWithJson(String path, PathItem pathItem)
     {
-        return pathItem.readOperations().stream().anyMatch(OpenApiSpec::hasJsonResponse);
+        return pathItem.readOperationsMap().entrySet().stream()
+                .anyMatch(entry -> hasJsonResponse(new HttpPath(entry.getKey(), path), entry.getValue()));
     }
 
-    private static boolean hasJsonResponse(Operation op)
+    private static boolean hasJsonResponse(HttpPath httpPath, Operation op)
     {
         return op != null && (op.getDeprecated() == null || !op.getDeprecated()) &&
-                getResponseContent(op).isPresent();
+                getResponseContent(httpPath, op).isPresent();
     }
 
     public Map<String, List<OpenApiColumn>> getTables()
@@ -632,7 +635,7 @@ public class OpenApiSpec
     public MediaType getResponseMediaType(HttpPath httpPath)
     {
         return getOperation(httpPath)
-                .flatMap(OpenApiSpec::getResponseContent)
+                .flatMap(op -> getResponseContent(httpPath, op))
                 .flatMap(OpenApiSpec::getJsonMediaType)
                 .map(OpenApiSpec::toRequestedMediaType)
                 .orElse(JSON_UTF_8);
@@ -683,7 +686,7 @@ public class OpenApiSpec
             throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(PAGINATION_RESULTS_PATH, specExtension.get(PAGINATION_RESULTS_PATH), e.getMessage()));
         }
 
-        Schema<?> schema = getResponseSchema(op);
+        Schema<?> schema = getResponseSchema(new HttpPath(method, path), op);
         if (schema != null) {
             Schema<?> resultsSchema = getResultsSchema(new HttpPath(method, path), specExtension.get(PAGINATION_RESULTS_PATH), schema, resultsPointer);
             Map<String, Schema> resultsProperties = getAlternativesProperties(resultsSchema);
@@ -1094,9 +1097,9 @@ public class OpenApiSpec
         return JsonPointer.compile(expression);
     }
 
-    private static Schema<?> getResponseSchema(Operation op)
+    private static Schema<?> getResponseSchema(HttpPath httpPath, Operation op)
     {
-        return getResponseContent(op)
+        return getResponseContent(httpPath, op)
                 .flatMap(OpenApiSpec::getJsonSchema)
                 .orElse(null);
     }
@@ -1109,12 +1112,38 @@ public class OpenApiSpec
                 .orElse(null);
     }
 
-    private static Optional<Content> getResponseContent(Operation op)
+    private static Optional<Content> getResponseContent(HttpPath httpPath, Operation op)
     {
-        return Optional.ofNullable(op.getResponses())
-                .map(responses -> responses.get(HTTP_OK))
+        ApiResponses responses = op.getResponses();
+        if (responses == null) {
+            return Optional.empty();
+        }
+        Optional<Content> okContent = getJsonContent(responses.get(HTTP_OK));
+        // responses to writes with other codes, like 202 Accepted, often describe processing the request instead of the resource
+        if (okContent.isPresent() || !getSqlOperations(httpPath, op).contains(SqlOperation.SELECT)) {
+            return okContent;
+        }
+        // the default response is not used, because APIs, like Cloudflare, declare only their errors with it
+        return responses.keySet().stream()
+                .filter(OpenApiSpec::isSuccessStatus)
+                // explicit codes sort before ranges, like 2XX
+                .sorted()
+                .map(responses::get)
+                .map(OpenApiSpec::getJsonContent)
+                .flatMap(Optional::stream)
+                .findFirst();
+    }
+
+    private static Optional<Content> getJsonContent(ApiResponse response)
+    {
+        return Optional.ofNullable(response)
                 .map(ApiResponse::getContent)
                 .filter(content -> getJsonMediaType(content).isPresent());
+    }
+
+    private static boolean isSuccessStatus(String status)
+    {
+        return SUCCESS_STATUS_PATTERN.matcher(status).matches();
     }
 
     private static Optional<Schema<?>> getJsonSchema(Content content)

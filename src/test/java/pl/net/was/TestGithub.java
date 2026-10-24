@@ -381,6 +381,7 @@ public class TestGithub
                 "repos_dependabot_secrets",
                 "repos_dependabot_secrets_public_key",
                 "repos_dependency_graph_compare",
+                "repos_dependency_graph_sbom_generate_report",
                 "repos_deployments",
                 "repos_deployments_statuses",
                 "repos_environments",
