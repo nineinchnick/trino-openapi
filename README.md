@@ -127,6 +127,7 @@ Trino version it's built for.
 | `spec-location.authentication`       | `OPENAPI_SPEC_AUTHENTICATION`       | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
 | `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
 | `trimmed-path-prefixes`              | `OPENAPI_TRIMMED_PATH_PREFIXES`     |                      | Path prefixes left out of table names, separated by commas, like `/api/v1,/api/v2`; see [Tables](#tables)       |
+| `schema-from-tags`                   | `OPENAPI_SCHEMA_FROM_TAGS`          | `false`              | Put tables into schemas named after the tags of their operations; see [Schemas](#schemas)                       |
 | `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
 | `authentication.username`            | `OPENAPI_USERNAME`                  |                      | Username for `http` basic authentication and the OAuth `password` flow                                          |
@@ -461,7 +462,8 @@ SET SESSION openapi.http_cache_enabled = false;
 
 ## Tables and columns
 
-All tables are in the `default` schema. Use `SHOW TABLES` and `DESCRIBE` to see
+All tables are in the `default` schema, unless they're put into
+[schemas named after tags](#schemas). Use `SHOW TABLES` and `DESCRIBE` to see
 how an API was mapped:
 
 ```sql
@@ -661,6 +663,30 @@ filters, then the shortest path.
 ```text
 TableScan[table = petstore:store_order paths=[GET /store/order/{orderId}] constraint={order_id=[ SortedRangeSet[type=bigint, ranges=1, {[1]}] ]}]
 ```
+
+## Schemas
+
+Tables are in the `default` schema. Many specifications group operations with
+tags, like `repos` and `orgs` in the GitHub API. Set the `schema-from-tags`
+catalog property to `true` to put every table into a schema named after the
+first tag of its operations instead:
+
+```properties
+schema-from-tags=true
+```
+
+```sql
+SHOW SCHEMAS FROM github;
+SHOW TABLES FROM github.repos;
+```
+
+Schema names are tags converted to `snake_case`, with other special characters
+converted to underscores, so `APM Retention Filters` becomes
+`apm_retention_filters`. When the operations of a table have different tags,
+like `GET /users` and `GET /users/{id}`, the schema is named after the first
+tag of the first operation that has tags, in the order of their paths. Tables
+without tags stay in the `default` schema, which is always listed. Table names
+don't change, so they stay unique in the whole catalog.
 
 ## Columns
 

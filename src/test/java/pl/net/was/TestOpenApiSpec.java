@@ -26,6 +26,8 @@ import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.block.SqlRow;
+import io.trino.spi.connector.SchemaNotFoundException;
+import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
@@ -3655,7 +3657,7 @@ class TestOpenApiSpec
                               name:
                                 type: string
                 """,
-                new TableMappingOptions(config.getTrimmedPathPrefixes()));
+                new TableMappingOptions(config.getTrimmedPathPrefixes(), false));
 
         // the longest prefix is trimmed, only at a segment boundary, and paths that end up with the same name get numeric suffixes
         Assertions.assertThat(spec.getTables().keySet().stream()
@@ -3841,6 +3843,113 @@ class TestOpenApiSpec
         // requests still use the whole path
         Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "query_timeseries")).getInsertPaths())
                 .containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/api/v2/query/timeseries"));
+    }
+
+    @Test
+    public void testSchemaFromTags()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /users:
+                    get:
+                      tags: [Users]
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /users/{id}:
+                    get:
+                      tags: [Admin]
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /teams:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /teams/{id}:
+                    get:
+                      tags: [APM Retention Filters]
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /accounts:
+                    get:
+                      tags: [userAccounts, users]
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /status:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                components:
+                  parameters:
+                    Id:
+                      name: id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                  responses:
+                    Ok:
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents, new TableMappingOptions(List.of(), true));
+
+        // tables are named the same way as without schemas, and the first tag of the first path with tags picks the schema
+        Assertions.assertThat(spec.getSchemaTableNames()).containsExactlyInAnyOrder(
+                schemaTableName("users", "users"),
+                schemaTableName("apm_retention_filters", "teams"),
+                schemaTableName("user_accounts", "accounts"),
+                schemaTableName(SCHEMA_NAME, "status"));
+        Assertions.assertThat(spec.getSchemaNames())
+                .containsExactlyInAnyOrder(SCHEMA_NAME, "users", "apm_retention_filters", "user_accounts");
+        Assertions.assertThat(spec.getTableHandle(schemaTableName("users", "users")).getSelectPaths())
+                .containsExactly(new HttpPath(PathItem.HttpMethod.GET, "/users"), new HttpPath(PathItem.HttpMethod.GET, "/users/{id}"));
+        Assertions.assertThatThrownBy(() -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, "users")))
+                .isInstanceOf(TableNotFoundException.class);
+        Assertions.assertThatThrownBy(() -> spec.getTableHandle(schemaTableName("admin", "users")))
+                .isInstanceOf(SchemaNotFoundException.class);
+
+        OpenApiSpec specWithoutSchemas = parseSpec(specContents);
+        Assertions.assertThat(specWithoutSchemas.getSchemaNames()).containsExactly(SCHEMA_NAME);
+        Assertions.assertThat(specWithoutSchemas.getSchemaTableNames()).extracting(SchemaTableName::getTableName)
+                .containsExactlyInAnyOrder("users", "teams", "accounts", "status");
+    }
+
+    @Test
+    public void getGithubTablesWithSchemaFromTags()
+    {
+        OpenApiConfig config = new OpenApiConfig()
+                .setSpecLocation(requireNonNull(getClass().getClassLoader().getResource("github.json")).getFile())
+                .setSchemaFromTags(true);
+        OpenApiSpec spec = createSpec(config);
+
+        Assertions.assertThat(spec.getSchemaTableNames())
+                .hasSize(loadSpec("github.json").getTables().size())
+                .contains(
+                        schemaTableName("orgs", "orgs"),
+                        schemaTableName("actions", "orgs_actions_permissions"),
+                        schemaTableName("emojis", "emojis"))
+                .noneMatch(table -> table.getSchemaName().equals(SCHEMA_NAME));
     }
 
     @Test
@@ -6019,7 +6128,7 @@ class TestOpenApiSpec
 
     private OpenApiSpec parseSpec(String spec)
     {
-        return parseSpec(spec, new TableMappingOptions(List.of()));
+        return parseSpec(spec, new TableMappingOptions(List.of(), false));
     }
 
     private OpenApiSpec parseSpec(String spec, TableMappingOptions tableMappingOptions)
