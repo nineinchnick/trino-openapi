@@ -42,6 +42,7 @@ public class OpenApiColumn
     private final Map<HttpPath, ParameterLocation> optionalPredicate;
     private final Map<HttpPath, ParameterStyle> parameterStyles;
     private final Set<HttpPath> responseRequiredPaths;
+    private final Set<HttpPath> envelopePaths;
     private final Map<HttpPath, RangeFilter> rangeFilters;
     private final Map<HttpPath, Object> parameterDefaults;
     private final ColumnMetadata metadata;
@@ -58,6 +59,7 @@ public class OpenApiColumn
             Map<HttpPath, ParameterLocation> optionalPredicate,
             Map<HttpPath, ParameterStyle> parameterStyles,
             Set<HttpPath> responseRequiredPaths,
+            Set<HttpPath> envelopePaths,
             Map<HttpPath, RangeFilter> rangeFilters,
             Map<HttpPath, Object> parameterDefaults,
             boolean isNullable,
@@ -74,6 +76,7 @@ public class OpenApiColumn
         this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
         this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
         this.responseRequiredPaths = ImmutableSet.copyOf(responseRequiredPaths);
+        this.envelopePaths = ImmutableSet.copyOf(envelopePaths);
         this.rangeFilters = ImmutableMap.copyOf(rangeFilters);
         this.parameterDefaults = ImmutableMap.copyOf(parameterDefaults);
         this.metadata = ColumnMetadata.builder()
@@ -140,6 +143,14 @@ public class OpenApiColumn
         return !selectPaths.isEmpty() && responseRequiredPaths.containsAll(selectPaths);
     }
 
+    /**
+     * Operations returning this field next to the results at {@code resultsPath}, so all rows of a response have its value.
+     */
+    public Set<HttpPath> getEnvelopePaths()
+    {
+        return envelopePaths;
+    }
+
     public Map<HttpPath, RangeFilter> getRangeFilters()
     {
         return rangeFilters;
@@ -202,6 +213,7 @@ public class OpenApiColumn
                 && Objects.equals(optionalPredicate, that.optionalPredicate)
                 && Objects.equals(parameterStyles, that.parameterStyles)
                 && Objects.equals(responseRequiredPaths, that.responseRequiredPaths)
+                && Objects.equals(envelopePaths, that.envelopePaths)
                 && Objects.equals(rangeFilters, that.rangeFilters)
                 && Objects.equals(parameterDefaults, that.parameterDefaults)
                 && Objects.equals(metadata, that.metadata)
@@ -221,6 +233,7 @@ public class OpenApiColumn
                 ", optionalPredicate=" + optionalPredicate +
                 ", parameterStyles=" + parameterStyles +
                 ", responseRequiredPaths=" + responseRequiredPaths +
+                ", envelopePaths=" + envelopePaths +
                 ", rangeFilters=" + rangeFilters +
                 ", parameterDefaults=" + parameterDefaults +
                 ", metadata=" + metadata +
@@ -232,7 +245,7 @@ public class OpenApiColumn
     @Override
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, parameterDefaults, metadata, isPageNumber, isRequestOnly);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, envelopePaths, rangeFilters, parameterDefaults, metadata, isPageNumber, isRequestOnly);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -255,6 +268,7 @@ public class OpenApiColumn
         private final SortedMap<HttpPath, ParameterLocation> optionalPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
         private final SortedSet<HttpPath> responseRequiredPaths = new TreeSet<>();
+        private final SortedSet<HttpPath> envelopePaths = new TreeSet<>();
         private final SortedMap<HttpPath, RangeFilter> rangeFilters = new TreeMap<>();
         private final SortedMap<HttpPath, Object> parameterDefaults = new TreeMap<>();
         private boolean isNullable;
@@ -275,6 +289,7 @@ public class OpenApiColumn
             this.optionalPredicate.putAll(handle.getOptionalPredicate());
             this.parameterStyles.putAll(handle.getParameterStyles());
             this.responseRequiredPaths.addAll(handle.getResponseRequiredPaths());
+            this.envelopePaths.addAll(handle.getEnvelopePaths());
             this.rangeFilters.putAll(handle.getRangeFilters());
             this.parameterDefaults.putAll(handle.getParameterDefaults());
             this.isNullable = handle.getMetadata().isNullable();
@@ -333,6 +348,13 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setEnvelopePaths(Set<HttpPath> envelopePaths)
+        {
+            this.envelopePaths.clear();
+            this.envelopePaths.addAll(requireNonNull(envelopePaths, "envelopePaths is null"));
+            return this;
+        }
+
         public OpenApiColumn.Builder setRangeFilters(Map<HttpPath, RangeFilter> rangeFilters)
         {
             this.rangeFilters.putAll(requireNonNull(rangeFilters, "rangeFilters is null"));
@@ -388,6 +410,7 @@ public class OpenApiColumn
                     optionalPredicate,
                     parameterStyles,
                     responseRequiredPaths,
+                    envelopePaths,
                     rangeFilters,
                     parameterDefaults,
                     isNullable,

@@ -851,6 +851,13 @@ public class TestOpenApiQueries
                         "WHERE table_schema = 'default' AND table_name = 'has_more_items' " +
                         "AND column_name IN ('has_more', 'id', 'name', 'price', 'description', 'tax')",
                 "VALUES ('id', 'NO'), ('name', 'NO'), ('price', 'NO'), ('description', 'YES'), ('tax', 'YES')");
+        // but they can be selected, and every row has the value of its page
+        assertQuery(
+                "SELECT name, has_more FROM fastapi.default.has_more_items",
+                "VALUES ('Portal Gun', true), ('Plumbus', false)");
+        assertQuery(
+                "SELECT name, total_results FROM fastapi.default.items",
+                "VALUES ('Portal Gun', 2), ('Plumbus', 2)");
     }
 
     @Test

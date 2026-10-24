@@ -548,7 +548,9 @@ public class OpenApiSpec
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     // fields next to the results, like the total number of results, describe pages, not rows
-                    .map(column -> hasEnvelope ? OpenApiColumn.builderFrom(column.get()).setIsHidden(true).build() : column.get())
+                    .map(column -> hasEnvelope
+                            ? OpenApiColumn.builderFrom(column.get()).setIsHidden(true).setEnvelopePaths(Set.of(new HttpPath(method, path))).build()
+                            : column.get())
                     .forEach(result::add);
             List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
             resultsProperties
@@ -1584,6 +1586,9 @@ public class OpenApiSpec
                         .setIsRequestOnly(sameColumns.stream().allMatch(OpenApiColumn::isRequestOnly))
                         .setResponseRequiredPaths(sameColumns.stream()
                                 .flatMap(column -> column.getResponseRequiredPaths().stream())
+                                .collect(toImmutableSet()))
+                        .setEnvelopePaths(sameColumns.stream()
+                                .flatMap(column -> column.getEnvelopePaths().stream())
                                 .collect(toImmutableSet()))
                         .setRequiresPredicate(sameColumns.stream()
                                 .map(OpenApiColumn::getRequiresPredicate)
