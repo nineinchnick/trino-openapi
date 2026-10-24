@@ -69,6 +69,7 @@ import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2169,6 +2170,10 @@ public class OpenApiSpec
         if (type == null) {
             return Optional.of(FALLBACK_TYPE);
         }
+        if (property.getEnum() != null && hasValuesOfDifferentTypes(property.getEnum())) {
+            // the parser infers the type of an enum without one from its first value, so values of other types would fail to be read
+            return Optional.of(FALLBACK_TYPE);
+        }
         String format = property.getFormat();
         return switch (type) {
             case "array" -> convertArray(property);
@@ -2190,7 +2195,10 @@ public class OpenApiSpec
             return property.getType();
         }
         if (property.getTypes() == null) {
-            return null;
+            // OpenAPI 3.1 allows a const value without a type, like a discriminator of an alternative of a union
+            return Optional.ofNullable(property.getConst())
+                    .flatMap(OpenApiSpec::getValueType)
+                    .orElse(null);
         }
         // OpenAPI 3.1 declares nullable values with a list of types including null, instead of the nullable keyword
         List<String> types = property.getTypes().stream()
@@ -2200,6 +2208,31 @@ public class OpenApiSpec
             return null;
         }
         return types.getFirst();
+    }
+
+    private static boolean hasValuesOfDifferentTypes(List<?> values)
+    {
+        long typesCount = values.stream()
+                .filter(Objects::nonNull)
+                // integers are numbers too
+                .map(value -> getValueType(value).map(type -> type.equals("integer") ? "number" : type))
+                .distinct()
+                .count();
+        return typesCount > 1;
+    }
+
+    private static Optional<String> getValueType(Object value)
+    {
+        return switch (value) {
+            case String _ -> Optional.of("string");
+            case Boolean _ -> Optional.of("boolean");
+            case Integer _, Long _, BigInteger _ -> Optional.of("integer");
+            // the parser reads integers that don't fit in an Integer as decimals
+            case BigDecimal decimal -> Optional.of(decimal.stripTrailingZeros().scale() <= 0 ? "integer" : "number");
+            case Number _ -> Optional.of("number");
+            // objects and arrays
+            default -> Optional.empty();
+        };
     }
 
     private static boolean isObjectUnion(Schema<?> union)

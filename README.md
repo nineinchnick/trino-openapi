@@ -860,6 +860,7 @@ Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 | `prefixItems` with `items: false` or `maxItems`        | `ROW` with fields `_col0`, `_col1`, ... for the elements of the tuple  |
 | `object` with `properties`                             | `ROW` with a field for every property                                  |
 | `object` with `additionalProperties`                   | `MAP(VARCHAR, ...)` of the value type                                  |
+| `const` or `enum` without a `type`                     | type of the values, or `VARCHAR` with the raw JSON if they differ      |
 | `type: [T, "null"]` (OpenAPI 3.1), or `nullable: true` | nullable `T`                                                           |
 | `oneOf` or `anyOf` of `T` and `type: "null"`           | nullable `T`                                                           |
 | unions, and anything else                              | see [Union types](#union-types), otherwise `VARCHAR` with the raw JSON |

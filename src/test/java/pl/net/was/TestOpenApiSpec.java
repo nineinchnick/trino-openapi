@@ -5983,6 +5983,76 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testConstAndEnumWithoutType()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /events:
+                    get:
+                      parameters:
+                      - in: query
+                        name: mode
+                        schema:
+                          const: fast
+                      responses:
+                        "200":
+                          description: Events
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    kind:
+                                      const: push
+                                    version:
+                                      const: 2
+                                    ratio:
+                                      const: 0.5
+                                    enabled:
+                                      const: true
+                                    origin:
+                                      const: {x: 1}
+                                    state:
+                                      enum: [open, closed]
+                                    level:
+                                      type: [string, "null"]
+                                      enum: [low, high, null]
+                                    code:
+                                      enum: [1, a]
+                                    label:
+                                      enum: [a, 1]
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        List<OpenApiColumn> columns = spec.getTables().get("events");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("kind", VARCHAR),
+                        Assertions.tuple("version", BIGINT),
+                        Assertions.tuple("ratio", createDecimalType(38, 10)),
+                        Assertions.tuple("enabled", BOOLEAN),
+                        Assertions.tuple("origin", VARCHAR),
+                        Assertions.tuple("state", VARCHAR),
+                        Assertions.tuple("level", VARCHAR),
+                        // values of different types hold the raw JSON value
+                        Assertions.tuple("code", VARCHAR),
+                        Assertions.tuple("label", VARCHAR),
+                        Assertions.tuple("mode", VARCHAR));
+        Assertions.assertThat(columns)
+                .filteredOn(column -> JsonTrinoConverter.isJsonText(column.getSourceType()))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("origin", "code", "label");
+    }
+
+    @Test
     public void getDatadogTablesWithMediaTypeParameters()
     {
         OpenApiSpec spec = DATADOG_SPEC.get();
