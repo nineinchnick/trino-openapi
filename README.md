@@ -123,7 +123,6 @@ Trino version it's built for.
 
 | Property                                       | Container environment variable          | Default              | Description                                                                                                     |
 | ---------------------------------------------- | --------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| ---------------------------------------------- | --------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `spec-location`                                | `OPENAPI_SPEC_LOCATION`                 |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
 | `spec-location.authentication`                 | `OPENAPI_SPEC_AUTHENTICATION`           | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
 | `base-uri`                                     | `OPENAPI_BASE_URI`                      |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
