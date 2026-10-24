@@ -328,7 +328,7 @@ public class OpenApiClient
         else {
             // the first page is also read by its own split, because rows can't be sent in splits
             ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), revalidateCachedResponses);
-            serverPageSize = pageSize.orElse(Iterables.size(firstPage.rows()));
+            serverPageSize = Iterables.size(firstPage.rows());
             pageCount = getPageCount(firstPage, pageSize);
         }
         if (pageCount.isEmpty()) {
@@ -352,19 +352,18 @@ public class OpenApiClient
         if (firstPage.hasMore().isPresent() && !firstPage.hasMore().get()) {
             return OptionalLong.of(1);
         }
-        if (pageSize.isPresent() && firstPageSize < pageSize.orElseThrow()) {
-            return OptionalLong.of(1);
+        if (!firstPage.hasLastPageSignal()) {
+            return pageSize.isPresent() && firstPageSize < pageSize.orElseThrow() ? OptionalLong.of(1) : OptionalLong.empty();
         }
         OptionalLong pageCountFromResults = OptionalLong.empty();
         if (firstPage.totalResults().isPresent()) {
             long totalResults = firstPage.totalResults().orElseThrow();
-            // the first page is full, unless it's the last one, so its size is the page size the server uses
-            long serverPageSize = pageSize.orElse(firstPageSize);
             if (totalResults <= firstPageSize) {
                 pageCountFromResults = OptionalLong.of(1);
             }
-            else if (serverPageSize > 0) {
-                pageCountFromResults = OptionalLong.of(ceilDiv(totalResults, serverPageSize));
+            // more results follow, so the first page is full, and its size is the page size the server uses, even if it's not the declared one
+            else if (firstPageSize > 0) {
+                pageCountFromResults = OptionalLong.of(ceilDiv(totalResults, firstPageSize));
             }
         }
         return Stream.of(firstPage.totalPages(), pageCountFromResults)
@@ -1009,7 +1008,14 @@ public class OpenApiClient
         return node;
     }
 
-    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults, OptionalLong totalPages, Optional<Boolean> hasMore) {}
+    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults, OptionalLong totalPages, Optional<Boolean> hasMore)
+    {
+        // servers can return fewer results than the declared page size, so a short page ends pagination only without these
+        boolean hasLastPageSignal()
+        {
+            return totalResults.isPresent() || totalPages.isPresent() || hasMore.isPresent();
+        }
+    }
 
     private class JsonResponseHandler
             implements ResponseHandler<ResultsPage, RuntimeException>
@@ -1239,6 +1245,9 @@ public class OpenApiClient
             long rowCount;
             int page = offset + 1;
             boolean isLastPage;
+            // servers can return fewer results than the declared page size, so the results before a page are computed from it
+            // only by splits reading every few pages, which don't count them
+            final OptionalLong stridePageSize = pageIncrement > 1 ? pageSize : OptionalLong.empty();
             Iterator<List<?>> rows;
 
             @Override
@@ -1269,12 +1278,12 @@ public class OpenApiClient
                 int pageResults = Iterables.size(resultsPage.rows());
                 // splits reading every few pages can start past the last page,
                 // and servers might return the last page for every page number past it
-                if (isPastLastPage(resultsPage, fetchedPage, pageSize, maxResults)) {
+                if (isPastLastPage(resultsPage, fetchedPage, stridePageSize, maxResults)) {
                     isLastPage = true;
                     rows = emptyIterator();
                     return;
                 }
-                if (isPastLastPage(resultsPage, page, pageSize, maxResults)) {
+                if (isPastLastPage(resultsPage, page, stridePageSize, maxResults)) {
                     isLastPage = true;
                 }
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
@@ -1283,7 +1292,7 @@ public class OpenApiClient
                 if (pageResults == 0) {
                     isLastPage = true;
                 }
-                if (pageSize.isPresent() && pageResults < pageSize.orElseThrow()) {
+                if (!resultsPage.hasLastPageSignal() && pageSize.isPresent() && pageResults < pageSize.orElseThrow()) {
                     isLastPage = true;
                 }
                 if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {

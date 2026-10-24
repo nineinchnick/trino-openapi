@@ -437,6 +437,24 @@ def list_total_pages_items(page: int = 1) -> TotalPagesResults:
         total_pages=len(items))
 
 
+# like servers that cap the page size below the declared default, these return one item per page,
+# and the last page for out of range page numbers, so a short page must not end pagination
+@router.get("/short_page_items")
+def list_short_page_items(page: int = 1, size: int = 3) -> Results:
+    page = min(max(page, 1), len(items))
+    return Results(
+        results=list(items.values())[page - 1:page],
+        total_results=len(items))
+
+
+@router.get("/short_page_has_more_items")
+def list_short_page_has_more_items(page: int = 1, size: int = 3) -> HasMoreResults:
+    page = min(max(page, 1), len(items))
+    return HasMoreResults(
+        results=list(items.values())[page - 1:page],
+        has_more=page < len(items))
+
+
 @router.get("/max_pages_items")
 def list_max_pages_items(page: int = 1) -> Results:
     page = min(max(page, 1), len(items))
@@ -928,6 +946,18 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "totalPagesPath": "$response.body#/total_pages",
+    }
+    openapi_schema["paths"]["/short_page_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "size",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
+    }
+    openapi_schema["paths"]["/short_page_has_more_items"]["get"]["x-trino"] = {
+        "pageParam": "page",
+        "limitParam": "size",
+        "resultsPath": "$response.body#/results",
+        "hasMorePath": "$response.body#/has_more",
     }
     openapi_schema["paths"]["/max_pages_items"]["get"]["x-trino"] = {
         "pageParam": "page",
