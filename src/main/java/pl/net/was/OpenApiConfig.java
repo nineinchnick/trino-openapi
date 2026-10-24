@@ -32,12 +32,14 @@ import pl.net.was.authentication.ClientAuthenticationMethod;
 import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static java.util.Objects.requireNonNull;
@@ -49,6 +51,7 @@ public class OpenApiConfig
     private String specLocation;
     private SpecLocationAuthentication specLocationAuthentication = SpecLocationAuthentication.NONE;
     private URI baseUri;
+    private List<String> trimmedPathPrefixes = List.of();
     private AuthenticationType authenticationType = AuthenticationType.NONE;
 
     private AuthenticationScheme authenticationScheme = AuthenticationScheme.BASIC;
@@ -146,6 +149,29 @@ public class OpenApiConfig
     {
         this.baseUri = baseUri;
         return this;
+    }
+
+    @NotNull
+    public List<String> getTrimmedPathPrefixes()
+    {
+        return trimmedPathPrefixes;
+    }
+
+    @Config("trimmed-path-prefixes")
+    @ConfigDescription("Comma-separated list of path prefixes, like /api/v1, left out of table names")
+    public OpenApiConfig setTrimmedPathPrefixes(List<String> trimmedPathPrefixes)
+    {
+        this.trimmedPathPrefixes = requireNonNull(trimmedPathPrefixes, "trimmedPathPrefixes is null").stream()
+                // a prefix matches whole path segments, so a trailing slash would never match
+                .map(prefix -> prefix.replaceAll("/+$", ""))
+                .collect(toImmutableList());
+        return this;
+    }
+
+    @AssertTrue(message = "trimmed-path-prefixes must start with a slash, like /api/v1")
+    public boolean isTrimmedPathPrefixesValid()
+    {
+        return trimmedPathPrefixes.stream().allMatch(prefix -> prefix.startsWith("/"));
     }
 
     @NotNull

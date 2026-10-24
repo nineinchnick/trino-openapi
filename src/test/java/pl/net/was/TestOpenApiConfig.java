@@ -13,6 +13,7 @@
  */
 package pl.net.was;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.ConfigurationException;
 import io.airlift.configuration.ConfigurationFactory;
@@ -56,6 +57,7 @@ class TestOpenApiConfig
                 .setSpecLocation(null)
                 .setSpecLocationAuthentication(SpecLocationAuthentication.NONE)
                 .setBaseUri(null)
+                .setTrimmedPathPrefixes(ImmutableList.of())
                 .setAuthenticationType(AuthenticationType.NONE)
                 .setAuthenticationScheme(AuthenticationScheme.BASIC)
                 .setUsername(null)
@@ -89,6 +91,7 @@ class TestOpenApiConfig
                 .put("spec-location", "https://api.example.com/openapi.yaml")
                 .put("spec-location.authentication", "CATALOG")
                 .put("base-uri", "https://api.example.com/v1")
+                .put("trimmed-path-prefixes", "/api/v1, /api/v2/")
                 .put("authentication.type", "API_KEY")
                 .put("authentication.scheme", "BEARER")
                 .put("authentication.username", "user")
@@ -118,6 +121,7 @@ class TestOpenApiConfig
                 .setSpecLocation("https://api.example.com/openapi.yaml")
                 .setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG)
                 .setBaseUri(URI.create("https://api.example.com/v1"))
+                .setTrimmedPathPrefixes(ImmutableList.of("/api/v1", "/api/v2"))
                 .setAuthenticationType(AuthenticationType.API_KEY)
                 .setAuthenticationScheme(AuthenticationScheme.BEARER)
                 .setUsername("user")
@@ -324,6 +328,23 @@ class TestOpenApiConfig
                 .buildOrThrow()))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("Invalid configuration property max-splits-per-second: must be greater than 0");
+    }
+
+    @Test
+    void testTrimmedPathPrefixes()
+    {
+        assertThat(buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("trimmed-path-prefixes", "/api/v1, /api/v2/")
+                .buildOrThrow())
+                .getTrimmedPathPrefixes())
+                .containsExactly("/api/v1", "/api/v2");
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("trimmed-path-prefixes", "api/v1")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("trimmed-path-prefixes must start with a slash, like /api/v1");
     }
 
     private static void assertFailsValidation(Map<String, String> properties)

@@ -3591,6 +3591,103 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testTrimmedPathPrefixes()
+    {
+        OpenApiConfig config = new OpenApiConfig()
+                .setTrimmedPathPrefixes(List.of("/api/v1", "/api/v2/", "/api/v2/beta"));
+        OpenApiSpec spec = parseSpec(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /api/v1/users:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/v1/users/{id}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/v2/users:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/v2/beta/teams:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/v10/teams:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/v1/{id}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                components:
+                  parameters:
+                    Id:
+                      name: id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                  responses:
+                    Ok:
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                """,
+                config.getTrimmedPathPrefixes());
+
+        // the longest prefix is trimmed, only at a segment boundary, and paths that end up with the same name get numeric suffixes
+        Assertions.assertThat(spec.getTables().keySet().stream()
+                        .collect(toImmutableMap(identity(), table -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, table)).getSelectPaths().stream()
+                                .map(HttpPath::path)
+                                .toList())))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "users", List.of("/api/v1/users", "/api/v1/users/{id}"),
+                        "users_2", List.of("/api/v2/users"),
+                        "teams", List.of("/api/v2/beta/teams"),
+                        "api_v10_teams", List.of("/api/v10/teams"),
+                        "api_v1", List.of("/api/v1/{id}")));
+    }
+
+    @Test
+    public void getDatadogTablesWithTrimmedPathPrefixes()
+    {
+        OpenApiConfig config = new OpenApiConfig()
+                .setSpecLocation("specs/datadog.yaml")
+                .setTrimmedPathPrefixes(List.of("/api/v1", "/api/v2"));
+        OpenApiSpec spec = createSpec(config);
+
+        Assertions.assertThat(spec.getTables().keySet())
+                .hasSize(loadSpecFile("specs/datadog.yaml").getTables().size())
+                .contains("events", "team", "metrics", "query_timeseries")
+                .noneMatch(table -> table.startsWith("api_v1_") || table.startsWith("api_v2_"));
+        // requests still use the whole path
+        Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "query_timeseries")).getInsertPaths())
+                .containsExactly(new HttpPath(PathItem.HttpMethod.POST, "/api/v2/query/timeseries"));
+    }
+
+    @Test
     public void testParserDropsEmptyGlobalSecurity()
     {
         // OpenApiSpec.parse() restores the empty list, so if this fails after upgrading the parser, that workaround can be removed
@@ -5766,12 +5863,17 @@ class TestOpenApiSpec
 
     private OpenApiSpec parseSpec(String spec)
     {
+        return parseSpec(spec, List.of());
+    }
+
+    private OpenApiSpec parseSpec(String spec, List<String> trimmedPathPrefixes)
+    {
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
         SwaggerParseResult result = new OpenAPIV3Parser().readContents(spec, null, parseOptions);
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
-        return new OpenApiSpec(result.getOpenAPI(), "test");
+        return new OpenApiSpec(result.getOpenAPI(), "test", trimmedPathPrefixes);
     }
 }

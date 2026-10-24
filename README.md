@@ -126,6 +126,7 @@ Trino version it's built for.
 | `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
 | `spec-location.authentication`       | `OPENAPI_SPEC_AUTHENTICATION`       | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
 | `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
+| `trimmed-path-prefixes`              | `OPENAPI_TRIMMED_PATH_PREFIXES`     |                      | Path prefixes left out of table names, separated by commas, like `/api/v1,/api/v2`; see [Tables](#tables)       |
 | `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
 | `authentication.username`            | `OPENAPI_USERNAME`                  |                      | Username for `http` basic authentication and the OAuth `password` flow                                          |
@@ -562,10 +563,25 @@ If a path has several variants with different parameters, each variant becomes
 a separate table that also includes the columns of the base path, and the table
 name also includes the path parameters.
 
-Different paths can map to the same table name, like `/a/b` and `/a-b`. They
-become separate tables, and the next ones in the order of their paths get
-numeric suffixes (`_2`, `_3`, and so on), skipping names of other tables. The
-connector logs a warning with such paths.
+Many APIs start all paths with the same prefix, like `/api/v2`, which would
+start all table names with `api_v2_`. Set the `trimmed-path-prefixes` catalog
+property to a list of such prefixes, separated by commas, to leave them out of
+table names:
+
+```properties
+trimmed-path-prefixes=/api/v1,/api/v2
+```
+
+A prefix matches whole path segments, so `/api/v1` doesn't match `/api/v10`.
+When several prefixes match a path, the longest one is left out. A path that is
+only a prefix followed by path parameters, like `/api/v1/{id}`, keeps its whole
+name. Requests still use the whole path.
+
+Different paths can map to the same table name, like `/a/b` and `/a-b`, or
+`/api/v1/users` and `/api/v2/users` after trimming their prefixes. They become
+separate tables, and the next ones in the order of their paths get numeric
+suffixes (`_2`, `_3`, and so on), skipping names of other tables. The connector
+logs a warning with such paths.
 
 A table is not listed if none of the responses, parameters, or request bodies of
 its operations can be mapped to columns, like a response that is a single
