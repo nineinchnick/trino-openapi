@@ -91,6 +91,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Sets.toImmutableEnumSet;
 import static com.google.common.net.MediaType.ANY_TYPE;
+import static com.google.common.net.MediaType.FORM_DATA;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.type.BigintType.BIGINT;
@@ -1294,8 +1295,28 @@ public class OpenApiSpec
     {
         return Optional.ofNullable(op.getRequestBody())
                 .map(RequestBody::getContent)
-                .flatMap(OpenApiSpec::getJsonSchema)
+                .flatMap(content -> getRequestBodyMediaType(content)
+                        .map(mediaType -> content.get(mediaType).getSchema()))
                 .orElse(null);
+    }
+
+    private static Optional<String> getRequestBodyMediaType(Content content)
+    {
+        // JSON can describe nested values, which form fields can't, so form bodies are only sent to operations that don't accept JSON
+        return getJsonMediaType(content)
+                .or(() -> content.keySet().stream()
+                        .filter(OpenApiSpec::isFormMediaType)
+                        .findFirst());
+    }
+
+    private static boolean isFormMediaType(String mediaType)
+    {
+        try {
+            return MediaType.parse(mediaType).withoutParameters().equals(FORM_DATA);
+        }
+        catch (IllegalArgumentException _) {
+            return false;
+        }
     }
 
     private static Optional<Content> getResponseContent(HttpPath httpPath, Operation op)

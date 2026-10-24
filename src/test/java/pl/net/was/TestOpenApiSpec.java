@@ -4313,6 +4313,86 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testFormRequestBodyFields()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /tokens:
+                    post:
+                      requestBody:
+                        content:
+                          application/x-www-form-urlencoded:
+                            schema:
+                              type: object
+                              required:
+                              - grant_type
+                              properties:
+                                grant_type:
+                                  type: string
+                                scope:
+                                  type: array
+                                  items:
+                                    type: string
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  access_token:
+                                    type: string
+                  /pets:
+                    post:
+                      requestBody:
+                        content:
+                          application/x-www-form-urlencoded:
+                            schema:
+                              type: object
+                              properties:
+                                form_name:
+                                  type: string
+                          application/json:
+                            schema:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  id:
+                                    type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Map<HttpPath, ParameterLocation> tokensBody = Map.of(new HttpPath(PathItem.HttpMethod.POST, "/tokens"), ParameterLocation.BODY);
+        Assertions.assertThat(spec.getTables().get("tokens"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, OpenApiColumn::getRequiresPredicate, OpenApiColumn::getOptionalPredicate)
+                .containsExactly(
+                        Assertions.tuple("access_token", VARCHAR, Map.of(), Map.of()),
+                        Assertions.tuple("grant_type", VARCHAR, tokensBody, Map.of()),
+                        Assertions.tuple("scope", new ArrayType(VARCHAR), Map.of(), tokensBody));
+        // fields of the form body are ignored when the operation also accepts JSON
+        Assertions.assertThat(spec.getTables().get("pets"))
+                .filteredOn(column -> !column.getMetadata().isHidden())
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("id", "name");
+    }
+
+    @Test
     public void testUnionResponses()
     {
         String specContents =
