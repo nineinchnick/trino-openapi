@@ -815,9 +815,18 @@ from errors in the connector:
   format. The message names the column and the expected type, but not the
   value.
 
-Only the first 64 KiB of an error response are read. They're logged at the
-`DEBUG` level of the `pl.net.was` logger, and `errorPath` is ignored for longer
-responses.
+Only the first 64 KiB of an error response are read, and `errorPath` is ignored
+for longer responses.
+
+The `DEBUG` level of the `pl.net.was` logger logs every request, with the URL
+without its query string, and the size of request and response bodies. The
+bodies themselves, including error responses, are logged at the `DEBUG` level of
+the separate `trino-openapi-bodies` logger, because they can contain credentials
+and personal data:
+
+```properties
+trino-openapi-bodies=DEBUG
+```
 
 # Bundled catalogs
 

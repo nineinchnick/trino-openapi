@@ -126,6 +126,9 @@ import static pl.net.was.OpenApiSpec.ROW_ID;
 public class OpenApiClient
 {
     private static final Logger log = Logger.get(OpenApiRecordSetProvider.class);
+    // request and response bodies can contain credentials and personal data, so they're logged only when this logger,
+    // which is not a child of the connector's package, is enabled on purpose
+    private static final Logger bodyLog = Logger.get("trino-openapi-bodies");
     // small decimals would otherwise be written in the scientific notation, like 1E-8, which some servers can't parse
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
             .enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
@@ -633,7 +636,7 @@ public class OpenApiClient
                     format("%s%s: %s", context, attemptsSuffix, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
                     error.getCause());
             case HttpRequestFailure.ErrorResponse error -> {
-                log.debug("%s with HTTP %d%s, response body%s: %s", context, error.getStatusCode(), attemptsSuffix, error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
+                bodyLog.debug("%s with HTTP %d%s, response body%s: %s", context, error.getStatusCode(), attemptsSuffix, error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
                 String message = format("%s with HTTP %d%s", context, error.getStatusCode(), attemptsSuffix);
                 JsonPointer errorPointer = openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath);
                 // the response body is not included, because it might not be readable, and it might contain sensitive information
@@ -1038,7 +1041,8 @@ public class OpenApiClient
                 throw HttpRequestFailure.ErrorResponse.read(response);
             }
             String result = readBody(response);
-            log.debug("Received response code " + response.getStatusCode() + ": " + result);
+            log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
+            bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
 
             JsonNode jsonNode;
             try {
@@ -1047,7 +1051,7 @@ public class OpenApiClient
             catch (JsonProcessingException ex) {
                 String message = format("Response to %s is not valid JSON", describe(request));
                 // the parser's message quotes the response, which might contain sensitive information, so it's only logged
-                log.debug(ex, message);
+                bodyLog.debug(ex, message);
                 throw new TrinoException(OPENAPI_INVALID_RESPONSE, message);
             }
             return new ResultsPage(
@@ -1185,7 +1189,10 @@ public class OpenApiClient
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         OBJECT_MAPPER.createGenerator(baos).writeTree(rootNode);
         byte[] output = baos.toByteArray();
-        log.debug("Request body: " + new String(output, UTF_8));
+        log.debug("Request body of %d bytes", output.length);
+        if (bodyLog.isDebugEnabled()) {
+            bodyLog.debug("Request body: %s", new String(output, UTF_8));
+        }
         return output;
     }
 
@@ -1206,7 +1213,8 @@ public class OpenApiClient
                 throw HttpRequestFailure.ErrorResponse.read(response);
             }
             String result = readBody(response);
-            log.debug("Received response code " + response.getStatusCode() + ": " + result);
+            log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
+            bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
             return null;
         }
     }
