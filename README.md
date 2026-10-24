@@ -479,6 +479,9 @@ Column names follow the same rules as table names. Columns are disambiguated:
   suffixes (`_2`, `_3`, and so on).
 
 Columns are nullable, unless the schema they come from lists them as required.
+Columns built from responses are nullable, unless they're required and not
+nullable in responses of all operations used for `SELECT`, because a query uses
+only one of them, depending on its filters.
 In tables that support `INSERT`, columns that only come from responses are
 always nullable, because they can't be set in an `INSERT`.
 
