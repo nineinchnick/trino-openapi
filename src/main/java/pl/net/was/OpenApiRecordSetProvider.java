@@ -17,19 +17,22 @@ package pl.net.was;
 import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
 import io.trino.spi.connector.ColumnHandle;
-import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorTableHandle;
-import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTransactionHandle;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordSet;
 import io.trino.spi.type.Type;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
 
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toList;
 import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
 
@@ -37,13 +40,11 @@ public class OpenApiRecordSetProvider
         implements ConnectorRecordSetProvider
 {
     private final OpenApiClient client;
-    private final OpenApiMetadata metadata;
     private final OpenApiSpec spec;
 
     @Inject
-    public OpenApiRecordSetProvider(OpenApiMetadata metadata, OpenApiClient client, OpenApiSpec spec)
+    public OpenApiRecordSetProvider(OpenApiClient client, OpenApiSpec spec)
     {
-        this.metadata = metadata;
         this.client = client;
         this.spec = spec;
     }
@@ -60,18 +61,12 @@ public class OpenApiRecordSetProvider
         List<OpenApiColumnHandle> columnHandles = list.stream()
                 .map(c -> (OpenApiColumnHandle) c)
                 .toList();
-        ConnectorTableMetadata tableMetadata = metadata.getTableMetadata(connectorSession, table);
-
+        Map<OpenApiColumnHandle, Integer> tableColumnIndexes = getColumnIndexes(spec.getTables().get(((OpenApiTableHandle) table).getSchemaTableName().getTableName()));
         List<Integer> columnIndexes = columnHandles.stream()
                 .map(column -> {
-                    int index = 0;
-                    for (ColumnMetadata columnMetadata : tableMetadata.getColumns()) {
-                        if (columnMetadata.getName().equalsIgnoreCase(column.getName())) {
-                            return index;
-                        }
-                        index++;
-                    }
-                    throw new IllegalStateException("Unknown column: " + column.getName());
+                    Integer index = tableColumnIndexes.get(column);
+                    checkState(index != null, "Unknown column: %s", column.getName());
+                    return index;
                 })
                 .toList();
 
@@ -86,5 +81,13 @@ public class OpenApiRecordSetProvider
                 .map(OpenApiColumnHandle::getType)
                 .toList();
         return new InMemoryRecordSet(mappedTypes, mappedRows);
+    }
+
+    private static Map<OpenApiColumnHandle, Integer> getColumnIndexes(List<OpenApiColumn> columns)
+    {
+        // rows have values of all the table's columns, in the order of the table's columns
+        return IntStream.range(0, columns.size())
+                .boxed()
+                .collect(toImmutableMap(index -> columns.get(index).getHandle(), identity()));
     }
 }
