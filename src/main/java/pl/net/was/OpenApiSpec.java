@@ -109,6 +109,7 @@ import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
@@ -200,12 +201,13 @@ public class OpenApiSpec
     private final Optional<JsonPointer> documentErrorPointer;
     private final String specHash;
     private final List<String> trimmedPathPrefixes;
+    private final boolean schemaFromTags;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
     {
         this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")),
-                new TableMappingOptions(config.getTrimmedPathPrefixes()));
+                new TableMappingOptions(config.getTrimmedPathPrefixes(), config.isSchemaFromTags()));
     }
 
     private OpenApiSpec(ParsedSpec parsedSpec, TableMappingOptions tableMappingOptions)
@@ -219,6 +221,7 @@ public class OpenApiSpec
         this.specHash = requireNonNull(specHash, "specHash is null");
         requireNonNull(tableMappingOptions, "tableMappingOptions is null");
         this.trimmedPathPrefixes = tableMappingOptions.trimmedPathPrefixes();
+        this.schemaFromTags = tableMappingOptions.schemaFromTags();
         Map<String, String> documentExtension = getDocumentExtension(openApi);
         this.rateLimitHeaders = getRateLimitHeaders(documentExtension);
         // errors are usually reported the same way by all operations of an API
@@ -2510,15 +2513,45 @@ public class OpenApiSpec
                 && !column.getMetadata().isHidden();
     }
 
-    private static OpenApiTableHandle tableHandle(String tableName, Map<SqlOperation, List<HttpPath>> tablePaths, String specHash)
+    private OpenApiTableHandle tableHandle(String tableName, Map<SqlOperation, List<HttpPath>> tablePaths, String specHash)
     {
-        return OpenApiTableHandle.builder(SchemaTableName.schemaTableName(SCHEMA_NAME, tableName))
+        return OpenApiTableHandle.builder(SchemaTableName.schemaTableName(getSchemaName(tablePaths), tableName))
                 .setSpecHash(specHash)
                 .setSelectPaths(tablePaths.getOrDefault(SqlOperation.SELECT, ImmutableList.of()))
                 .setInsertPaths(tablePaths.getOrDefault(SqlOperation.INSERT, ImmutableList.of()))
                 .setUpdatePaths(tablePaths.getOrDefault(SqlOperation.UPDATE, ImmutableList.of()))
                 .setDeletePaths(tablePaths.getOrDefault(SqlOperation.DELETE, ImmutableList.of()))
                 .build();
+    }
+
+    private String getSchemaName(Map<SqlOperation, List<HttpPath>> tablePaths)
+    {
+        if (!schemaFromTags) {
+            return SCHEMA_NAME;
+        }
+        // operations of a table can have different tags, and the sorted ones always pick the same schema
+        return tablePaths.values().stream()
+                .flatMap(List::stream)
+                .distinct()
+                .sorted(comparing(HttpPath::path).thenComparing(HttpPath::method))
+                .map(this::getOperation)
+                .flatMap(Optional::stream)
+                .map(Operation::getTags)
+                .filter(tags -> tags != null && !tags.isEmpty())
+                .map(tags -> getSchemaIdentifier(tags.getFirst()))
+                // the information schema is added to every catalog by Trino
+                .filter(schemaName -> !schemaName.isEmpty() && !schemaName.equals("information_schema"))
+                .findFirst()
+                .orElse(SCHEMA_NAME);
+    }
+
+    private static String getSchemaIdentifier(String tag)
+    {
+        // tags are often titles with spaces and acronyms, like APM Retention Filters, which getIdentifier doesn't convert to snake_case
+        return tag.replaceAll("([a-z0-9])([A-Z])", "$1_$2")
+                .toLowerCase(Locale.ENGLISH)
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_|_$", "");
     }
 
     public Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> getPathSecurityRequirements()

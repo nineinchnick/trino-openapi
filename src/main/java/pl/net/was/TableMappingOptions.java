@@ -20,7 +20,7 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
-record TableMappingOptions(List<String> trimmedPathPrefixes)
+record TableMappingOptions(List<String> trimmedPathPrefixes, boolean schemaFromTags)
 {
     TableMappingOptions
     {

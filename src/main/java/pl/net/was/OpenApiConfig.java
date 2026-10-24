@@ -52,6 +52,7 @@ public class OpenApiConfig
     private SpecLocationAuthentication specLocationAuthentication = SpecLocationAuthentication.NONE;
     private URI baseUri;
     private List<String> trimmedPathPrefixes = List.of();
+    private boolean schemaFromTags;
     private AuthenticationType authenticationType = AuthenticationType.NONE;
 
     private AuthenticationScheme authenticationScheme = AuthenticationScheme.BASIC;
@@ -174,6 +175,19 @@ public class OpenApiConfig
     public boolean isTrimmedPathPrefixesValid()
     {
         return trimmedPathPrefixes.stream().allMatch(prefix -> prefix.startsWith("/"));
+    }
+
+    public boolean isSchemaFromTags()
+    {
+        return schemaFromTags;
+    }
+
+    @Config("schema-from-tags")
+    @ConfigDescription("Put tables into schemas named after the first tag of their operations, instead of the default schema")
+    public OpenApiConfig setSchemaFromTags(boolean schemaFromTags)
+    {
+        this.schemaFromTags = schemaFromTags;
+        return this;
     }
 
     @NotNull
