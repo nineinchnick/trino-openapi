@@ -331,6 +331,26 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void insertWithFormBody()
+    {
+        assertUpdate("INSERT INTO fastapi.default.memos (id, text, priority, ratio, urgent, color, tags) VALUES (1, 'first & last = only', 2, 1e7, true, 'green', ARRAY['a', 'b c'])", 1);
+        // NULL values are not sent, so the server uses its defaults
+        assertUpdate("INSERT INTO fastapi.default.memos (id, text, priority, tags) VALUES (2, 'second', NULL, ARRAY[])", 1);
+        assertQuery(
+                "SELECT id, text, priority, ratio, urgent, color, array_join(tags, ',') FROM fastapi.default.memos WHERE id IN (1, 2)",
+                "VALUES (1, 'first & last = only', 2, 1e7, true, 'green', 'a,b c'), (2, 'second', 0, 0.0, false, 'red', '')");
+    }
+
+    @Test
+    public void selectWithFormBody()
+    {
+        assertQuery(
+                "SELECT id, text, ratio, urgent, color, array_join(tags, ',') FROM fastapi.default.echo_memo " +
+                        "WHERE id = 3 AND text = 'a+b%c' AND ratio = 0.5 AND urgent AND color = 'green' AND tags = ARRAY['x', 'y z']",
+                "VALUES (3, 'a+b%c', 0.5, true, 'green', 'x,y z')");
+    }
+
+    @Test
     public void selectByPathParameterLinkedToField()
     {
         // the note_id path parameter is linked to the id field, so they're a single column
