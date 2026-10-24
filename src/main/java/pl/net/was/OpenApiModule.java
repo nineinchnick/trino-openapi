@@ -39,6 +39,7 @@ public class OpenApiModule
         configBinder(binder).bindConfig(OpenApiConfig.class);
 
         binder.bind(OpenApiSpec.class).in(SINGLETON);
+        binder.bind(OpenApiServers.class).in(SINGLETON);
         httpClientBinder(binder)
                 .bindHttpClient("openApi", ForOpenApi.class)
                 .withFilter(Authentication.class);

@@ -152,7 +152,7 @@ public class OpenApiClient
     // OWASP's recommendation for PBKDF2-HMAC-SHA256
     private static final int TOKEN_HASH_ITERATIONS = 210_000;
 
-    private final URI baseUri;
+    private final OpenApiServers servers;
 
     private final HttpClient httpClient;
     private final OpenApiSpec openApiSpec;
@@ -160,14 +160,14 @@ public class OpenApiClient
     private final RetryPolicy retryPolicy;
 
     @Inject
-    public OpenApiClient(OpenApiConfig config, CatalogName catalogName, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec)
+    public OpenApiClient(OpenApiConfig config, CatalogName catalogName, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec, OpenApiServers servers)
     {
-        this.baseUri = config.getBaseUri();
+        this.servers = servers;
         // the cache is wrapped by decompression, so it stores compressed responses
         this.httpClient = new DecompressingHttpClient(config.getHttpCacheDirectory()
                 .<HttpClient>map(directory -> new CachingHttpClient(
                         httpClient,
-                        new HttpCache(getHttpCacheDirectory(config, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
+                        new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
                         Clock.systemUTC()))
                 .orElse(httpClient));
         this.openApiSpec = openApiSpec;
@@ -688,7 +688,7 @@ public class OpenApiClient
         }
         URI uri;
         try {
-            uri = buildUri(baseUri, uriPath, getQueryParams(table, httpPath, valueProvider));
+            uri = buildUri(servers.getUri(httpPath), uriPath, getQueryParams(table, httpPath, valueProvider));
         }
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
@@ -1586,14 +1586,15 @@ public class OpenApiClient
         return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().orElseThrow());
     }
 
-    // responses depend on the server and the account, so a catalog created again with the same name, but another base URI or another account,
+    // responses depend on the server and the account, so a catalog created again with the same name, but other servers or another account,
     // can't reuse responses of the previous one; passwords and client secrets are left out, because the username or client ID already identify the account
-    private static Path getHttpCacheDirectory(OpenApiConfig config, CatalogName catalogName, String directory)
+    private static Path getHttpCacheDirectory(OpenApiConfig config, OpenApiServers servers, CatalogName catalogName, String directory)
     {
         Hasher hasher = Hashing.sha256().newHasher();
+        String serverUris = getServerUris(servers);
         Stream.concat(
                         Stream.of(
-                                config.getBaseUri().toString(),
+                                serverUris,
                                 config.getAuthenticationType().name(),
                                 config.getAuthenticationScheme().name(),
                                 config.getUsername(),
@@ -1601,13 +1602,21 @@ public class OpenApiClient
                                 config.getApiKeyName()),
                         new TreeMap<>(config.getApiKeys()).keySet().stream())
                 .forEach(value -> hasher.putString(nullToEmpty(value), UTF_8).putByte((byte) 0));
-        hasher.putBytes(hashTokens(config));
+        hasher.putBytes(hashTokens(config, serverUris));
         return Path.of(directory, catalogName + "-" + hasher.hash());
+    }
+
+    private static String getServerUris(OpenApiServers servers)
+    {
+        return servers.getUris().stream()
+                .map(URI::toString)
+                .sorted()
+                .collect(joining("\0"));
     }
 
     // bearer tokens and API key values are the only identity of their accounts, and the directory name is visible to other users,
     // so they're hashed with a slow function, which makes guessing them from the name impractical
-    private static byte[] hashTokens(OpenApiConfig config)
+    private static byte[] hashTokens(OpenApiConfig config, String serverUris)
     {
         String tokens = Stream.concat(
                         Stream.of(config.getBearerToken(), config.getApiKeyValue()),
@@ -1617,7 +1626,7 @@ public class OpenApiClient
         if (CharMatcher.is('\0').matchesAllOf(tokens)) {
             return new byte[0];
         }
-        PBEKeySpec keySpec = new PBEKeySpec(tokens.toCharArray(), config.getBaseUri().toString().getBytes(UTF_8), TOKEN_HASH_ITERATIONS, 256);
+        PBEKeySpec keySpec = new PBEKeySpec(tokens.toCharArray(), serverUris.getBytes(UTF_8), TOKEN_HASH_ITERATIONS, 256);
         try {
             return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(keySpec).getEncoded();
         }
