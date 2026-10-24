@@ -848,6 +848,73 @@ class JsonTrinoConverterTest
         }
     }
 
+    @Test
+    void shouldReadRowsWithNestedFieldsOfEveryType()
+            throws JsonProcessingException
+    {
+        var decimalType = createDecimalType(10, 2);
+        var mapType = new MapType(VARCHAR, BIGINT, new TypeOperators());
+        var arrayType = new ArrayType(VARCHAR);
+        var innerRowType = RowType.from(List.of(RowType.field("name", VARCHAR)));
+        var rowType = RowType.from(List.of(
+                RowType.field("flag", BOOLEAN),
+                RowType.field("count", INTEGER),
+                RowType.field("total", BIGINT),
+                RowType.field("ratio", DOUBLE),
+                RowType.field("price", decimalType),
+                RowType.field("day", DateType.DATE),
+                RowType.field("created_at", TimestampType.TIMESTAMP_MILLIS),
+                RowType.field("labels", mapType),
+                RowType.field("tags", arrayType),
+                RowType.field("owner", innerRowType),
+                RowType.field("missing", VARCHAR)));
+        var rowSchema = new ObjectSchema()
+                .addProperty("flag", new BooleanSchema())
+                .addProperty("count", new IntegerSchema().format("int32"))
+                .addProperty("total", new IntegerSchema().format("int64"))
+                .addProperty("ratio", new NumberSchema().format("double"))
+                .addProperty("price", new NumberSchema())
+                .addProperty("day", new Schema<>().type("string").format("date"))
+                .addProperty("created_at", new Schema<>().type("string").format("date-time"))
+                .addProperty("labels", new MapSchema().additionalProperties(new IntegerSchema()))
+                .addProperty("tags", new ArraySchema().items(new StringSchema()))
+                .addProperty("owner", new ObjectSchema().addProperty("name", new StringSchema()))
+                .addProperty("missing", new StringSchema());
+        var objectMapper = new ObjectMapper();
+        String json = "{\"flag\":true,\"count\":7,\"total\":8000000000,\"ratio\":0.25,\"price\":12.34,\"day\":\"2025-04-18\",\"created_at\":\"2025-04-18T12:30:45.123Z\","
+                + "\"labels\":{\"a\":1},\"tags\":[\"x\",\"y\"],\"owner\":{\"name\":\"cat\"},\"missing\":null}";
+
+        Object row = JsonTrinoConverter.convert(objectMapper.readTree(json), rowType, rowSchema);
+
+        // reading the row back shows every field was written with the block encoding of its type
+        assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convert(writeNativeValue(rowType, row), 0, rowType, rowSchema, objectMapper)))
+                .isEqualTo(json);
+    }
+
+    @Test
+    void shouldConvertArraysOfBooleansDoublesAndObjectsToJson()
+            throws JsonProcessingException
+    {
+        var booleanArrayType = new ArrayType(BOOLEAN);
+        var doubleArrayType = new ArrayType(DOUBLE);
+        var rowArrayType = new ArrayType(RowType.from(List.of(RowType.field("name", VARCHAR))));
+        var booleanArraySchema = new ArraySchema().items(new BooleanSchema());
+        var doubleArraySchema = new ArraySchema().items(new NumberSchema().format("double"));
+        var rowArraySchema = new ArraySchema().items(new ObjectSchema().addProperty("name", new StringSchema()));
+        var objectMapper = new ObjectMapper();
+
+        assertThat(objectMapper.writeValueAsString(toJsonAndBack(objectMapper, "[true,false,null]", booleanArrayType, booleanArraySchema))).isEqualTo("[true,false,null]");
+        assertThat(objectMapper.writeValueAsString(toJsonAndBack(objectMapper, "[0.5,-1.0E10,null]", doubleArrayType, doubleArraySchema))).isEqualTo("[0.5,-1.0E10,null]");
+        assertThat(objectMapper.writeValueAsString(toJsonAndBack(objectMapper, "[{\"name\":\"a\"},{\"name\":null}]", rowArrayType, rowArraySchema))).isEqualTo("[{\"name\":\"a\"},{\"name\":null}]");
+    }
+
+    private static Object toJsonAndBack(ObjectMapper objectMapper, String json, ArrayType type, Schema<?> schema)
+            throws JsonProcessingException
+    {
+        Object value = JsonTrinoConverter.convert(objectMapper.readTree(json), type, schema);
+        return JsonTrinoConverter.convert(writeNativeValue(type, value), 0, type, schema, objectMapper);
+    }
+
     private static Object formatTimestamp(TimestampType type, Object value, Schema<?> schema)
     {
         BlockBuilder blockBuilder = type.createBlockBuilder(null, 1);
