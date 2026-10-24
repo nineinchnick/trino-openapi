@@ -637,6 +637,8 @@ class TestOpenApiSpec
                         OpenApiColumn.builder()
                                 .setName("total_count").setSourceName("total_count")
                                 .setType(BIGINT).setSourceType(intSchema)
+                                // only returned when listing workflows
+                                .setIsNullable(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")

@@ -260,7 +260,9 @@ public class OpenApiSpec
         this.handles = handles.buildOrThrow();
         this.tables = tables.buildOrThrow().entrySet().stream()
                 .collect(toImmutableMap(Map.Entry::getKey, entry -> addRowIdColumn(
-                        allowInsertsWithoutResponseColumns(entry.getValue(), this.handles.get(entry.getKey())),
+                        allowInsertsWithoutResponseColumns(
+                                allowNullsMissingFromSelectResponses(entry.getValue(), this.handles.get(entry.getKey())),
+                                this.handles.get(entry.getKey())),
                         this.handles.get(entry.getKey()))));
         this.errorPointers = errorPointers.buildOrThrow();
         this.resultsPointers = resultsPointers.buildOrThrow();
@@ -1595,6 +1597,17 @@ public class OpenApiSpec
                                 .setIsHidden(true)
                                 .build()),
                         columns.stream())
+                .toList();
+    }
+
+    private static List<OpenApiColumn> allowNullsMissingFromSelectResponses(List<OpenApiColumn> columns, OpenApiTableHandle tableHandle)
+    {
+        // a field required in the response of one operation can be missing from the responses of other operations used for SELECT,
+        // and the operation used depends on the query predicates
+        return columns.stream()
+                .map(column -> !column.isRequestOnly() && !column.getMetadata().isNullable() && !column.isResponseRequired(tableHandle.getSelectPaths())
+                        ? OpenApiColumn.builderFrom(column).setIsNullable(true).build()
+                        : column)
                 .toList();
     }
 
