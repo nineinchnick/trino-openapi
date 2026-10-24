@@ -13,6 +13,7 @@
  */
 package pl.net.was.authentication;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
 import com.google.inject.Inject;
@@ -165,7 +166,7 @@ public class Authentication
             List<Credential> credentials = new ArrayList<>();
             List<String> requirementProblems = new ArrayList<>();
             for (String schemeName : requirement.keySet()) {
-                switch (resolveScheme(schemeName)) {
+                switch (resolveScheme(schemeName, requirement.get(schemeName))) {
                     case Resolved(Credential credential) -> credentials.add(credential);
                     case Unresolved(String problem) -> requirementProblems.add(problem);
                 }
@@ -204,7 +205,7 @@ public class Authentication
         };
     }
 
-    private Resolution resolveScheme(String schemeName)
+    private Resolution resolveScheme(String schemeName, List<String> scopes)
     {
         String subject = format("the %s security scheme", schemeName);
         SecurityScheme securitySchema = securitySchemas.get(schemeName);
@@ -214,7 +215,7 @@ public class Authentication
         return switch (securitySchema.getType()) {
             case APIKEY -> resolveApiKey(subject, securitySchema);
             case HTTP -> resolveHttp(subject, securitySchema.getScheme());
-            case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows());
+            case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows(), scopes);
             default -> new Unresolved(format("%s has the unsupported %s type", subject, securitySchema.getType()));
         };
     }
@@ -261,16 +262,16 @@ public class Authentication
         return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, username, password)));
     }
 
-    private Resolution resolveOAuth(String subject, OAuthFlows flows)
+    private Resolution resolveOAuth(String subject, OAuthFlows flows, List<String> scopes)
     {
         // the authorizationCode and implicit flows require a user to log in using a browser, so only flows that don't need user interaction can be used
         OAuthFlow passwordFlow = flows == null ? null : flows.getPassword();
         OAuthFlow clientCredentialsFlow = flows == null ? null : flows.getClientCredentials();
         if (passwordFlow != null && username != null && password != null) {
-            return resolveTokenRequest(subject, passwordFlow, GrantType.PASSWORD);
+            return resolveTokenRequest(subject, passwordFlow, new TokenGrant(GrantType.PASSWORD, scopes));
         }
         if (clientCredentialsFlow != null) {
-            return resolveTokenRequest(subject, clientCredentialsFlow, GrantType.CLIENT_CREDENTIALS);
+            return resolveTokenRequest(subject, clientCredentialsFlow, new TokenGrant(GrantType.CLIENT_CREDENTIALS, scopes));
         }
         if (passwordFlow != null) {
             return missing("the password flow of " + subject, List.of("authentication.username", "authentication.password"));
@@ -278,10 +279,10 @@ public class Authentication
         return new Unresolved(format("%s must declare a password or clientCredentials flow, because other flows require a user to log in using a browser", subject));
     }
 
-    private Resolution resolveTokenRequest(String subject, OAuthFlow flow, GrantType grantType)
+    private Resolution resolveTokenRequest(String subject, OAuthFlow flow, TokenGrant grant)
     {
         if (tokenUrl != null) {
-            return new Resolved(new OAuthCredential(new TokenRequest(tokenUrl.toString(), grantType)));
+            return new Resolved(new OAuthCredential(new TokenRequest(tokenUrl.toString(), grant)));
         }
         // specs written for older versions of the connector could only set authorizationUrl, so keep using it when tokenUrl is missing
         String specTokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
@@ -292,7 +293,7 @@ public class Authentication
         if (!isTrustedTokenUrl(URI.create(specTokenUrl))) {
             return new Unresolved(format("%s sets tokenUrl to %s, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it", subject, specTokenUrl));
         }
-        return new Resolved(new OAuthCredential(new TokenRequest(specTokenUrl, grantType)));
+        return new Resolved(new OAuthCredential(new TokenRequest(specTokenUrl, grant)));
     }
 
     private boolean isTrustedTokenUrl(URI uri)
@@ -351,7 +352,6 @@ public class Authentication
 
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
-        // TODO use options as scopes
         String token = tokenProviders.computeIfAbsent(tokenRequest, this::createTokenProvider).getToken();
         return builder.addHeader(AUTHORIZATION, "Bearer " + token);
     }
@@ -373,18 +373,21 @@ public class Authentication
                 // following a redirect would send the client secret and the password to another location
                 .setFollowRedirects(false)
                 .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
+                .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grant()), UTF_8))
                 .build());
     }
 
-    private String getBody(GrantType grantType)
+    private String getBody(TokenGrant grant)
     {
-        requireNonNull(grantType, "grantType is null");
+        requireNonNull(grant, "grant is null");
         ImmutableMap.Builder<String, String> params = ImmutableMap.<String, String>builder()
-                .put("grant_type", grantType.value());
-        if (grantType == GrantType.PASSWORD) {
+                .put("grant_type", grant.type().value());
+        if (grant.type() == GrantType.PASSWORD) {
             params.put("username", username);
             params.put("password", password);
+        }
+        if (!grant.scopes().isEmpty()) {
+            params.put("scope", String.join(" ", grant.scopes()));
         }
         if (clientId != null && !clientId.isEmpty()) {
             params.put("client_id", clientId);
@@ -425,12 +428,22 @@ public class Authentication
     private record Unresolved(String problem)
             implements Resolution {}
 
-    private record TokenRequest(String tokenUrl, GrantType grantType)
+    private record TokenRequest(String tokenUrl, TokenGrant grant)
     {
         TokenRequest
         {
             requireNonNull(tokenUrl, "tokenUrl is null");
-            requireNonNull(grantType, "grantType is null");
+            requireNonNull(grant, "grant is null");
+        }
+    }
+
+    // operations can require different scopes, and a token is only reused for operations requiring the same ones
+    private record TokenGrant(GrantType type, List<String> scopes)
+    {
+        TokenGrant
+        {
+            requireNonNull(type, "type is null");
+            scopes = ImmutableList.copyOf(requireNonNullElse(scopes, List.of()));
         }
     }
 
