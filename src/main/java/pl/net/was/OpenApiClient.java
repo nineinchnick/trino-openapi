@@ -740,6 +740,18 @@ public class OpenApiClient
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
         }
+        return sendRequest(table, httpPath, uri, valueProvider, revalidateCachedResponses, bodyGenerator, responseHandler);
+    }
+
+    private <T> T sendRequest(
+            OpenApiTableHandle table,
+            HttpPath httpPath,
+            URI uri,
+            Function<OpenApiColumn, Object> valueProvider,
+            boolean revalidateCachedResponses,
+            BodyGenerator bodyGenerator,
+            ResponseHandler<T, RuntimeException> responseHandler)
+    {
         Request.Builder builder = new Request.Builder()
                 .setMethod(httpPath.method().name())
                 .setBodyGenerator(bodyGenerator)
