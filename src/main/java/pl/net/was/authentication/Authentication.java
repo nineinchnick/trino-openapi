@@ -30,7 +30,6 @@ import pl.net.was.OpenApiConfig;
 import pl.net.was.OpenApiSpec;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.time.Instant;
 import java.util.List;
@@ -39,6 +38,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.io.BaseEncoding.base64Url;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
@@ -187,22 +187,28 @@ public class Authentication
         switch (scheme.getIn()) {
             case COOKIE -> builder.addHeader(COOKIE, encodePair(name, value));
             case HEADER -> builder.addHeader(HeaderName.of(name), value);
-            case QUERY -> {
-                String query = encodePair(name, value);
-                try {
-                    builder.setUri(new URI(
-                            uri.getScheme(),
-                            uri.getAuthority(),
-                            uri.getPath(),
-                            uri.getQuery() == null ? query : uri.getQuery() + "&" + query,
-                            uri.getFragment()));
-                }
-                catch (URISyntaxException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+            case QUERY -> builder.setUri(appendQuery(uri, encodePair(name, value)));
             default -> throw new IllegalArgumentException(format("Unsupported security schema `in` type: %s", scheme.getIn()));
         }
+    }
+
+    private static URI appendQuery(URI uri, String query)
+    {
+        // the URI is already percent-encoded, and the decoded parts would let encoded characters of filter values, like & or /, become separators
+        StringBuilder result = new StringBuilder()
+                .append(uri.getScheme())
+                .append("://")
+                .append(uri.getRawAuthority())
+                .append(nullToEmpty(uri.getRawPath()))
+                .append('?');
+        if (uri.getRawQuery() != null) {
+            result.append(uri.getRawQuery()).append('&');
+        }
+        result.append(query);
+        if (uri.getRawFragment() != null) {
+            result.append('#').append(uri.getRawFragment());
+        }
+        return URI.create(result.toString());
     }
 
     private Request.Builder applyHttpAuth(Request.Builder builder, String scheme)
