@@ -31,6 +31,7 @@ import io.trino.spi.predicate.TupleDomain;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -196,6 +197,34 @@ public class OpenApiTableHandle
     public String getSpecHash()
     {
         return specHash;
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        OpenApiTableHandle that = (OpenApiTableHandle) o;
+        return schemaTableName.equals(that.schemaTableName)
+                && selectPaths.equals(that.selectPaths)
+                && insertPaths.equals(that.insertPaths)
+                && updatePaths.equals(that.updatePaths)
+                && deletePaths.equals(that.deletePaths)
+                && constraint.equals(that.constraint)
+                && limit.equals(that.limit)
+                && sortItem.equals(that.sortItem)
+                && rowFilter.equals(that.rowFilter)
+                && specHash.equals(that.specHash);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hash(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter, specHash);
     }
 
     @Override
