@@ -34,9 +34,11 @@ import io.trino.spi.type.TypeOperators;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -2088,64 +2090,89 @@ class TestOpenApiSpec
     }
 
     @Test
-    public void testArrayReferencedInAllOf()
+    public void testArrayReferencedInAllOf(@TempDir Path tempDir)
+            throws IOException
     {
-        // the parser merges allOf alternatives into a single schema, but drops the items of arrays, like in the Cloudflare spec
-        OpenApiSpec spec = parseSpec(
-                """
-                openapi: 3.0.3
-                info:
-                  title: test
-                  version: 1.0
-                paths:
-                  /items:
-                    get:
-                      responses:
-                        '200':
-                          description: OK
-                          content:
-                            application/json:
-                              schema:
-                                type: array
-                                items:
-                                  $ref: '#/components/schemas/Item'
-                    post:
-                      requestBody:
-                        content:
-                          application/json:
-                            schema:
-                              $ref: '#/components/schemas/Item'
-                      responses:
-                        '200':
-                          description: OK
-                components:
-                  schemas:
-                    Item:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        tags:
-                          allOf:
-                            - $ref: '#/components/schemas/Tags'
-                    Tags:
-                      type: array
-                      items:
-                        type: string
-                """);
+        // like in the Cloudflare spec, which also merges references with inline arrays
+        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), allOfArraysSpec());
+        OpenApiSpec spec = loadSpecFile(specFile.toString());
 
         Assertions.assertThat(spec.getTables().get("items"))
                 .filteredOn(column -> !column.getMetadata().isHidden())
                 .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
                 .containsExactly(
                         Assertions.tuple("name", VARCHAR),
-                        Assertions.tuple("tags", VARCHAR));
-        // the values are JSON, so they're sent as arrays in request bodies, not as strings
-        Assertions.assertThat(spec.getTables().get("items"))
-                .filteredOn(column -> column.getName().equals("tags"))
-                .extracting(OpenApiColumn::getSourceType)
-                .singleElement()
-                .matches(JsonTrinoConverter::isJsonText);
+                        Assertions.tuple("tags", new ArrayType(VARCHAR)),
+                        Assertions.tuple("labels", new ArrayType(VARCHAR)));
+    }
+
+    @Test
+    public void testParserDropsItemsOfArraysInAllOf()
+    {
+        // OpenApiSpec.parse() merges such alternatives itself, so if this fails after upgrading the parser, that workaround can be removed
+        ParseOptions parseOptions = new ParseOptions();
+        parseOptions.setResolveFully(true);
+        SwaggerParseResult result = new OpenAPIV3Parser().readContents(allOfArraysSpec(), null, parseOptions);
+        Schema<?> item = result.getOpenAPI().getComponents().getSchemas().get("Item");
+
+        Assertions.assertThat(List.of("tags", "labels"))
+                .allSatisfy(name -> {
+                    Schema<?> property = (Schema<?>) item.getProperties().get(name);
+                    Assertions.assertThat(property.getType()).isEqualTo("array");
+                    Assertions.assertThat(property.getItems()).isNull();
+                });
+    }
+
+    private static String allOfArraysSpec()
+    {
+        return """
+               openapi: 3.0.3
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /items:
+                   get:
+                     responses:
+                       '200':
+                         description: OK
+                         content:
+                           application/json:
+                             schema:
+                               type: array
+                               items:
+                                 $ref: '#/components/schemas/Item'
+                   post:
+                     requestBody:
+                       content:
+                         application/json:
+                           schema:
+                             $ref: '#/components/schemas/Item'
+                     responses:
+                       '200':
+                         description: OK
+               components:
+                 schemas:
+                   Item:
+                     type: object
+                     properties:
+                       name:
+                         type: string
+                       tags:
+                         allOf:
+                           - $ref: '#/components/schemas/Tags'
+                       labels:
+                         allOf:
+                           - $ref: '#/components/schemas/Tags'
+                           - type: array
+                             items:
+                               type: string
+                             default: []
+                   Tags:
+                     type: array
+                     items:
+                       type: string
+               """;
     }
 
     @Test
