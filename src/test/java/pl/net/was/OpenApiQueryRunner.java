@@ -96,6 +96,8 @@ public class OpenApiQueryRunner
             PetStoreServer server = new PetStoreServer(new KeycloakServer());
             properties.put("spec-location", server.getSpecUrl());
             properties.put("base-uri", server.getApiUrl());
+            // the test servers use HTTP, and Keycloak runs on another port than the API
+            properties.put("authentication.token-url", server.getTokenUrl());
         }
         else {
             properties.put("spec-location", System.getenv("OPENAPI_SPEC_LOCATION"));

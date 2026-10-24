@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -83,6 +84,8 @@ public class Authentication
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
+    private final URI baseUri;
+    private final URI tokenUrl;
     private final ConcurrentMap<TokenRequest, TokenWithExpiry> tokens = new ConcurrentHashMap<>();
 
     @Inject
@@ -108,6 +111,8 @@ public class Authentication
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
+        this.baseUri = config.getBaseUri();
+        this.tokenUrl = config.getTokenUrl();
     }
 
     @Override
@@ -279,14 +284,29 @@ public class Authentication
         return new Unresolved(format("%s must declare a password or clientCredentials flow, because other flows require a user to log in using a browser", subject));
     }
 
-    private static Resolution resolveTokenRequest(String subject, OAuthFlow flow, GrantType grantType)
+    private Resolution resolveTokenRequest(String subject, OAuthFlow flow, GrantType grantType)
     {
+        if (tokenUrl != null) {
+            return new Resolved(new OAuthCredential(new TokenRequest(tokenUrl.toString(), grantType)));
+        }
         // specs written for older versions of the connector could only set authorizationUrl, so keep using it when tokenUrl is missing
-        String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
-        if (tokenUrl == null) {
+        String specTokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
+        if (specTokenUrl == null) {
             return new Unresolved(format("%s doesn't set tokenUrl", subject));
         }
-        return new Resolved(new OAuthCredential(new TokenRequest(tokenUrl, grantType)));
+        // the spec can come from another source than the API, so it can't decide where the client secret and the password are sent
+        if (!isTrustedTokenUrl(URI.create(specTokenUrl))) {
+            return new Unresolved(format("%s sets tokenUrl to %s, which doesn't use HTTPS and has a different host than base-uri, so set authentication.token-url to use it", subject, specTokenUrl));
+        }
+        return new Resolved(new OAuthCredential(new TokenRequest(specTokenUrl, grantType)));
+    }
+
+    private boolean isTrustedTokenUrl(URI uri)
+    {
+        if ("https".equalsIgnoreCase(uri.getScheme())) {
+            return true;
+        }
+        return baseUri != null && Objects.equals(uri.getScheme(), baseUri.getScheme()) && Objects.equals(uri.getAuthority(), baseUri.getAuthority());
     }
 
     private static Resolution missing(String subject, List<String> properties)
