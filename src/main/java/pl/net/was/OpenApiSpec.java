@@ -531,10 +531,15 @@ public class OpenApiSpec
 
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
+            Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
+            Map<String, Schema> resultsProperties = getAlternativesProperties(resultsSchema);
+            boolean hasEnvelope = !resultsPointer.equals(JsonPointer.empty());
             List<String> requiredProperties = getRequiredProperties(schema);
             getAlternativesProperties(schema)
                     .entrySet().stream()
                     .filter(propEntry -> !resultsPointer.matchesProperty(propEntry.getKey()))
+                    // fields of the results are read from the results, even if the response has a field with the same name next to them
+                    .filter(propEntry -> !hasEnvelope || !resultsProperties.containsKey(propEntry.getKey()))
                     .map(propEntry -> getResultColumn(
                             new HttpPath(method, path),
                             propEntry.getKey(),
@@ -542,10 +547,11 @@ public class OpenApiSpec
                             !requiredProperties.contains(propEntry.getKey()),
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
-                    .forEach(column -> result.add(column.get()));
-            Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
+                    // fields next to the results, like the total number of results, describe pages, not rows
+                    .map(column -> hasEnvelope ? OpenApiColumn.builderFrom(column.get()).setIsHidden(true).build() : column.get())
+                    .forEach(result::add);
             List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
-            getAlternativesProperties(resultsSchema)
+            resultsProperties
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
                             new HttpPath(method, path),
@@ -1573,6 +1579,8 @@ public class OpenApiSpec
                 .values().stream()
                 .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
                         .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))
+                        // a field next to the results of one operation can be a field of the results of another operation
+                        .setIsHidden(sameColumns.stream().allMatch(column -> column.getMetadata().isHidden()))
                         .setIsRequestOnly(sameColumns.stream().allMatch(OpenApiColumn::isRequestOnly))
                         .setResponseRequiredPaths(sameColumns.stream()
                                 .flatMap(column -> column.getResponseRequiredPaths().stream())
