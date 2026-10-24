@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.servers.ServerVariable;
+import io.trino.spi.TrinoException;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -32,12 +33,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_SPEC;
 
 public class OpenApiServers
 {
@@ -83,7 +85,10 @@ public class OpenApiServers
                 .distinct()
                 .sorted()
                 .collect(joining(", "));
-        checkArgument(insecureUris.isEmpty(), "Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", insecureUris);
+        if (insecureUris.isEmpty()) {
+            return;
+        }
+        throw new TrinoException(INVALID_CATALOG_PROPERTY, format("Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", insecureUris));
     }
 
     static Optional<URI> getSpecUri(String specLocation)
@@ -108,12 +113,16 @@ public class OpenApiServers
             }
             serverUris.put(httpPath, getServerUri(httpPath, server.get(), specUri));
         }
-        checkArgument(pathsWithoutServers.size() < httpPaths.size(), "The spec doesn't declare any servers, so set base-uri");
-        checkArgument(pathsWithoutServers.isEmpty(), "The spec doesn't declare servers for %s, so set base-uri", pathsWithoutServers.stream()
+        if (pathsWithoutServers.size() == httpPaths.size()) {
+            throw new TrinoException(INVALID_CATALOG_PROPERTY, "The spec doesn't declare any servers, so set base-uri");
+        }
+        if (pathsWithoutServers.isEmpty()) {
+            return serverUris.buildOrThrow();
+        }
+        throw new TrinoException(INVALID_CATALOG_PROPERTY, format("The spec doesn't declare servers for %s, so set base-uri", pathsWithoutServers.stream()
                 .sorted()
                 .map(HttpPath::toString)
-                .collect(joining(", ")));
-        return serverUris.buildOrThrow();
+                .collect(joining(", "))));
     }
 
     private static Set<HttpPath> getHttpPaths(OpenApiSpec spec)
@@ -133,14 +142,15 @@ public class OpenApiServers
             uri = new URI(url);
         }
         catch (URISyntaxException e) {
-            throw new IllegalArgumentException(format("Invalid server URL %s of %s", url, httpPath), e);
+            throw new TrinoException(OPENAPI_INVALID_SPEC, format("Invalid server URL %s of %s", url, httpPath), e);
         }
         if (uri.isAbsolute()) {
             return uri;
         }
         // like the OpenAPI specification defines, relative URLs are relative to where the spec is served from
-        checkArgument(specUri.isPresent(), "Server URL %s of %s is relative, but spec-location is not a URL, so set base-uri", url, httpPath);
-        return specUri.get().resolve(uri);
+        return specUri
+                .map(location -> location.resolve(uri))
+                .orElseThrow(() -> new TrinoException(INVALID_CATALOG_PROPERTY, format("Server URL %s of %s is relative, but spec-location is not a URL, so set base-uri", url, httpPath)));
     }
 
     private static String fillVariables(HttpPath httpPath, Server server)
@@ -149,7 +159,9 @@ public class OpenApiServers
         Matcher matcher = VARIABLE_PATTERN.matcher(server.getUrl());
         return matcher.replaceAll(match -> {
             ServerVariable variable = variables.get(match.group(1));
-            checkArgument(variable != null && variable.getDefault() != null, "Server URL %s of %s uses the variable %s, which doesn't have a default value, so set base-uri", server.getUrl(), httpPath, match.group(1));
+            if (variable == null || variable.getDefault() == null) {
+                throw new TrinoException(OPENAPI_INVALID_SPEC, format("Server URL %s of %s uses the variable %s, which doesn't have a default value, so set base-uri", server.getUrl(), httpPath, match.group(1)));
+            }
             return Matcher.quoteReplacement(variable.getDefault());
         });
     }
