@@ -484,6 +484,14 @@ public class OpenApiSpec
                 .isPresent();
     }
 
+    public boolean declaresResponse(HttpPath httpPath, String statusCode)
+    {
+        return getOperation(httpPath)
+                .map(Operation::getResponses)
+                .map(responses -> responses.containsKey(statusCode))
+                .orElse(false);
+    }
+
     private Optional<Operation> getOperation(HttpPath httpPath)
     {
         return Optional.ofNullable(openApi.getPaths())
