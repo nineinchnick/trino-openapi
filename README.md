@@ -1137,8 +1137,10 @@ how they're made.
   repeating them can create duplicates or apply a change twice, so another
   temporary error in an `INSERT`, or an `UPDATE` that uses `PATCH`, fails the
   query.
-* Only JSON request and response bodies are supported, not form-encoded or
-  multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
+* Only JSON responses, and JSON or form-encoded request bodies, are supported.
+  A spec with form request bodies that have nested objects, or custom
+  `encoding` rules, fails to load, and an operation that accepts only multipart
+  request bodies fails when it's used.
 * `resultsPath` selects a single node of the response, so results nested in
   every entry of an object with dynamic keys can't be read as rows of their own
   ([#339](https://github.com/nineinchnick/trino-openapi/issues/339)).

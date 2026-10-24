@@ -4200,6 +4200,93 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testUnsupportedFormRequestBodies()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /tokens:
+                    post:
+                      requestBody:
+                        content:
+                          application/x-www-form-urlencoded:
+                            schema:
+                              type: object
+                              properties:
+                                scope:
+                                  type: array
+                                  items:
+                                    type: string
+                            encoding:
+                              scope:
+                                style: form
+                                contentType: text/plain
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  access_token:
+                                    type: string
+                """;
+        Assertions.assertThat(parseSpec(specContents).getTables().get("tokens"))
+                .extracting(OpenApiColumn::getName)
+                .contains("scope");
+
+        String nestedObject =
+                """
+                                scope:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                """;
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                        scope:
+                                          type: array
+                                          items:
+                                            type: string
+                        """,
+                        nestedObject)))
+                .hasMessage("Field scope of the form request body of POST /tokens is an object or an array of objects or arrays, which can't be sent as a form field");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("    type: string\n            encoding:", "    type: object\n            encoding:")))
+                .hasMessage("Field scope of the form request body of POST /tokens is an object or an array of objects or arrays, which can't be sent as a form field");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                    schema:
+                                      type: object
+                        """,
+                        """
+                                    schema:
+                                      type: array
+                                      items:
+                                        type: string
+                        """)))
+                .hasMessage("Request body of POST /tokens is a form, but its schema is an array, and a form can only send the properties of an object");
+        for (String encoding : List.of("style: spaceDelimited", "explode: false", "allowReserved: true", "contentType: application/json")) {
+            Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("style: form\n                contentType: text/plain", encoding)))
+                    .hasMessage("Field scope of the form request body of POST /tokens has a custom encoding, but only the form style with explode is supported, " +
+                            "without allowReserved, and with the text/plain content type");
+        }
+
+        // multipart bodies fail only when they're sent, so other operations of the spec can still be used
+        OpenApiSpec multipartSpec = parseSpec(specContents.replace("application/x-www-form-urlencoded:", "multipart/form-data:"));
+        Assertions.assertThat(multipartSpec.getTables().get("tokens"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("access_token");
+        Assertions.assertThat(multipartSpec.getMultipartRequestMediaType(new HttpPath(PathItem.HttpMethod.POST, "/tokens"))).contains("multipart/form-data");
+        Assertions.assertThat(parseSpec(specContents).getMultipartRequestMediaType(new HttpPath(PathItem.HttpMethod.POST, "/tokens"))).isEmpty();
+    }
+
+    @Test
     public void testUnionResponses()
     {
         String specContents =

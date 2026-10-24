@@ -616,6 +616,11 @@ public class OpenApiClient
 
     private BodyGenerator toBodyGenerator(HttpPath httpPath, ObjectNode fields)
     {
+        // the spec can still be used for other operations, so an operation with only a multipart body fails when it's used
+        Optional<String> multipartMediaType = openApiSpec.getMultipartRequestMediaType(httpPath);
+        if (multipartMediaType.isPresent()) {
+            throw new TrinoException(NOT_SUPPORTED, format("Operation %s only accepts %s request bodies, which are not supported", httpPath, multipartMediaType.get()));
+        }
         if (openApiSpec.hasFormRequestBody(httpPath)) {
             return toFormBody(httpPath, fields);
         }
