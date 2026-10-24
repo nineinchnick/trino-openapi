@@ -196,22 +196,25 @@ public class OpenApiSpec
     private final Optional<RateLimitHeaders> rateLimitHeaders;
     private final Optional<JsonPointer> documentErrorPointer;
     private final String specHash;
+    private final List<String> trimmedPathPrefixes;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
     {
-        this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")));
+        this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")),
+                config.getTrimmedPathPrefixes());
     }
 
-    private OpenApiSpec(ParsedSpec parsedSpec)
+    private OpenApiSpec(ParsedSpec parsedSpec, List<String> trimmedPathPrefixes)
     {
-        this(parsedSpec.openApi(), parsedSpec.hash());
+        this(parsedSpec.openApi(), parsedSpec.hash(), trimmedPathPrefixes);
     }
 
-    OpenApiSpec(OpenAPI openApi, String specHash)
+    OpenApiSpec(OpenAPI openApi, String specHash, List<String> trimmedPathPrefixes)
     {
         this.openApi = requireNonNull(openApi, "openApi is null");
         this.specHash = requireNonNull(specHash, "specHash is null");
+        this.trimmedPathPrefixes = ImmutableList.copyOf(requireNonNull(trimmedPathPrefixes, "trimmedPathPrefixes is null"));
         Map<String, String> documentExtension = getDocumentExtension(openApi);
         this.rateLimitHeaders = getRateLimitHeaders(documentExtension);
         // errors are usually reported the same way by all operations of an API
@@ -457,16 +460,31 @@ public class OpenApiSpec
         for (List<Map.Entry<String, PathItem>> pathGroup : pathGroups) {
             if (pathGroup.size() == 1) {
                 String path = pathGroup.getFirst().getKey();
-                tableNames.put(path, getIdentifier(stripPathParams(path)));
+                tableNames.put(path, getIdentifier(stripPathParams(trimPathPrefix(path))));
                 continue;
             }
             Map.Entry<String, PathItem> baseEntry = getBaseEntry(pathGroup);
             pathGroup.stream()
                     .filter(entry -> !entry.equals(baseEntry))
                     // in groups of more than 2 paths, path parameters are included to tell the tables apart
-                    .forEach(entry -> tableNames.put(entry.getKey(), getIdentifier(pathGroup.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey())));
+                    .forEach(entry -> {
+                        String path = trimPathPrefix(entry.getKey());
+                        tableNames.put(entry.getKey(), getIdentifier(pathGroup.size() == 2 ? stripPathParams(path) : path));
+                    });
         }
         return tableNames.buildOrThrow();
+    }
+
+    private String trimPathPrefix(String path)
+    {
+        // a prefix matches whole segments, so /api/v1 doesn't match /api/v10
+        return trimmedPathPrefixes.stream()
+                .filter(prefix -> path.startsWith(prefix + "/"))
+                .max(comparingInt(String::length))
+                .map(prefix -> path.substring(prefix.length()))
+                // a prefix followed only by path parameters would leave nothing to name the table after
+                .filter(trimmedPath -> !getIdentifier(stripPathParams(trimmedPath)).isEmpty())
+                .orElse(path);
     }
 
     private static Map.Entry<String, PathItem> getBaseEntry(List<Map.Entry<String, PathItem>> pathGroup)
