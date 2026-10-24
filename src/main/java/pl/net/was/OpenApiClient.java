@@ -464,7 +464,7 @@ public class OpenApiClient
             return null;
         }
         try {
-            return createStaticBodyGenerator(toBytes(serializeMap(table, httpPath)));
+            return createStaticBodyGenerator(toBytes(toRequestBody(httpPath, serializeMap(table, httpPath))));
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -528,12 +528,21 @@ public class OpenApiClient
                     pathWithParams.getValue(),
                     parameterValues,
                     false,
-                    createStaticBodyGenerator(toBytes(body)),
+                    createStaticBodyGenerator(toBytes(toRequestBody(httpPath, body))),
                     new AnyResponseHandler());
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private JsonNode toRequestBody(HttpPath httpPath, ObjectNode fields)
+    {
+        // columns of array request bodies are the properties of its items, so every row is sent as a single item
+        if (!openApiSpec.hasArrayRequestBody(httpPath)) {
+            return fields;
+        }
+        return OBJECT_MAPPER.createArrayNode().add(fields);
     }
 
     public <T> T makeRequest(

@@ -342,6 +342,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void insertWithArrayRequestBody()
+    {
+        assertUpdate("INSERT INTO fastapi.default.label_list (id, name, tags, value) VALUES (10, 'listed', ARRAY['l'], '1')", 1);
+        assertQuery(
+                "SELECT id, name, array_join(tags, ','), value FROM fastapi.default.labels WHERE id = 10",
+                "VALUES (10, 'listed', 'l', '1')");
+    }
+
+    @Test
     public void deleteUsingPost()
     {
         // the POST operation marked for DELETE requires the URL in the request body

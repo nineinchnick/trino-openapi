@@ -713,6 +713,14 @@ def update_label(label_id: int, body: LabelBody) -> Label:
     return labels[label_id]
 
 
+# like Petstore's /user/createWithList, the request body is an array of resources
+@router.post("/label_list")
+def create_labels(body: list[Label]) -> list[Label]:
+    for label in body:
+        labels[label.id] = label
+    return body
+
+
 @router.get("/bookmarks")
 def list_bookmarks() -> list[Bookmark]:
     return bookmarks
