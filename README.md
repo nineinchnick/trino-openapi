@@ -203,10 +203,12 @@ you trust as much as the API itself. To limit what a specification can change:
   specification, and redirects are not followed, because the HTTP client would
   send custom headers, like API keys, to the new location;
 * a `tokenUrl` from the specification must use HTTPS, or the host of
-  `base-uri`; set `authentication.token-url` to use another one;
+  `base-uri`, or of a declared server if `base-uri` is not set; set
+  `authentication.token-url` to use another one;
 * credentials are only sent over HTTPS, unless
   `authentication.allow-insecure-http` is set, for example for an API on a local
-  network.
+  network, so the catalog fails to start if `base-uri`, or a declared server
+  used instead of it, doesn't use HTTPS.
 
 ## HTTP client
 

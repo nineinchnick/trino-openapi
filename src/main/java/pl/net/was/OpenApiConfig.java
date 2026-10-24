@@ -300,7 +300,7 @@ public class OpenApiConfig
         return !isInsecure(baseUri) && !isInsecure(tokenUrl);
     }
 
-    private boolean hasCredentials()
+    public boolean hasCredentials()
     {
         return Stream.of(username, password, bearerToken, apiKeyValue, clientId, clientSecret).anyMatch(Objects::nonNull) || !apiKeys.isEmpty();
     }

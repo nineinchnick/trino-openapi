@@ -25,6 +25,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.KeycloakServer;
 import pl.net.was.OpenApiConfig;
+import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
 
 import java.io.IOException;
@@ -137,7 +138,8 @@ class TestKeycloakAuthentication
                           scopes: {}
                 """.formatted(keycloakServer.getTokenUrl()));
         config.setSpecLocation(specFile.toString());
-        return new Authentication(config, new OpenApiSpec(config), httpClient);
+        OpenApiSpec spec = new OpenApiSpec(config);
+        return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
     }
 
     private static Request request()

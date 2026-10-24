@@ -22,6 +22,7 @@ import io.trino.spi.TrinoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.OpenApiConfig;
+import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
 
 import java.io.IOException;
@@ -360,7 +361,7 @@ class TestAuthentication
         assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config, tokenClient).filterRequest(request("/secured")))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: " +
-                        "the oauth security scheme sets tokenUrl to http://auth.example.com/token, which doesn't use HTTPS and has a different host than base-uri, so set authentication.token-url to use it");
+                        "the oauth security scheme sets tokenUrl to http://auth.example.com/token, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it");
 
         // the same host as base-uri
         createAuthentication(clientCredentialsSpec("http://localhost:8080/token"), config, tokenClient)
@@ -369,6 +370,31 @@ class TestAuthentication
                 .filterRequest(request("/secured"));
 
         assertThat(tokenUris).containsExactly(URI.create("http://localhost:8080/token"), URI.create("https://auth.example.com/override"));
+    }
+
+    @Test
+    void testOAuthTokenUrlOnDeclaredServer()
+            throws IOException
+    {
+        List<URI> tokenUris = new ArrayList<>();
+        HttpClient tokenClient = new TestingHttpClient(request -> {
+            tokenUris.add(request.getUri());
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"expires_in\":30}");
+        });
+        String spec = clientCredentialsSpec("http://localhost:8080/token").replace("paths:", "servers:\n  - url: http://localhost:8080/v1\npaths:");
+        OpenApiConfig config = new OpenApiConfig()
+                .setSpecLocation(Files.writeString(tempDir.resolve("spec.yaml"), spec).toString())
+                .setClientId("client")
+                .setClientSecret("secret")
+                .setAllowInsecureHttp(true);
+
+        newAuthentication(config, tokenClient).filterRequest(request("/secured"));
+        // base-uri is used instead of the declared servers, so their hosts are not trusted
+        assertThatThrownBy(() -> newAuthentication(config.setBaseUri(URI.create("http://api.example.com")), tokenClient).filterRequest(request("/secured")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageEndingWith("sets tokenUrl to http://localhost:8080/token, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it");
+
+        assertThat(tokenUris).containsExactly(URI.create("http://localhost:8080/token"));
     }
 
     @Test
@@ -621,7 +647,13 @@ class TestAuthentication
         Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), specContents);
         config.setSpecLocation(specFile.toString())
                 .setBaseUri(BASE_URI);
-        return new Authentication(config, new OpenApiSpec(config), httpClient);
+        return newAuthentication(config, httpClient);
+    }
+
+    private static Authentication newAuthentication(OpenApiConfig config, HttpClient httpClient)
+    {
+        OpenApiSpec spec = new OpenApiSpec(config);
+        return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
     }
 
     private Authentication createClientCredentialsAuthentication(String tokenResponse)
