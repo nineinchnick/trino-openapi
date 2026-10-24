@@ -18,7 +18,6 @@ import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Suppliers;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
@@ -5673,7 +5672,7 @@ class TestOpenApiSpec
         ObjectMapper objectMapper = new ObjectMapper();
         SqlRow row = (SqlRow) JsonTrinoConverter.convert(objectMapper.readTree("{\"id\": 7, \"email\": \"a@b.c\", \"meta\": {\"b\": 1}}"), actor.getType(), actor.getSourceType());
         Assertions.assertThat(row.getRawFieldBlock(1).isNull(row.getRawIndex())).isTrue();
-        ObjectNode node = JsonTrinoConverter.convertRow(row, actorType, actor.getSourceType(), objectMapper);
+        JsonNode node = JsonTrinoConverter.convertRow(row, actorType, actor.getSourceType(), objectMapper);
         Assertions.assertThat(objectMapper.writeValueAsString(node)).isEqualTo("{\"id\":7,\"meta\":{\"b\":1},\"email\":\"a@b.c\"}");
     }
 
@@ -5878,6 +5877,109 @@ class TestOpenApiSpec
                         Assertions.tuple("created_at", TIMESTAMP_MILLIS, true, false),
                         Assertions.tuple("tags", new ArrayType(VARCHAR), true, false),
                         Assertions.tuple("note", VARCHAR, true, false));
+    }
+
+    @Test
+    public void testTuples()
+            throws JsonProcessingException
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /shapes:
+                    get:
+                      responses:
+                        "200":
+                          description: Shapes
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    closed:
+                                      type: array
+                                      prefixItems:
+                                      - type: integer
+                                      - type: string
+                                      items: false
+                                    sized:
+                                      type: array
+                                      prefixItems:
+                                      - $ref: '#/components/schemas/Point'
+                                      - type: number
+                                        format: double
+                                      minItems: 2
+                                      maxItems: 2
+                                    vertices:
+                                      type: array
+                                      items:
+                                        type: array
+                                        prefixItems:
+                                        - type: integer
+                                        - type: integer
+                                        items: false
+                                    open:
+                                      type: array
+                                      prefixItems:
+                                      - type: integer
+                                      items:
+                                        type: string
+                                    unlimited:
+                                      type: array
+                                      prefixItems:
+                                      - type: integer
+                                      minItems: 1
+                components:
+                  schemas:
+                    Point:
+                      type: object
+                      properties:
+                        x:
+                          type: integer
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        RowType closedType = RowType.from(List.of(
+                RowType.field("_col0", BIGINT),
+                RowType.field("_col1", VARCHAR)));
+        RowType sizedType = RowType.from(List.of(
+                RowType.field("_col0", RowType.from(List.of(RowType.field("x", BIGINT)))),
+                RowType.field("_col1", DOUBLE)));
+        RowType vertexType = RowType.from(List.of(
+                RowType.field("_col0", BIGINT),
+                RowType.field("_col1", BIGINT)));
+        List<OpenApiColumn> columns = spec.getTables().get("shapes");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(
+                        Assertions.tuple("closed", closedType),
+                        Assertions.tuple("sized", sizedType),
+                        Assertions.tuple("vertices", new ArrayType(vertexType)),
+                        // elements after the declared ones can have other types, so such arrays hold the raw JSON value
+                        Assertions.tuple("open", VARCHAR),
+                        Assertions.tuple("unlimited", VARCHAR));
+        Assertions.assertThat(columns.subList(3, 5))
+                .allSatisfy(column -> Assertions.assertThat(JsonTrinoConverter.isJsonText(column.getSourceType())).isTrue());
+
+        // tuples are read from and serialized to JSON arrays, and fields of elements missing from a shorter array are NULL
+        ObjectMapper objectMapper = new ObjectMapper();
+        OpenApiColumn sized = columns.get(1);
+        SqlRow row = (SqlRow) JsonTrinoConverter.convert(objectMapper.readTree("[{\"x\": 1}, 2.5]"), sized.getType(), sized.getSourceType());
+        Assertions.assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convertRow(row, sizedType, sized.getSourceType(), objectMapper)))
+                .isEqualTo("[{\"x\":1},2.5]");
+        OpenApiColumn closed = columns.getFirst();
+        row = (SqlRow) JsonTrinoConverter.convert(objectMapper.readTree("[3]"), closed.getType(), closed.getSourceType());
+        Assertions.assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convertRow(row, closedType, closed.getSourceType(), objectMapper)))
+                .isEqualTo("[3,null]");
+        Assertions.assertThatThrownBy(() -> JsonTrinoConverter.convert(objectMapper.readTree("{\"_col0\": 3}"), closed.getType(), closed.getSourceType()))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot read a JSON OBJECT as row(\"_col0\" bigint, \"_col1\" varchar)");
     }
 
     @Test

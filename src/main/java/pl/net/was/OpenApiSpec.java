@@ -2278,6 +2278,9 @@ public class OpenApiSpec
 
     private Optional<TypeTuple> convertArray(Schema<?> array)
     {
+        if (array.getPrefixItems() != null) {
+            return convertTuple(array);
+        }
         if (array.getItems() == null) {
             // the parser drops items when it merges allOf alternatives referencing an array schema,
             // so elements of an unknown type can only be kept as serialized JSON
@@ -2286,6 +2289,35 @@ public class OpenApiSpec
         return convertType(array.getItems()).map(elementType -> new TypeTuple(
                 new ArrayType(elementType.type()),
                 array.items(elementType.schema())));
+    }
+
+    private Optional<TypeTuple> convertTuple(Schema<?> tuple)
+    {
+        if (tuple.getPrefixItems().isEmpty() || !isClosedTuple(tuple)) {
+            // elements after the declared ones can have any type, so the whole array can only be kept as serialized JSON
+            return Optional.of(FALLBACK_TYPE);
+        }
+        List<TypeTuple> elementTypes = tuple.getPrefixItems().stream()
+                .map(element -> convertType(element).orElse(FALLBACK_TYPE))
+                .toList();
+        // elements don't have names, so the fields are named like unnamed columns in Trino
+        List<RowType.Field> fields = IntStream.range(0, elementTypes.size())
+                .mapToObj(i -> RowType.field("_col" + i, elementTypes.get(i).type()))
+                .toList();
+        return Optional.of(new TypeTuple(
+                RowType.from(fields),
+                tuple.prefixItems(elementTypes.stream()
+                        .<Schema>map(TypeTuple::schema)
+                        .toList())));
+    }
+
+    private static boolean isClosedTuple(Schema<?> tuple)
+    {
+        if (tuple.getItems() != null) {
+            return FALSE.equals(tuple.getItems().getBooleanSchemaValue());
+        }
+        // Pydantic limits the number of elements instead of disallowing other ones with `items: false`
+        return tuple.getMaxItems() != null && tuple.getMaxItems() <= tuple.getPrefixItems().size();
     }
 
     private Optional<TypeTuple> convertObject(Schema<?> object)
