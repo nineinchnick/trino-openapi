@@ -124,6 +124,7 @@ Trino version it's built for.
 | Property                             | Container environment variable      | Default              | Description                                                                                                     |
 | ------------------------------------ | ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
+| `spec-location.authentication`       | `OPENAPI_SPEC_AUTHENTICATION`       | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
 | `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
 | `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
@@ -158,6 +159,25 @@ pagination. Every node must be able to reach `spec-location`, and a node that
 can't load it fails to start the catalog. When the OpenAPI parser rejects the
 specification, the catalog fails with the `OPENAPI_INVALID_SPEC` error, which
 lists every problem on a separate line.
+
+The specification is fetched without credentials. If the server requires them,
+set `spec-location.authentication=catalog` to send the credentials of
+`authentication.type`, which must be `http` or `api_key`, like:
+
+```properties
+spec-location=https://api.example.com/openapi.yaml
+spec-location.authentication=catalog
+authentication.type=http
+authentication.username=${ENV:OPENAPI_USERNAME}
+authentication.password=${ENV:OPENAPI_PASSWORD}
+```
+
+Credentials of security schemes declared in the specification can't be used,
+because they're only known after it's loaded. The credentials are only sent to
+`spec-location`, which must use HTTPS, unless
+`authentication.allow-insecure-http` is set. Redirects are not followed, and
+documents referenced with `$ref` are loaded without credentials, so they're
+never sent to another host.
 
 When a URL serves a changed specification, nodes that load it later, like a
 restarted worker, map tables differently than the other nodes. In production,
@@ -1239,8 +1259,6 @@ how they're made.
 * Every Trino node reads the specification when the catalog starts, so every
   node must be able to reach `spec-location`, and get the same specification,
   see [Specification](#specification).
-* The specification is loaded without authentication
-  ([#155](https://github.com/nineinchnick/trino-openapi/issues/155)).
 * All tables are in a single `default` schema
   ([#16](https://github.com/nineinchnick/trino-openapi/issues/16)), with names
   derived from paths ([#15](https://github.com/nineinchnick/trino-openapi/issues/15),

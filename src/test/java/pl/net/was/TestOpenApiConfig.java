@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
 import pl.net.was.authentication.ClientAuthenticationMethod;
+import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.net.URI;
 import java.util.Map;
@@ -53,6 +54,7 @@ class TestOpenApiConfig
     {
         assertRecordedDefaults(recordDefaults(OpenApiConfig.class)
                 .setSpecLocation(null)
+                .setSpecLocationAuthentication(SpecLocationAuthentication.NONE)
                 .setBaseUri(null)
                 .setAuthenticationType(AuthenticationType.NONE)
                 .setAuthenticationScheme(AuthenticationScheme.BASIC)
@@ -84,7 +86,8 @@ class TestOpenApiConfig
     void testExplicitPropertyMappings()
     {
         Map<String, String> properties = ImmutableMap.<String, String>builder()
-                .put("spec-location", "/etc/trino/spec.yaml")
+                .put("spec-location", "https://api.example.com/openapi.yaml")
+                .put("spec-location.authentication", "CATALOG")
                 .put("base-uri", "https://api.example.com/v1")
                 .put("authentication.type", "API_KEY")
                 .put("authentication.scheme", "BEARER")
@@ -112,7 +115,8 @@ class TestOpenApiConfig
                 .buildOrThrow();
 
         OpenApiConfig expected = new OpenApiConfig()
-                .setSpecLocation("/etc/trino/spec.yaml")
+                .setSpecLocation("https://api.example.com/openapi.yaml")
+                .setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG)
                 .setBaseUri(URI.create("https://api.example.com/v1"))
                 .setAuthenticationType(AuthenticationType.API_KEY)
                 .setAuthenticationScheme(AuthenticationScheme.BEARER)
@@ -263,6 +267,46 @@ class TestOpenApiConfig
                 .buildOrThrow()))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("authentication.type cannot be oauth, because OAuth needs the token URL and flows of an oauth2 security scheme declared in the specification");
+    }
+
+    @Test
+    void testSpecLocationAuthentication()
+    {
+        Map<String, String> properties = Map.of(
+                "spec-location", "https://api.example.com/openapi.yaml",
+                "spec-location.authentication", "catalog",
+                "authentication.type", "http",
+                "authentication.bearer-token", "token");
+        assertThat(buildConfig(properties).getSpecLocationAuthentication()).isEqualTo(SpecLocationAuthentication.CATALOG);
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(properties)
+                .put("spec-location", "/etc/trino/spec.yaml")
+                .buildKeepingLast()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("spec-location must be an HTTPS URL when spec-location.authentication is catalog, or an HTTP URL if authentication.allow-insecure-http is set");
+        Map<String, String> httpProperties = ImmutableMap.<String, String>builder()
+                .putAll(properties)
+                .put("spec-location", "http://api.example.com/openapi.yaml")
+                .buildKeepingLast();
+        assertThatThrownBy(() -> buildConfig(httpProperties))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("spec-location must be an HTTPS URL when spec-location.authentication is catalog");
+        assertThat(buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(httpProperties)
+                .put("authentication.allow-insecure-http", "true")
+                .buildOrThrow())
+                .getSpecLocationAuthentication())
+                .isEqualTo(SpecLocationAuthentication.CATALOG);
+    }
+
+    @Test
+    void testSpecLocationAuthenticationWithoutDefaultAuthenticationType()
+    {
+        assertThatThrownBy(() -> buildConfig(Map.of(
+                "spec-location", "https://api.example.com/openapi.yaml",
+                "spec-location.authentication", "catalog")))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("spec-location.authentication can only be catalog when authentication.type is http or api_key");
     }
 
     @Test

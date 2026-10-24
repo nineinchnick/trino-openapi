@@ -29,8 +29,10 @@ import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
 import pl.net.was.authentication.ClientAuthenticationMethod;
+import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.net.URI;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,6 +47,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class OpenApiConfig
 {
     private String specLocation;
+    private SpecLocationAuthentication specLocationAuthentication = SpecLocationAuthentication.NONE;
     private URI baseUri;
     private AuthenticationType authenticationType = AuthenticationType.NONE;
 
@@ -97,6 +100,39 @@ public class OpenApiConfig
     {
         this.specLocation = value;
         return this;
+    }
+
+    @NotNull
+    public SpecLocationAuthentication getSpecLocationAuthentication()
+    {
+        return specLocationAuthentication;
+    }
+
+    @Config("spec-location.authentication")
+    @ConfigDescription("Credentials sent with the request fetching spec-location: none, or catalog to send the credentials of authentication.type")
+    public OpenApiConfig setSpecLocationAuthentication(SpecLocationAuthentication specLocationAuthentication)
+    {
+        this.specLocationAuthentication = specLocationAuthentication;
+        return this;
+    }
+
+    @AssertTrue(message = "spec-location.authentication can only be catalog when authentication.type is http or api_key, "
+            + "because the credentials of security schemes declared in the specification are only known after loading it")
+    public boolean isSpecLocationAuthenticationTypeSupported()
+    {
+        return specLocationAuthentication != SpecLocationAuthentication.CATALOG
+                || authenticationType == AuthenticationType.HTTP
+                || authenticationType == AuthenticationType.API_KEY;
+    }
+
+    @AssertTrue(message = "spec-location must be an HTTPS URL when spec-location.authentication is catalog, or an HTTP URL if authentication.allow-insecure-http is set")
+    public boolean isSpecLocationTransportSecure()
+    {
+        if (specLocationAuthentication != SpecLocationAuthentication.CATALOG || specLocation == null) {
+            return true;
+        }
+        String location = specLocation.toLowerCase(Locale.ENGLISH);
+        return location.startsWith("https://") || (allowInsecureHttp && location.startsWith("http://"));
     }
 
     public URI getBaseUri()

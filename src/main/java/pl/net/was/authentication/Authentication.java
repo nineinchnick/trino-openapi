@@ -116,6 +116,22 @@ public class Authentication
     }
 
     /**
+     * Adds the credentials of authentication.type to a request that is not an operation of the spec, like the one fetching the spec itself.
+     */
+    public static Request addDefaultCredentials(OpenApiConfig config, Request request, String requestName)
+    {
+        Request.Builder builder = Request.Builder.fromRequest(request);
+        for (Credential credential : getDefaultCredentials(config, requestName)) {
+            // the default API key is always sent in a header, and the default authentication type can't be OAuth
+            if (!(credential instanceof HeaderCredential(HeaderName name, String value))) {
+                throw new IllegalStateException("Unexpected default credential type: " + credential.getClass().getSimpleName());
+            }
+            builder.addHeader(name, value);
+        }
+        return builder.build();
+    }
+
+    /**
      * Gets new tokens for the OAuth credentials of the request, if the authenticated request was sent with any of them.
      * Returns true if the authenticated request should be sent again with the new tokens.
      */
