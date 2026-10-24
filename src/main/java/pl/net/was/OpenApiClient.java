@@ -107,7 +107,6 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
@@ -701,11 +700,11 @@ public class OpenApiClient
                 // the HTTP client would send custom headers, like API keys, to any host a server redirects to
                 .setFollowRedirects(false)
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
-                .addHeader(ACCEPT, JSON_UTF_8.toString())
+                .addHeader(ACCEPT, openApiSpec.getResponseMediaType(httpPath).toString())
                 .addHeader(OPENAPI_PATH_HEADER, httpPath.path());
         // some gateways and firewalls reject requests without a body that declare its type
         if (bodyGenerator != null) {
-            builder.addHeader(CONTENT_TYPE, JSON_UTF_8.toString());
+            builder.addHeader(CONTENT_TYPE, openApiSpec.getRequestMediaType(httpPath).toString());
         }
         getFilterColumnValues(table, httpPath, ParameterLocation.HEADER, valueProvider)
                 .forEach((column, value) -> builder.addHeader(
