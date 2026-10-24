@@ -1264,6 +1264,11 @@ public class OpenApiSpec
             BigDecimal decimal = BigDecimal.valueOf(number.longValue());
             checkSpec(schema.getMinimum() == null || decimal.compareTo(schema.getMinimum()) >= 0, "Invalid value of %s: %s for parameter %s of %s is less than its minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMinimum());
             checkSpec(schema.getMaximum() == null || decimal.compareTo(schema.getMaximum()) <= 0, "Invalid value of %s: %s for parameter %s of %s is greater than its maximum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMaximum());
+            // OpenAPI 3.0 makes the bounds exclusive with a boolean, and OpenAPI 3.1 declares exclusive bounds as numbers instead
+            Optional<BigDecimal> exclusiveMinimum = Optional.ofNullable(TRUE.equals(schema.getExclusiveMinimum()) ? schema.getMinimum() : schema.getExclusiveMinimumValue());
+            Optional<BigDecimal> exclusiveMaximum = Optional.ofNullable(TRUE.equals(schema.getExclusiveMaximum()) ? schema.getMaximum() : schema.getExclusiveMaximumValue());
+            checkSpec(exclusiveMinimum.map(minimum -> decimal.compareTo(minimum) > 0).orElse(true), "Invalid value of %s: %s for parameter %s of %s is not greater than its exclusive minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, exclusiveMinimum.orElse(null));
+            checkSpec(exclusiveMaximum.map(maximum -> decimal.compareTo(maximum) < 0).orElse(true), "Invalid value of %s: %s for parameter %s of %s is not less than its exclusive maximum %s", PARAMETER_DEFAULTS, value, parameter, operation, exclusiveMaximum.orElse(null));
             return number.longValue();
         }
         if (value instanceof String string) {

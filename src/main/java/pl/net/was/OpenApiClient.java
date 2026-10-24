@@ -139,10 +139,14 @@ import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Boolean.TRUE;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.ceilDiv;
 import static java.lang.Math.min;
 import static java.lang.String.format;
+import static java.math.BigDecimal.ONE;
+import static java.math.RoundingMode.CEILING;
+import static java.math.RoundingMode.FLOOR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.emptyIterator;
 import static java.util.Objects.requireNonNull;
@@ -550,10 +554,29 @@ public class OpenApiClient
             return OptionalLong.empty();
         }
         // servers often return fewer results than requested when the limit is too high, so it must not exceed the declared maximum
-        if (schema.getMaximum() != null) {
-            return OptionalLong.of(min(limitNumber.longValue(), schema.getMaximum().longValue()));
+        OptionalLong maximum = getMaximumPageSize(schema);
+        if (maximum.isPresent()) {
+            return OptionalLong.of(min(limitNumber.longValue(), maximum.orElseThrow()));
         }
         return OptionalLong.of(limitNumber.longValue());
+    }
+
+    private static OptionalLong getMaximumPageSize(Schema<?> schema)
+    {
+        // OpenAPI 3.0 makes the maximum exclusive with a boolean, and OpenAPI 3.1 declares the exclusive maximum as a number instead
+        return Stream.of(
+                        Optional.ofNullable(schema.getMaximum())
+                                .map(maximum -> TRUE.equals(schema.getExclusiveMaximum()) ? getLargestIntegerBelow(maximum) : maximum.setScale(0, FLOOR)),
+                        Optional.ofNullable(schema.getExclusiveMaximumValue())
+                                .map(OpenApiClient::getLargestIntegerBelow))
+                .flatMap(Optional::stream)
+                .mapToLong(BigDecimal::longValue)
+                .min();
+    }
+
+    private static BigDecimal getLargestIntegerBelow(BigDecimal value)
+    {
+        return value.setScale(0, CEILING).subtract(ONE);
     }
 
     private Optional<OpenApiColumn> getLimitColumn(OpenApiTableHandle table, HttpPath httpPath)

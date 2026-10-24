@@ -1250,9 +1250,11 @@ public class TestOpenApiQueries
     @Test
     public void itemsWithPageSizeAboveMaximum()
     {
-        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.capped_items WHERE size = 5").getMaterializedRows())
-                .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
+        for (String table : List.of("capped_items", "exclusive_capped_items")) {
+            assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.%s WHERE size = 5".formatted(table)).getMaterializedRows())
+                    .extracting(row -> row.getFields().getFirst())
+                    .containsExactly("Portal Gun", "Plumbus");
+        }
     }
 
     @Test
