@@ -819,8 +819,10 @@ how they're made.
 
 # Limitations
 
-* The specification is read when the catalog starts. To use a changed
-  specification, restart Trino.
+* Every Trino node reads the specification when the catalog starts, so every
+  node must be able to reach `spec-location`, and get the same specification
+  ([#294](https://github.com/nineinchnick/trino-openapi/issues/294)). To use a
+  changed specification, restart Trino.
 * `base-uri` is required, even if the specification lists servers
   ([#51](https://github.com/nineinchnick/trino-openapi/issues/51)), and the
   specification is loaded without authentication
@@ -842,11 +844,12 @@ how they're made.
   a single column declared in `sortValues` that every response includes.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
-  requested one after another ([#94](https://github.com/nineinchnick/trino-openapi/issues/94)).
-* `POST` and `PATCH` requests are not retried, so a temporary error in an
+  requested one after another, unless a
+  [split strategy](#reading-pages-concurrently) is set.
+* `POST` and `PATCH` requests are never [retried](#retries), because repeating
+  them can create duplicates or apply a change twice, so a temporary error in an
   `INSERT`, an `UPDATE` that uses `PATCH`, or a search that uses `POST`, fails
-  the query
-  ([#249](https://github.com/nineinchnick/trino-openapi/issues/249)).
+  the query.
 * Only JSON request and response bodies are supported, not form-encoded or
   multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
 * Responses that are arrays of plain values
