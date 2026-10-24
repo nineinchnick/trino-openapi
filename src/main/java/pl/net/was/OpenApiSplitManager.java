@@ -78,6 +78,7 @@ public class OpenApiSplitManager
     private final int domainExpansionLimit;
     private final int maxFilterCombinations;
     private final SplitStrategy splitStrategy;
+    private final Optional<Integer> strideSplits;
     private final ProbeLimit probeLimit;
 
     private final ExecutorService executor = newCachedThreadPool(daemonThreadsNamed(OpenApiSplitManager.class.getName() + "-%d"));
@@ -93,6 +94,7 @@ public class OpenApiSplitManager
         this.domainExpansionLimit = config.getDomainExpansionLimit();
         this.maxFilterCombinations = config.getMaxFilterCombinations();
         this.splitStrategy = config.getSplitStrategy();
+        this.strideSplits = config.getStrideSplits();
         this.probeLimit = config.getProbeLimit();
     }
 
@@ -304,7 +306,7 @@ public class OpenApiSplitManager
                     .or(pagination::splitStrategy)
                     .orElse(this.splitStrategy);
             if (splitStrategy == SplitStrategy.STRIDE && table.getLimit().isEmpty() && client.canReadPagesWithStride(splitTable.table())) {
-                int strideSplits = getStrideSplits(pagination);
+                int strideSplits = getStrideSplits(session, pagination);
                 for (int firstPage = 1; firstPage <= strideSplits; firstPage++) {
                     splits.add(new OpenApiSplit(splitTable.table(), firstPage, strideSplits));
                 }
@@ -366,9 +368,12 @@ public class OpenApiSplitManager
                 maxFilterCombinations));
     }
 
-    private int getStrideSplits(Pagination pagination)
+    // the spec sets it for a single operation, so it knows better how many requests the API can handle at once
+    private int getStrideSplits(ConnectorSession session, Pagination pagination)
     {
-        int strideSplits = pagination.strideSplits().orElseGet(() -> nodeManager.getRequiredWorkerNodes().size());
+        int strideSplits = pagination.strideSplits().orElseGet(() -> OpenApiSessionProperties.getStrideSplits(session)
+                .or(() -> this.strideSplits)
+                .orElseGet(() -> nodeManager.getRequiredWorkerNodes().size()));
         if (pagination.maxPages().isPresent()) {
             return min(strideSplits, pagination.maxPages().orElseThrow());
         }

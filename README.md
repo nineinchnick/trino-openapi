@@ -160,6 +160,7 @@ Trino version it's built for.
 | `http-cache.max-size`                          | `OPENAPI_HTTP_CACHE_MAX_SIZE`           | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
 | `http-cache.max-entry-size`                    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE`     | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
 | `split-strategy`                               | `OPENAPI_SPLIT_STRATEGY`                | `off`                | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
+| `stride-splits`                                | `OPENAPI_STRIDE_SPLITS`                 | worker nodes         | Number of splits reading pages with the `stride` split strategy; see [Pagination](#pagination)                  |
 | `probe-limit`                                  | `OPENAPI_PROBE_LIMIT`                   | `none`               | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
 
 ## Specification
@@ -956,7 +957,7 @@ paths:
 | `maxPages`           | Maximum number of pages to request                                                                                                                  |
 | `maxResults`         | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `splitStrategy`      | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
-| `strideSplits`       | Number of splits reading pages with the `stride` strategy, instead of the number of worker nodes                                                    |
+| `strideSplits`       | Number of splits reading pages with the `stride` strategy, overriding the `stride_splits` session and `stride-splits` catalog properties            |
 | `probeLimit`         | Page size of the first page requested by the `probe` split strategy, overriding the `probe-limit` catalog property                                  |
 | `errorPath`          | JSON pointer to a human-readable message in error responses                                                                                         |
 | `rangeFilters`       | Parameters that limit values of response fields, see below                                                                                          |
@@ -1161,12 +1162,15 @@ separate splits:
   parameter's default, because the totals of a smaller page can't tell the
   number of regular pages otherwise.
 * `stride` - create a split for every worker node, or as many as set in
-  `strideSplits`, without requesting any page on the coordinator. With N
-  splits, the first split reads pages 1, N+1, 2N+1, and so on, the second
-  split reads pages 2, N+2, 2N+2, and so on. Every split stops at the last page
-  like a single split would, and skips pages past the last one, using
-  `totalResultsPath` or `totalPagesPath`. Servers often return the last page
-  for every page number past it, so the strategy is used only when
+  `strideSplits`, the `stride_splits` catalog session property, or the
+  `stride-splits` catalog property, in this order, without requesting any page
+  on the coordinator. A node runs many splits at once, so on a single node, like
+  in the [quick start](#quick-start), set `stride-splits` to read pages
+  concurrently. With N splits, the first split reads pages 1, N+1, 2N+1, and so
+  on, the second split reads pages 2, N+2, 2N+2, and so on. Every split stops at
+  the last page like a single split would, and skips pages past the last one,
+  using `totalResultsPath` or `totalPagesPath`. Servers often return the last
+  page for every page number past it, so the strategy is used only when
   `totalPagesPath` is set, or `totalResultsPath` is set and the page size is
   known, from a filter, from `parameterDefaults`, or from the parameter's
   default. With `maxResults`, the page size must also be known. When
@@ -1194,11 +1198,14 @@ pages can be returned in any order.
 
 The `split_strategy` and `probe_limit` catalog session properties override both
 the spec and the catalog properties for a single query, for all its tables in
-the catalog:
+the catalog. The `stride_splits` catalog session property overrides only the
+`stride-splits` catalog property, because `strideSplits` in the spec is set for
+a single operation:
 
 ```sql
 SET SESSION openapi.split_strategy = 'probe';
 SET SESSION openapi.probe_limit = '0';
+SET SESSION openapi.stride_splits = 8;
 ```
 
 ## Range filters

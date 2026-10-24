@@ -100,6 +100,7 @@ public class OpenApiConfig
     // long enough to get dynamic filters from small tables, and from some larger subqueries
     private Duration dynamicFilteringWaitTimeout = new Duration(20, SECONDS);
     private SplitStrategy splitStrategy = SplitStrategy.OFF;
+    private Optional<Integer> strideSplits = Optional.empty();
     private ProbeLimit probeLimit = ProbeLimit.NONE;
 
     @NotNull
@@ -686,6 +687,20 @@ public class OpenApiConfig
     public OpenApiConfig setSplitStrategy(SplitStrategy splitStrategy)
     {
         this.splitStrategy = splitStrategy;
+        return this;
+    }
+
+    @NotNull
+    public Optional<@Min(1) Integer> getStrideSplits()
+    {
+        return strideSplits;
+    }
+
+    @Config("stride-splits")
+    @ConfigDescription("Number of splits reading pages with the stride split strategy; the number of worker nodes if not set")
+    public OpenApiConfig setStrideSplits(Integer strideSplits)
+    {
+        this.strideSplits = Optional.ofNullable(strideSplits);
         return this;
     }
 

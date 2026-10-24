@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.airlift.units.Duration;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.session.PropertyMetadata;
 
@@ -24,8 +25,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static io.trino.plugin.base.session.PropertyMetadataUtil.durationProperty;
+import static io.trino.spi.StandardErrorCode.INVALID_SESSION_PROPERTY;
 import static io.trino.spi.session.PropertyMetadata.booleanProperty;
 import static io.trino.spi.session.PropertyMetadata.enumProperty;
+import static io.trino.spi.session.PropertyMetadata.integerProperty;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 
 public final class OpenApiSessionProperties
@@ -33,6 +36,7 @@ public final class OpenApiSessionProperties
     private static final String HTTP_CACHE_ENABLED = "http_cache_enabled";
     // without defaults, so that unset properties don't override values from the spec
     private static final String SPLIT_STRATEGY = "split_strategy";
+    private static final String STRIDE_SPLITS = "stride_splits";
     private static final String PROBE_LIMIT = "probe_limit";
     private static final String DYNAMIC_FILTERING_WAIT_TIMEOUT = "dynamic_filtering_wait_timeout";
 
@@ -52,6 +56,16 @@ public final class OpenApiSessionProperties
                         "How to read pages in separate splits, overriding the spec and the split-strategy catalog property",
                         SplitStrategy.class,
                         null,
+                        false),
+                integerProperty(
+                        STRIDE_SPLITS,
+                        "Number of splits reading pages with the stride split strategy, overriding the stride-splits catalog property, but not the spec",
+                        null,
+                        value -> {
+                            if (value < 1) {
+                                throw new TrinoException(INVALID_SESSION_PROPERTY, "%s must be greater than 0: %s".formatted(STRIDE_SPLITS, value));
+                            }
+                        },
                         false),
                 new PropertyMetadata<>(
                         PROBE_LIMIT,
@@ -82,6 +96,11 @@ public final class OpenApiSessionProperties
     public static Optional<SplitStrategy> getSplitStrategy(ConnectorSession session)
     {
         return Optional.ofNullable(session.getProperty(SPLIT_STRATEGY, SplitStrategy.class));
+    }
+
+    public static Optional<Integer> getStrideSplits(ConnectorSession session)
+    {
+        return Optional.ofNullable(session.getProperty(STRIDE_SPLITS, Integer.class));
     }
 
     public static Optional<ProbeLimit> getProbeLimit(ConnectorSession session)
