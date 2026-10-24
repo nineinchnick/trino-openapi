@@ -45,6 +45,7 @@ import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -374,6 +375,15 @@ public class TestOpenApiQueries
                 null,
                 null,
                 List.of(LocalDate.of(2007, 10, 10), LocalDate.of(2022, 12, 8)));
+    }
+
+    @Test
+    public void selectUnionsWithNullAlternative()
+    {
+        // Pydantic describes optional fields as an anyOf of their type and null
+        String query = "SELECT id, count, created_at, array_join(tags, ','), note FROM fastapi.default.optional_values";
+        assertThat(computeActual(query).getTypes()).containsExactly(BIGINT, BIGINT, TIMESTAMP_MILLIS, VARCHAR, VARCHAR);
+        assertQuery(query, "VALUES (1, 3, TIMESTAMP '2025-04-18 12:30:45', 'a,b', 'first'), (2, NULL, NULL, NULL, NULL)");
     }
 
     @Test
