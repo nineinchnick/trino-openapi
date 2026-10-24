@@ -393,7 +393,9 @@ fields of the request body, like identifiers. Setting a column to `NULL` sends
 an explicit `null`. Other requests send all columns that are not `NULL`. A
 `DELETE` sends the query filters, and when it uses an operation with a request
 body, like a `POST` marked with `sqlOperation: delete`, the body includes the
-filters on its fields.
+filters on its fields. When the request body is an array, like in
+`POST /user/createWithList` of the Petstore API, its columns are the fields of
+the array items, and every row is sent as an array with a single item.
 
 A write succeeds if the server responds with any `2xx` status. Writes are not
 transactional: if a statement fails halfway, the rows already sent stay

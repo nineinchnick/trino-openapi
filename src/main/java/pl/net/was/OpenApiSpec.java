@@ -476,6 +476,14 @@ public class OpenApiSpec
                 .filter(operationId -> !operationId.isBlank());
     }
 
+    public boolean hasArrayRequestBody(HttpPath httpPath)
+    {
+        return getOperation(httpPath)
+                .map(OpenApiSpec::getRequestSchema)
+                .filter(OpenApiSpec::isArray)
+                .isPresent();
+    }
+
     private Optional<Operation> getOperation(HttpPath httpPath)
     {
         return Optional.ofNullable(openApi.getPaths())

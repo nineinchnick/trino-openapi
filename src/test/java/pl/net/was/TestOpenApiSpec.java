@@ -1230,6 +1230,17 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testArrayRequestBodies()
+    {
+        OpenApiSpec spec = loadSpec("petstore.yaml");
+
+        Assertions.assertThat(spec.hasArrayRequestBody(new HttpPath(PathItem.HttpMethod.POST, "/user/createWithList"))).isTrue();
+        Assertions.assertThat(spec.hasArrayRequestBody(new HttpPath(PathItem.HttpMethod.POST, "/user"))).isFalse();
+        Assertions.assertThat(spec.hasArrayRequestBody(new HttpPath(PathItem.HttpMethod.GET, "/user/{username}"))).isFalse();
+        Assertions.assertThat(spec.hasArrayRequestBody(new HttpPath(PathItem.HttpMethod.POST, "/missing"))).isFalse();
+    }
+
+    @Test
     public void getDatadogUnionTables()
     {
         OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
