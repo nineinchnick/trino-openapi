@@ -610,6 +610,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithUnionsOfLiteralsInRequestBody()
+    {
+        MaterializedResult result = getQueryRunner().execute("SELECT state, priority FROM fastapi.default.echo_literal WHERE state = 'open' AND priority = 2");
+        assertThat(result.getTypes()).containsExactly(VARCHAR, BIGINT);
+        assertThat(result.getMaterializedRows()).hasSize(1);
+        assertThat(result.getMaterializedRows().getFirst().getFields()).containsExactly("open", 2L);
+    }
+
+    @Test
     public void selectWithArrayInAllOfInRequestBody()
     {
         // the server returns the request body, so a JSON string sent instead of an array can't be read back

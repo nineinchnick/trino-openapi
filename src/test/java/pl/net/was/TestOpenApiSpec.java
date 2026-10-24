@@ -6053,6 +6053,91 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testUnionsOfConstAndEnumValues()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /events:
+                    get:
+                      responses:
+                        "200":
+                          description: Events
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  required:
+                                  - state
+                                  - kind
+                                  properties:
+                                    state:
+                                      anyOf:
+                                      - const: open
+                                        type: string
+                                      - const: closed
+                                        type: string
+                                    kind:
+                                      oneOf:
+                                      - const: push
+                                      - const: pull
+                                    priority:
+                                      anyOf:
+                                      - const: 1
+                                        type: integer
+                                      - const: 2
+                                        type: integer
+                                      - type: "null"
+                                    level:
+                                      anyOf:
+                                      - enum: [low, medium]
+                                      - enum: [high]
+                                    ratio:
+                                      anyOf:
+                                      - const: 0.5
+                                        type: number
+                                        format: double
+                                      - const: 1
+                                        type: number
+                                        format: double
+                                    code:
+                                      anyOf:
+                                      - const: 1
+                                      - const: a
+                                    size:
+                                      anyOf:
+                                      - const: 1
+                                        type: integer
+                                      - type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        List<OpenApiColumn> columns = spec.getTables().get("events");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("state", VARCHAR, false),
+                        Assertions.tuple("kind", VARCHAR, false),
+                        Assertions.tuple("priority", BIGINT, true),
+                        Assertions.tuple("level", VARCHAR, true),
+                        Assertions.tuple("ratio", DOUBLE, true),
+                        // values of different types, and alternatives that are not only allowed values, hold the raw JSON value
+                        Assertions.tuple("code", VARCHAR, true),
+                        Assertions.tuple("size", VARCHAR, true));
+        Assertions.assertThat(columns)
+                .filteredOn(column -> JsonTrinoConverter.isJsonText(column.getSourceType()))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("code", "size");
+        Assertions.assertThat(columns.getFirst().getSourceType().getEnum()).isEqualTo(List.of("open", "closed"));
+    }
+
+    @Test
     public void getDatadogTablesWithMediaTypeParameters()
     {
         OpenApiSpec spec = DATADOG_SPEC.get();
