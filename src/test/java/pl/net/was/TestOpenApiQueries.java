@@ -1269,6 +1269,15 @@ public class TestOpenApiQueries
                 "Request GET http://[^ ?]+/error for operation error_error_get failed with HTTP 418: \"Oops! Inevitable error happened\\. There goes a rainbow\\.\\.\\.\"");
     }
 
+    @Test
+    public void notFound()
+    {
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 404");
+        assertQueryFails(
+                "SELECT * FROM fastapi.default.retired_items",
+                "Request GET http://[^ ?]+/retired_items for operation list_retired_items_retired_items_get failed with HTTP 404: \"Not Found\"");
+    }
+
     private List<Object> selectNumbers(long id, String columns)
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT %s FROM fastapi.default.numbers WHERE id = %d".formatted(columns, id)).getMaterializedRows();
