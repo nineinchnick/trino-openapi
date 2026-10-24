@@ -158,6 +158,21 @@ class TestOpenApiClientRequests
             %s
             """.formatted(OK_RESPONSES);
 
+    private static final String DECLARED_NOT_FOUND_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /items:
+                get:
+                  operationId: listItems
+            %s
+                    '404':
+                      description: No items
+            """.formatted(OK_RESPONSES);
+
     private static final String PAGED_SPEC =
             """
             openapi: 3.0.0
@@ -762,6 +777,38 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value of totalResultsPath /total in the response to GET %s/paged is not a whole number", baseUri)
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+    }
+
+    @Test
+    void testNotFoundListFails()
+            throws IOException
+    {
+        responses.add(respond(404, "{\"message\":\"Not Found\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 404: \"Not Found\"", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testNotFoundWithPathParametersIsEmpty()
+            throws IOException
+    {
+        responses.add(respond(404, "{\"message\":\"Not Found\"}"));
+
+        assertThat(getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", "missing")).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/missing/items"));
+    }
+
+    @Test
+    void testDeclaredNotFoundIsEmpty()
+            throws IOException
+    {
+        responses.add(respond(404, "{\"message\":\"Not Found\"}"));
+
+        assertThat(getRows(newConfig(DECLARED_NOT_FOUND_SPEC), "items", null)).isEmpty();
+        assertThat(requestCount).hasValue(1);
     }
 
     @Test

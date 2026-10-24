@@ -188,7 +188,7 @@ public class OpenApiClient
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty()) {
-            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows())
+            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, pathWithParams.getValue())).rows())
                     .filter(rowFilter)
                     .toList();
         }
@@ -410,7 +410,7 @@ public class OpenApiClient
     {
         // the body must be serialized for every page, since it can contain the page number,
         // and the response handler copies the page number to every row
-        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath));
+        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, pathParameters));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
@@ -449,13 +449,20 @@ public class OpenApiClient
                 .findFirst();
     }
 
-    private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath)
+    private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters)
     {
         return new JsonResponseHandler(
                 table,
                 httpPath,
                 openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
-                openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()));
+                openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()),
+                isNotFoundEmpty(httpPath, pathParameters));
+    }
+
+    private boolean isNotFoundEmpty(HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters)
+    {
+        // a single resource that doesn't exist has no rows, but a list that doesn't exist usually means that the base URI or the path is wrong
+        return !pathParameters.isEmpty() || openApiSpec.declaresResponse(httpPath, String.valueOf(HttpStatus.NOT_FOUND.code()));
     }
 
     private BodyGenerator getBodyGenerator(OpenApiTableHandle table, HttpPath httpPath)
@@ -1102,13 +1109,15 @@ public class OpenApiClient
         private final HttpPath httpPath;
         private final JsonPointer resultsPointer;
         private final Pagination pagination;
+        private final boolean notFoundIsEmpty;
 
-        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, Pagination pagination)
+        JsonResponseHandler(OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, Pagination pagination, boolean notFoundIsEmpty)
         {
             this.table = requireNonNull(table, "table is null");
             this.httpPath = requireNonNull(httpPath, "httpPath is null");
             this.resultsPointer = resultsPointer;
             this.pagination = requireNonNull(pagination, "pagination is null");
+            this.notFoundIsEmpty = notFoundIsEmpty;
         }
 
         @Override
@@ -1120,7 +1129,7 @@ public class OpenApiClient
         @Override
         public ResultsPage handle(Request request, Response response)
         {
-            if (response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
+            if (notFoundIsEmpty && response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
                 return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
             if (response.getStatusCode() != HttpStatus.OK.code()) {
