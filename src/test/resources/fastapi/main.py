@@ -973,7 +973,7 @@ def custom_openapi():
         "resultsPath": "$response.body#/results",
         "totalResultsPath": "$response.body#/total_results",
         "sortParam": "sort",
-        "sortValues": {"price": "price", "tax": "tax"},
+        "sortValues": {"price": "price", "tax": "tax", "name": "name"},
         "directionParam": "direction",
         "ascendingValue": "asc",
         "descendingValue": "desc",

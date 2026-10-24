@@ -601,6 +601,9 @@ after reading enough rows, when the column is in `sortValues`, so the server
 returns the top rows first. The connector sends `sortParam` and `directionParam`
 only when:
 
+* the column is a number, boolean, `DATE`, or `TIMESTAMP`, because servers
+  often sort text ignoring case or using a locale collation, while Trino
+  compares code points;
 * the field is required and not nullable in responses of all operations used
   for `SELECT`, because the server might place nulls differently than
   `NULLS FIRST` or `NULLS LAST` in the query;
@@ -609,8 +612,7 @@ only when:
   doesn't filter on them with different values.
 
 Otherwise it requests all pages, and Trino sorts the rows. Declare only fields
-that the server sorts the same way as Trino. For example, servers often sort
-text ignoring case.
+that the server sorts the same way as Trino.
 
 ### Reading pages concurrently
 
@@ -879,7 +881,8 @@ how they're made.
   ([#5](https://github.com/nineinchnick/trino-openapi/issues/5)).
   `LIMIT` doesn't change the page size sent in requests, and it doesn't stop
   pagination when Trino filters the returned rows. `ORDER BY` is sent only for
-  a single column declared in `sortValues` that every response includes.
+  a single number, boolean, `DATE`, or `TIMESTAMP` column declared in
+  `sortValues` that every response includes.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another, unless a

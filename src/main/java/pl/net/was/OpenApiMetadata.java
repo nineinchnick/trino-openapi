@@ -41,6 +41,9 @@ import io.trino.spi.connector.SortItem;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.connector.TopNApplicationResult;
 import io.trino.spi.statistics.ComputedStatistics;
+import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.TimestampType;
+import io.trino.spi.type.Type;
 
 import java.util.Collection;
 import java.util.Iterator;
@@ -56,6 +59,12 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.RowChangeParadigm.CHANGE_ONLY_UPDATED_COLUMNS;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
+import static io.trino.spi.type.DateType.DATE;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.RealType.REAL;
 import static java.util.Collections.emptyIterator;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
@@ -237,6 +246,10 @@ public class OpenApiMetadata
         if (sortings.stream().noneMatch(sorting -> sorting.sortValues().containsKey(column.getSourceName()))) {
             return Optional.empty();
         }
+        // servers often sort text ignoring case or using a locale collation, while Trino compares code points
+        if (!isOrderedLikeTrino(column.getType())) {
+            return Optional.empty();
+        }
         // rows contain values of request parameters, so sending the sort parameters would change values of their columns
         Set<String> sortParams = sortings.stream()
                 .flatMap(sorting -> Stream.of(sorting.sortParam(), sorting.directionParam()))
@@ -350,5 +363,17 @@ public class OpenApiMetadata
     private static boolean isRequestParameter(OpenApiColumn column)
     {
         return !column.getRequiresPredicate().isEmpty() || !column.getOptionalPredicate().isEmpty();
+    }
+
+    private static boolean isOrderedLikeTrino(Type type)
+    {
+        return type.equals(BOOLEAN)
+                || type.equals(INTEGER)
+                || type.equals(BIGINT)
+                || type.equals(REAL)
+                || type.equals(DOUBLE)
+                || type instanceof DecimalType
+                || type.equals(DATE)
+                || type instanceof TimestampType;
     }
 }
