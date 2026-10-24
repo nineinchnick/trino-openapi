@@ -57,12 +57,24 @@
         <dep.airlift.version>451</dep.airlift.version>
         <dep.swagger-parser.version>2.1.48</dep.swagger-parser.version>
         <dep.swagger-models.version>2.2.55</dep.swagger-models.version>
+        <!-- same as Trino, the test dependencies otherwise mix Netty 4.1 and 4.2, which have duplicate classes -->
+        <dep.netty.version>4.2.19.Final</dep.netty.version>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
-        <!-- Do not run the duplicate finder, some dependencies did not migrate to jakarta libs -->
-        <air.check.skip-duplicate-finder>true</air.check.skip-duplicate-finder>
         <project.scm.id>github</project.scm.id>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${dep.netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
 
@@ -261,6 +273,31 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.basepom.maven</groupId>
+                <artifactId>duplicate-finder-maven-plugin</artifactId>
+                <configuration>
+                    <exceptions combine.children="append">
+                        <!-- same as Trino, both are test dependencies and include the same public suffix list -->
+                        <exception>
+                            <conflictingDependencies>
+                                <dependency>
+                                    <groupId>com.github.docker-java</groupId>
+                                    <artifactId>docker-java-transport-zerodep</artifactId>
+                                </dependency>
+                                <dependency>
+                                    <groupId>org.apache.httpcomponents.client5</groupId>
+                                    <artifactId>httpclient5</artifactId>
+                                </dependency>
+                            </conflictingDependencies>
+                            <resources>
+                                <resource>org/publicsuffix/list/effective_tld_names.dat</resource>
+                            </resources>
+                        </exception>
+                    </exceptions>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <artifactId>maven-release-plugin</artifactId>
                 <configuration>
