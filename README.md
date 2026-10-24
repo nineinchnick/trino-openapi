@@ -155,7 +155,9 @@ Trino version it's built for.
 Every Trino node loads the specification from `spec-location` when the catalog
 starts, because workers need it too, to map responses to columns and to follow
 pagination. Every node must be able to reach `spec-location`, and a node that
-can't load it fails to start the catalog.
+can't load it fails to start the catalog. When the OpenAPI parser rejects the
+specification, the catalog fails with the `OPENAPI_INVALID_SPEC` error, which
+lists every problem on a separate line.
 
 When a URL serves a changed specification, nodes that load it later, like a
 restarted worker, map tables differently than the other nodes. In production,

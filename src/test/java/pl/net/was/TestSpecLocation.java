@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_SPEC;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_SPEC_MISMATCH;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
@@ -185,6 +186,32 @@ class TestSpecLocation
         assertThatThrownBy(() -> new OpenApiSpec(newConfig(unreachableUri.toString()), httpClient))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_CONNECTION_ERROR.toErrorCode()))
                 .hasMessageStartingWith("Failed to fetch the OpenAPI spec from %s after 3 attempts: ", unreachableUri);
+    }
+
+    @Test
+    void testInvalidSpec()
+    {
+        documents.put("/openapi.yaml",
+                """
+                openapi: 3.0.0
+                info:
+                  version: '1'
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                        - name: id
+                """);
+
+        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml?token=secret"), httpClient))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
+                .hasMessage(
+                        """
+                        Failed to parse the OpenAPI spec at %s/openapi.yaml:
+                        attribute info.title is missing
+                        attribute paths.'/items'(get).parameters.[id].in is missing
+                        attribute paths.'/items'(get).responses is missing""",
+                        serverUri);
     }
 
     @Test

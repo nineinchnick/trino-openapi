@@ -65,6 +65,7 @@ import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.VarcharType;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -114,6 +115,7 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_SPEC;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_SPEC_MISMATCH;
 
 public class OpenApiSpec
@@ -495,14 +497,20 @@ public class OpenApiSpec
         parseOptions.setResolveFully(true);
         PreprocessingParser parser = new PreprocessingParser();
         String specLocation = config.getSpecLocation();
+        Optional<URI> specUri = OpenApiServers.getSpecUri(specLocation);
         // references to other documents are still loaded by the parser, relative to the spec location
-        SwaggerParseResult result = OpenApiServers.getSpecUri(specLocation)
+        SwaggerParseResult result = specUri
                 .map(uri -> parser.readContents(SpecFetcher.fetch(uri, httpClient, RetryPolicy.fromConfig(config, Optional.empty())), null, parseOptions, specLocation))
                 .orElseGet(() -> parser.readLocation(specLocation, null, parseOptions));
         OpenAPI openAPI = result.getOpenAPI();
 
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {
-            throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
+            // a spec usually has many problems, which are hard to tell apart on a single line
+            throw new TrinoException(OPENAPI_INVALID_SPEC, format(
+                    "Failed to parse the OpenAPI spec at %s:\n%s",
+                    // spec-location is security sensitive, because the query string or the user info can contain credentials
+                    specUri.map(OpenApiClient::withoutQuery).orElse(specLocation),
+                    String.join("\n", result.getMessages())));
         }
 
         // the parser drops an empty top-level security list, but unlike a missing one, it explicitly allows anonymous access to all operations

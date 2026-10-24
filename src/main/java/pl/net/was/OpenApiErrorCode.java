@@ -25,7 +25,8 @@ public enum OpenApiErrorCode
     OPENAPI_HTTP_ERROR(0, EXTERNAL),
     OPENAPI_CONNECTION_ERROR(1, EXTERNAL),
     OPENAPI_INVALID_RESPONSE(2, EXTERNAL),
-    OPENAPI_SPEC_MISMATCH(3, EXTERNAL);
+    OPENAPI_SPEC_MISMATCH(3, EXTERNAL),
+    OPENAPI_INVALID_SPEC(4, EXTERNAL);
 
     // codes are part of the client protocol, so they must not change, and the offset must not be used by Trino plugins
 
