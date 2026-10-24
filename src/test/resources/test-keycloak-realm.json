@@ -42,6 +42,17 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "short-lived-client-id",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret",
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "4"
+      }
     }
   ],
   "users": [
