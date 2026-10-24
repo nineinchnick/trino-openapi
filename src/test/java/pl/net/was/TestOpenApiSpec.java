@@ -5184,6 +5184,29 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testComplexJsonPointersAreRejected()
+    {
+        String specContents = resultsPathSpec(
+                """
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                """);
+        String resultsPath = "resultsPath: $response.body#/data/results\n";
+
+        // without the # separator, the expression is not a JSON pointer, so it can't be read as one
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(resultsPath, "resultsPath: $response.body/data/results\n")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
+                .hasMessage("Invalid value of resultsPath: $response.body/data/results. Complex JSON pointer or JSON path expressions are not supported");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(resultsPath, resultsPath + "        totalResultsPath: $response.body/total\n")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
+                .hasMessage("Invalid value of totalResultsPath: $response.body/total. Complex JSON pointer or JSON path expressions are not supported");
+    }
+
+    @Test
     public void testResultsPathToScalar()
     {
         Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec("type: string")))
