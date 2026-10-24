@@ -154,6 +154,7 @@ public class OpenApiSpec
             .map(splitStrategy -> splitStrategy.name().toLowerCase(Locale.ENGLISH))
             .collect(joining(", "));
     private static final String SQL_OPERATION = "sqlOperation";
+    private static final String TABLE_NAME = "tableName";
     private static final String SORT_PARAM = "sortParam";
     private static final String SORT_VALUES = "sortValues";
     private static final String SORT_VALUE = "value";
@@ -459,20 +460,75 @@ public class OpenApiSpec
         ImmutableMap.Builder<String, String> tableNames = ImmutableMap.builder();
         for (List<Map.Entry<String, PathItem>> pathGroup : pathGroups) {
             if (pathGroup.size() == 1) {
-                String path = pathGroup.getFirst().getKey();
-                tableNames.put(path, getIdentifier(stripPathParams(trimPathPrefix(path))));
+                Map.Entry<String, PathItem> entry = pathGroup.getFirst();
+                tableNames.put(entry.getKey(), getTableNameExtension(entry.getKey(), entry.getValue())
+                        .orElseGet(() -> getIdentifier(stripPathParams(trimPathPrefix(entry.getKey())))));
                 continue;
             }
             Map.Entry<String, PathItem> baseEntry = getBaseEntry(pathGroup);
+            Optional<String> baseTableName = getTableNameExtension(baseEntry.getKey(), baseEntry.getValue());
+            checkArgument(
+                    baseTableName.isEmpty() || pathGroup.size() == 2,
+                    "Invalid value of %s in %s: the path is merged into several tables, so set %s in the paths with path parameters instead: %s",
+                    TABLE_NAME,
+                    baseEntry.getKey(),
+                    TABLE_NAME,
+                    pathGroup.stream().map(Map.Entry::getKey).filter(path -> !path.equals(baseEntry.getKey())).sorted().toList());
             pathGroup.stream()
                     .filter(entry -> !entry.equals(baseEntry))
                     // in groups of more than 2 paths, path parameters are included to tell the tables apart
                     .forEach(entry -> {
+                        Optional<String> tableName = getTableNameExtension(entry.getKey(), entry.getValue());
+                        checkArgument(
+                                tableName.isEmpty() || baseTableName.isEmpty() || tableName.equals(baseTableName),
+                                "Invalid value of %s in %s and %s: they're mapped to a single table, but set different names: %s, %s",
+                                TABLE_NAME,
+                                baseEntry.getKey(),
+                                entry.getKey(),
+                                baseTableName.orElse(null),
+                                tableName.orElse(null));
                         String path = trimPathPrefix(entry.getKey());
-                        tableNames.put(entry.getKey(), getIdentifier(pathGroup.size() == 2 ? stripPathParams(path) : path));
+                        tableNames.put(entry.getKey(), tableName.or(() -> baseTableName)
+                                .orElseGet(() -> getIdentifier(pathGroup.size() == 2 ? stripPathParams(path) : path)));
                     });
         }
         return tableNames.buildOrThrow();
+    }
+
+    private static Optional<String> getTableNameExtension(String path, PathItem pathItem)
+    {
+        Object pathItemExtension = pathItem.getExtensions() == null ? null : pathItem.getExtensions().get(SPEC_EXTENSION);
+        if (pathItemExtension != null) {
+            checkArgument(pathItemExtension instanceof Map<?, ?>, "Invalid value of the %s extension of %s: expected an object", SPEC_EXTENSION, path);
+            // properties of operations set for the whole path item would not be used, which is likely a mistake
+            ((Map<?, ?>) pathItemExtension).keySet().forEach(key -> checkArgument(
+                    key.equals(TABLE_NAME),
+                    "Invalid property of the %s extension of %s: %s, must be one of: %s",
+                    SPEC_EXTENSION,
+                    path,
+                    key,
+                    TABLE_NAME));
+        }
+        List<String> tableNames = Stream.concat(
+                        Stream.ofNullable(pathItemExtension),
+                        pathItem.readOperations().stream()
+                                .map(Operation::getExtensions)
+                                .filter(Objects::nonNull)
+                                .map(extensions -> extensions.get(SPEC_EXTENSION)))
+                .filter(extension -> extension instanceof Map<?, ?> map && map.containsKey(TABLE_NAME))
+                .map(extension -> ((Map<?, ?>) extension).get(TABLE_NAME))
+                .map(value -> {
+                    checkArgument(value instanceof String name && !name.isBlank(), "Invalid value of %s in %s: expected a table name", TABLE_NAME, path);
+                    String name = (String) value;
+                    // Trino converts unquoted names in queries to lowercase, so names with uppercase letters could only be used quoted
+                    checkArgument(name.equals(name.toLowerCase(Locale.ENGLISH)), "Invalid value of %s in %s: %s, must be lowercase", TABLE_NAME, path, name);
+                    return name;
+                })
+                .distinct()
+                .sorted()
+                .toList();
+        checkArgument(tableNames.size() <= 1, "Invalid value of %s in %s: operations of a path are mapped to a single table, but set different names: %s", TABLE_NAME, path, tableNames);
+        return tableNames.stream().findFirst();
     }
 
     private String trimPathPrefix(String path)

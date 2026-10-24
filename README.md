@@ -577,11 +577,30 @@ When several prefixes match a path, the longest one is left out. A path that is
 only a prefix followed by path parameters, like `/api/v1/{id}`, keeps its whole
 name. Requests still use the whole path.
 
-Different paths can map to the same table name, like `/a/b` and `/a-b`, or
-`/api/v1/users` and `/api/v2/users` after trimming their prefixes. They become
-separate tables, and the next ones in the order of their paths get numeric
-suffixes (`_2`, `_3`, and so on), skipping names of other tables. The connector
-logs a warning with such paths.
+To pick a table name, set `tableName` in the `x-trino` extension of the path
+item, or of any of its operations:
+
+```yaml
+paths:
+  /api/v2/users/{user_id}:
+    x-trino:
+      tableName: users
+    get:
+      # ...
+```
+
+All operations of a path belong to one table, so they can't set different
+names. The name of a path with path parameters is also the name of the table it
+is merged into with its base path, like `/api/v2/users`. When a base path is
+merged into several tables, set the names in the paths with path parameters.
+Names must be lowercase, because Trino converts unquoted names in queries to
+lowercase.
+
+Different paths can map to the same table name, like `/a/b` and `/a-b`,
+`/api/v1/users` and `/api/v2/users` after trimming their prefixes, or paths
+with the same `tableName`. They become separate tables, and the next ones in
+the order of their paths get numeric suffixes (`_2`, `_3`, and so on),
+skipping names of other tables. The connector logs a warning with such paths.
 
 A table is not listed if none of the responses, parameters, or request bodies of
 its operations can be mapped to columns, like a response that is a single
@@ -744,8 +763,9 @@ ignored. Request and response bodies must be JSON.
 # OpenAPI extensions
 
 Some behavior can't be described with standard OpenAPI. The connector reads an
-`x-trino` extension in an operation, one in a path parameter, which links it to
-a [response field](#resource-identifiers), and one of the whole document, which
+`x-trino` extension in an operation, one in a path item, which can only set
+the [table name](#tables), one in a path parameter, which links it to a
+[response field](#resource-identifiers), and one of the whole document, which
 describes [rate limits](#retries) and [error messages](#error-messages):
 
 ```yaml
@@ -801,6 +821,7 @@ paths:
 | `errorPath`          | JSON pointer to a human-readable message in error responses                                                                                         |
 | `rangeFilters`       | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`       | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
+| `tableName`          | Name of the table of the path, instead of the one made from the path; can also be set for the path item, see [Tables](#tables)                      |
 | `sortParam`          | Parameter that selects the field to sort results by                                                                                                 |
 | `sortValues`         | Map of response field names to the `sortParam` values that sort by them, see [Pagination](#pagination)                                              |
 | `directionParam`     | Parameter with the sort direction; required with `sortParam`                                                                                        |
