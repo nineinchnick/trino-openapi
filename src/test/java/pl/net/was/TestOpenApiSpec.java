@@ -1498,6 +1498,11 @@ class TestOpenApiSpec
                 "user",
                 "zones");
         Assertions.assertThat(tables.keySet()).containsAll(expected);
+        // both paths map to accounts_billable_usage
+        Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "accounts_billable_usage")).getSelectPaths())
+                .containsExactly(new HttpPath(PathItem.HttpMethod.GET, "/accounts/{account_id}/billable-usage"));
+        Assertions.assertThat(spec.getTableHandle(schemaTableName(SCHEMA_NAME, "accounts_billable_usage_2")).getSelectPaths())
+                .containsExactly(new HttpPath(PathItem.HttpMethod.GET, "/accounts/{account_id}/billable/usage"));
         OpenApiTableHandle tableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "zones"));
         String listPath = "/zones";
         String onePath = "/zones/{zone_id}";
@@ -3265,6 +3270,102 @@ class TestOpenApiSpec
                         Map.entry(new HttpPath(PathItem.HttpMethod.DELETE, "/items/{id}"), JsonPointer.compile("/error")));
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("$response.body#/error", "$response.body.error")))
                 .hasMessage("Invalid value of errorPath: $response.body.error, must point to a field of the response");
+    }
+
+    @Test
+    public void testPathsWithSameTableName()
+    {
+        OpenApiSpec spec = parseSpec(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /a/b:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /a-b:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /a_b_2:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /x:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /x/{a}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/A'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /x/{b}/{c}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/B'
+                        - $ref: '#/components/parameters/C'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /x_a:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                components:
+                  parameters:
+                    A:
+                      name: a
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                    B:
+                      name: b
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                    C:
+                      name: c
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                  responses:
+                    Ok:
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                """);
+
+        // tables with the same name get numeric suffixes in the order of their paths, skipping names of other tables
+        Assertions.assertThat(spec.getTables().keySet().stream()
+                        .collect(toImmutableMap(identity(), table -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, table)).getSelectPaths().stream()
+                                .map(HttpPath::path)
+                                .toList())))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "a_b", List.of("/a-b"),
+                        "a_b_2", List.of("/a_b_2"),
+                        "a_b_3", List.of("/a/b"),
+                        "x_a", List.of("/x", "/x/{a}"),
+                        "x_a_2", List.of("/x_a"),
+                        "x_b_c", List.of("/x", "/x/{b}/{c}")));
     }
 
     @Test

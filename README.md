@@ -450,7 +450,13 @@ with `camelCase` converted to `snake_case`, and other special characters
 converted to underscores. Paths with path parameters are merged with the same
 path without them, so `/pet` and `/pet/{petId}` become one table named `pet`.
 If a path has several variants with different parameters, each variant becomes
-a separate table that also includes the columns of the base path.
+a separate table that also includes the columns of the base path, and the table
+name also includes the path parameters.
+
+Different paths can map to the same table name, like `/a/b` and `/a-b`. They
+become separate tables, and the next ones in the order of their paths get
+numeric suffixes (`_2`, `_3`, and so on), skipping names of other tables. The
+connector logs a warning with such paths.
 
 SQL statements use operations with these HTTP methods:
 
