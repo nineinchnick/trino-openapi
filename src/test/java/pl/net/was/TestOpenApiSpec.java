@@ -639,6 +639,7 @@ class TestOpenApiSpec
                                 .setType(BIGINT).setSourceType(intSchema)
                                 // only returned when listing workflows
                                 .setIsNullable(true)
+                                .setIsHidden(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")
@@ -3483,17 +3484,18 @@ class TestOpenApiSpec
                 """;
         OpenApiSpec spec = parseSpec(specContents);
 
+        // fields next to the results are hidden
         Assertions.assertThat(spec.getTables().get("runs"))
-                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable(), column -> column.getMetadata().isHidden())
                 .containsExactly(
-                        Assertions.tuple("total", false),
-                        Assertions.tuple("next", true),
-                        Assertions.tuple("run_id", false),
-                        Assertions.tuple("name", false),
-                        Assertions.tuple("note", true),
-                        Assertions.tuple("comment", true),
-                        Assertions.tuple("label", true),
-                        Assertions.tuple("page", true));
+                        Assertions.tuple("total", false, true),
+                        Assertions.tuple("next", true, true),
+                        Assertions.tuple("run_id", false, false),
+                        Assertions.tuple("name", false, false),
+                        Assertions.tuple("note", true, false),
+                        Assertions.tuple("comment", true, false),
+                        Assertions.tuple("label", true, false),
+                        Assertions.tuple("page", true, true));
         Assertions.assertThat(spec.getTables().get("nested_runs"))
                 .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
                 .containsExactly(
@@ -3571,6 +3573,81 @@ class TestOpenApiSpec
                         Assertions.tuple("id", false),
                         Assertions.tuple("name", true),
                         Assertions.tuple("org", true));
+    }
+
+    @Test
+    public void testFieldsNextToResultsAreHidden()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /runs:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: Runs
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  id:
+                                    type: integer
+                                  attempts:
+                                    type: integer
+                                  has_more:
+                                    type: boolean
+                                  results:
+                                    type: array
+                                    items:
+                                      $ref: '#/components/schemas/Run'
+                  /runs/{run_id}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: run_id
+                        required: true
+                        schema:
+                          type: integer
+                      responses:
+                        "200":
+                          description: Run
+                          content:
+                            application/json:
+                              schema:
+                                allOf:
+                                - $ref: '#/components/schemas/Run'
+                                - type: object
+                                  properties:
+                                    attempts:
+                                      type: integer
+                components:
+                  schemas:
+                    Run:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        // the id is read from the results, and the number of attempts is also returned for a single run
+        Assertions.assertThat(spec.getTables().get("runs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isHidden())
+                .containsExactly(
+                        Assertions.tuple("attempts", false),
+                        Assertions.tuple("has_more", true),
+                        Assertions.tuple("id", false),
+                        Assertions.tuple("name", false),
+                        Assertions.tuple("run_id", false));
     }
 
     @Test

@@ -845,11 +845,12 @@ public class TestOpenApiQueries
     @Test
     public void paginatedResultsNullability()
     {
+        // fields next to the results, like has_more, are hidden, so they're not listed
         assertQuery(
                 "SELECT column_name, is_nullable FROM fastapi.information_schema.columns " +
                         "WHERE table_schema = 'default' AND table_name = 'has_more_items' " +
                         "AND column_name IN ('has_more', 'id', 'name', 'price', 'description', 'tax')",
-                "VALUES ('has_more', 'NO'), ('id', 'NO'), ('name', 'NO'), ('price', 'NO'), ('description', 'YES'), ('tax', 'YES')");
+                "VALUES ('id', 'NO'), ('name', 'NO'), ('price', 'NO'), ('description', 'YES'), ('tax', 'YES')");
     }
 
     @Test

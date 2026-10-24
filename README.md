@@ -488,7 +488,9 @@ always nullable, because they can't be set in an `INSERT`.
 Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 
 * `__trino_row_id` identifies rows in `UPDATE` and `DELETE`;
-* pagination parameters, like the page number and page size.
+* pagination parameters, like the page number and page size;
+* response fields next to the results at `resultsPath`, like the total number
+  of results, unless another operation returns them as a field of its results.
 
 ## Data types
 
