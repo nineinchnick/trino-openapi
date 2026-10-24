@@ -121,38 +121,43 @@ Trino version it's built for.
 
 # Configuration
 
-| Property                             | Container environment variable      | Default              | Description                                                                                                     |
-| ------------------------------------ | ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
-| `spec-location.authentication`       | `OPENAPI_SPEC_AUTHENTICATION`       | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
-| `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
-| `trimmed-path-prefixes`              | `OPENAPI_TRIMMED_PATH_PREFIXES`     |                      | Path prefixes left out of table names, separated by commas, like `/api/v1,/api/v2`; see [Tables](#tables)       |
-| `schema-from-tags`                   | `OPENAPI_SCHEMA_FROM_TAGS`          | `false`              | Put tables into schemas named after the tags of their operations; see [Schemas](#schemas)                       |
-| `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
-| `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
-| `authentication.username`            | `OPENAPI_USERNAME`                  |                      | Username for `http` basic authentication and the OAuth `password` flow                                          |
-| `authentication.password`            | `OPENAPI_PASSWORD`                  |                      | Password for `http` basic authentication and the OAuth `password` flow                                          |
-| `authentication.bearer-token`        | `OPENAPI_BEARER_TOKEN`              |                      | Token for `http` bearer authentication                                                                          |
-| `authentication.api-key-name`        | `OPENAPI_API_KEY_NAME`              |                      | Name of the API key, when the specification doesn't declare it                                                  |
-| `authentication.api-key-value`       | `OPENAPI_API_KEY_VALUE`             |                      | Value of the API key                                                                                            |
-| `authentication.api-keys`            | `OPENAPI_API_KEYS`                  |                      | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above     |
-| `authentication.client-id`           | `OPENAPI_CLIENT_ID`                 |                      | OAuth client ID                                                                                                 |
-| `authentication.client-secret`       | `OPENAPI_CLIENT_SECRET`             |                      | OAuth client secret                                                                                             |
-| `authentication.client-auth-method`  | `OPENAPI_CLIENT_AUTH_METHOD`        | `client_secret_post` | How OAuth client credentials are sent to the token endpoint: `client_secret_basic` or `client_secret_post`      |
-| `authentication.token-url`           | `OPENAPI_TOKEN_URL`                 |                      | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
-| `authentication.allow-insecure-http` | `OPENAPI_ALLOW_INSECURE_HTTP`       | `false`              | Allow sending credentials over HTTP, without TLS                                                                |
-| `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited            | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
-| `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited            | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
-| `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`                  | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
-| `retry-initial-delay`                | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
-| `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`                 | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
-| `max-response-size`                  | `OPENAPI_MAX_RESPONSE_SIZE`         | `16MB`               | Maximum size of a response body, after it's decompressed; see [HTTP client](#http-client)                       |
-| `domain-expansion-limit`             | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`                | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
-| `http-cache.directory`               | `OPENAPI_HTTP_CACHE_DIRECTORY`      |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
-| `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
-| `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
-| `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`                | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
-| `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`               | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
+| Property                                       | Container environment variable          | Default              | Description                                                                                                     |
+| ---------------------------------------------- | --------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| ---------------------------------------------- | --------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `spec-location`                                | `OPENAPI_SPEC_LOCATION`                 |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
+| `spec-location.authentication`                 | `OPENAPI_SPEC_AUTHENTICATION`           | `none`               | Credentials sent when fetching `spec-location`: `none`, or `catalog` to send the ones of `authentication.type`  |
+| `base-uri`                                     | `OPENAPI_BASE_URI`                      |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
+| `trimmed-path-prefixes`                        | `OPENAPI_TRIMMED_PATH_PREFIXES`         |                      | Path prefixes left out of table names, separated by commas, like `/api/v1,/api/v2`; see [Tables](#tables)       |
+| `schema-from-tags`                             | `OPENAPI_SCHEMA_FROM_TAGS`              | `false`              | Put tables into schemas named after the tags of their operations; see [Schemas](#schemas)                       |
+| `authentication.type`                          | `OPENAPI_AUTH_TYPE`                     | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
+| `authentication.scheme`                        | `OPENAPI_AUTH_SCHEME`                   | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
+| `authentication.username`                      | `OPENAPI_USERNAME`                      |                      | Username for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.password`                      | `OPENAPI_PASSWORD`                      |                      | Password for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.bearer-token`                  | `OPENAPI_BEARER_TOKEN`                  |                      | Token for `http` bearer authentication                                                                          |
+| `authentication.api-key-name`                  | `OPENAPI_API_KEY_NAME`                  |                      | Name of the API key, when the specification doesn't declare it                                                  |
+| `authentication.api-key-value`                 | `OPENAPI_API_KEY_VALUE`                 |                      | Value of the API key                                                                                            |
+| `authentication.api-keys`                      | `OPENAPI_API_KEYS`                      |                      | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above     |
+| `authentication.username-credential-name`      | `OPENAPI_USERNAME_CREDENTIAL_NAME`      |                      | Extra credential with the username of the query user; see [Per-user credentials](#per-user-credentials)         |
+| `authentication.password-credential-name`      | `OPENAPI_PASSWORD_CREDENTIAL_NAME`      |                      | Extra credential with the password of the query user, required with the property above                          |
+| `authentication.bearer-token-credential-name`  | `OPENAPI_BEARER_TOKEN_CREDENTIAL_NAME`  |                      | Extra credential with the bearer token of the query user                                                        |
+| `authentication.api-key-value-credential-name` | `OPENAPI_API_KEY_VALUE_CREDENTIAL_NAME` |                      | Extra credential with the API key of the query user; can't be combined with `authentication.api-keys`           |
+| `authentication.client-id`                     | `OPENAPI_CLIENT_ID`                     |                      | OAuth client ID                                                                                                 |
+| `authentication.client-secret`                 | `OPENAPI_CLIENT_SECRET`                 |                      | OAuth client secret                                                                                             |
+| `authentication.client-auth-method`            | `OPENAPI_CLIENT_AUTH_METHOD`            | `client_secret_post` | How OAuth client credentials are sent to the token endpoint: `client_secret_basic` or `client_secret_post`      |
+| `authentication.token-url`                     | `OPENAPI_TOKEN_URL`                     |                      | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
+| `authentication.allow-insecure-http`           | `OPENAPI_ALLOW_INSECURE_HTTP`           | `false`              | Allow sending credentials over HTTP, without TLS                                                                |
+| `max-requests-per-second`                      | `OPENAPI_MAX_REQUESTS_PER_SECOND`       | unlimited            | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
+| `max-splits-per-second`                        | `OPENAPI_MAX_SPLITS_PER_SECOND`         | unlimited            | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
+| `max-retries`                                  | `OPENAPI_MAX_RETRIES`                   | `3`                  | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
+| `retry-initial-delay`                          | `OPENAPI_RETRY_INITIAL_DELAY`           | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
+| `retry-max-delay`                              | `OPENAPI_RETRY_MAX_DELAY`               | `1m`                 | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
+| `max-response-size`                            | `OPENAPI_MAX_RESPONSE_SIZE`             | `16MB`               | Maximum size of a response body, after it's decompressed; see [HTTP client](#http-client)                       |
+| `domain-expansion-limit`                       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`        | `256`                | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
+| `http-cache.directory`                         | `OPENAPI_HTTP_CACHE_DIRECTORY`          |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
+| `http-cache.max-size`                          | `OPENAPI_HTTP_CACHE_MAX_SIZE`           | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
+| `http-cache.max-entry-size`                    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE`     | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
+| `split-strategy`                               | `OPENAPI_SPLIT_STRATEGY`                | `off`                | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
+| `probe-limit`                                  | `OPENAPI_PROBE_LIMIT`                   | `none`               | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
 
 ## Specification
 
@@ -273,6 +278,47 @@ you trust as much as the API itself. To limit what a specification can change:
   `authentication.allow-insecure-http` is set, for example for an API on a local
   network, so the catalog fails to start if `base-uri`, or a declared server
   used instead of it, doesn't use HTTPS.
+
+## Per-user credentials
+
+By default, every Trino user with access to the catalog sends requests with the
+catalog credentials, so the API applies the permissions of that account to all
+of them. Use Trino [access control](https://trino.io/docs/current/security/built-in-system-access-control.html)
+to limit who can use the catalog, or let users send requests with their own
+credentials, passed as [extra credentials](https://trino.io/docs/current/client/cli.html#extra-credentials),
+by naming them in the catalog properties:
+
+```properties
+authentication.bearer-token-credential-name=openapi_token
+authentication.username-credential-name=openapi_username
+authentication.password-credential-name=openapi_password
+authentication.api-key-value-credential-name=openapi_api_key
+```
+
+```shell
+trino --extra-credential openapi_token=s3cr3t
+```
+
+* A passed credential replaces the matching catalog property in all requests of
+  the query, including `INSERT`, `UPDATE`, and `DELETE`.
+* When a user doesn't pass it, the catalog property is used, so leave the
+  catalog property unset to require every user to pass their own credential.
+  Without either, the query fails, naming both the property and the extra
+  credential.
+* The username and password must be passed together, and both are used instead
+  of the catalog ones, so credentials of different accounts are never mixed.
+  They're used for `http` basic authentication and the OAuth `password` flow,
+  which gets a separate token for every user.
+* Keys of `authentication.api-keys`, and the OAuth client ID and secret, can't
+  be passed per user.
+* Like catalog credentials, they're only sent over HTTPS, unless
+  `authentication.allow-insecure-http` is set, even if the catalog has no
+  credentials of its own.
+
+The connector never logs extra credentials, or includes them in table handles,
+splits, or query plans. With the [HTTP cache](#http-cache), responses requested
+with credentials of a user are stored separately, so they're never returned to
+another user, unless they pass the same credentials.
 
 ## HTTP client
 
@@ -421,8 +467,12 @@ user running Trino can read them, and it doesn't store the `Set-Cookie` and
   `Cache-Control: no-store` are never cached.
 * Responses are cached separately for every value of header and cookie
   parameters, because they filter the response, and servers rarely list them in
-  the `Vary` header. Credentials are not part of the key, because every catalog
-  uses its own subdirectory.
+  the `Vary` header. Catalog credentials are not part of the key, because every
+  catalog uses its own subdirectory. Responses requested with
+  [per-user credentials](#per-user-credentials) are stored separately for every
+  set of them, with a PBKDF2 hash of the credentials in the file names, and
+  share the size limit of the catalog. A change made with any credentials
+  removes the cached responses of the same URL for all of them.
 * A fresh response is reused without sending a request.
 * A response that is no longer fresh, or has no freshness information, is
   revalidated: the request includes `If-None-Match` or `If-Modified-Since`, and

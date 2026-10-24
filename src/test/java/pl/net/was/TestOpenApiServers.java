@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.ExtraCredentialProvider;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -40,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -422,8 +424,8 @@ class TestOpenApiServers
     {
         OpenApiSpec spec = new OpenApiSpec(config, httpClient);
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
-        return ImmutableList.copyOf(client.getRows(spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName)), 1, 1, false));
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
+        return ImmutableList.copyOf(client.getRows(SESSION, spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName)), 1, 1, false));
     }
 
     private HttpServer startServer(Queue<URI> requests)

@@ -65,6 +65,11 @@ public class OpenApiConfig
     private String apiKeyName;
     private String apiKeyValue;
 
+    private String usernameCredentialName;
+    private String passwordCredentialName;
+    private String bearerTokenCredentialName;
+    private String apiKeyValueCredentialName;
+
     private String clientId;
     private String clientSecret;
     // RFC 6749 requires servers to support client_secret_basic, but client_secret_post was the only method before it could be chosen
@@ -313,10 +318,69 @@ public class OpenApiConfig
         return this;
     }
 
-    @AssertTrue(message = "authentication.api-keys cannot be combined with authentication.api-key-name or authentication.api-key-value")
+    @AssertTrue(message = "authentication.api-keys cannot be combined with authentication.api-key-name, authentication.api-key-value, or authentication.api-key-value-credential-name")
     public boolean isApiKeysValid()
     {
-        return apiKeys.isEmpty() || (apiKeyName == null && apiKeyValue == null);
+        return apiKeys.isEmpty() || (apiKeyName == null && apiKeyValue == null && apiKeyValueCredentialName == null);
+    }
+
+    public String getUsernameCredentialName()
+    {
+        return usernameCredentialName;
+    }
+
+    @Config("authentication.username-credential-name")
+    @ConfigDescription("Name of the extra credential with the username of the user running the query, used instead of authentication.username")
+    public OpenApiConfig setUsernameCredentialName(String usernameCredentialName)
+    {
+        this.usernameCredentialName = usernameCredentialName;
+        return this;
+    }
+
+    public String getPasswordCredentialName()
+    {
+        return passwordCredentialName;
+    }
+
+    @Config("authentication.password-credential-name")
+    @ConfigDescription("Name of the extra credential with the password of the user running the query, used instead of authentication.password")
+    public OpenApiConfig setPasswordCredentialName(String passwordCredentialName)
+    {
+        this.passwordCredentialName = passwordCredentialName;
+        return this;
+    }
+
+    // a username of one account and a password of another can't be valid together
+    @AssertTrue(message = "authentication.username-credential-name and authentication.password-credential-name must be set together")
+    public boolean isUsernamePasswordCredentialNamesValid()
+    {
+        return (usernameCredentialName == null) == (passwordCredentialName == null);
+    }
+
+    public String getBearerTokenCredentialName()
+    {
+        return bearerTokenCredentialName;
+    }
+
+    @Config("authentication.bearer-token-credential-name")
+    @ConfigDescription("Name of the extra credential with the bearer token of the user running the query, used instead of authentication.bearer-token")
+    public OpenApiConfig setBearerTokenCredentialName(String bearerTokenCredentialName)
+    {
+        this.bearerTokenCredentialName = bearerTokenCredentialName;
+        return this;
+    }
+
+    public String getApiKeyValueCredentialName()
+    {
+        return apiKeyValueCredentialName;
+    }
+
+    @Config("authentication.api-key-value-credential-name")
+    @ConfigDescription("Name of the extra credential with the API key of the user running the query, used instead of authentication.api-key-value")
+    public OpenApiConfig setApiKeyValueCredentialName(String apiKeyValueCredentialName)
+    {
+        this.apiKeyValueCredentialName = apiKeyValueCredentialName;
+        return this;
     }
 
     public String getClientId()
@@ -397,7 +461,10 @@ public class OpenApiConfig
 
     public boolean hasCredentials()
     {
-        return Stream.of(username, password, bearerToken, apiKeyValue, clientId, clientSecret).anyMatch(Objects::nonNull) || !apiKeys.isEmpty();
+        // users can pass their own credentials, even when the catalog has none
+        return Stream.of(username, password, bearerToken, apiKeyValue, clientId, clientSecret, usernameCredentialName, passwordCredentialName, bearerTokenCredentialName, apiKeyValueCredentialName)
+                .anyMatch(Objects::nonNull)
+                || !apiKeys.isEmpty();
     }
 
     private static boolean isInsecure(URI uri)

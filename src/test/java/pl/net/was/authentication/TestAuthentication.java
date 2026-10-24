@@ -115,8 +115,8 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
 
-        assertNoCredentials(authentication.filterRequest(request("/anonymous")));
-        assertThat(authentication.filterRequest(request("/inherited")).getHeader(AUTHORIZATION))
+        assertNoCredentials(authentication.filterRequest(request("/anonymous"), UserCredentials.NONE));
+        assertThat(authentication.filterRequest(request("/inherited"), UserCredentials.NONE).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
@@ -146,8 +146,8 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
 
-        assertNoCredentials(authentication.filterRequest(request("/anonymous")));
-        Request inherited = authentication.filterRequest(request("/inherited"));
+        assertNoCredentials(authentication.filterRequest(request("/anonymous"), UserCredentials.NONE));
+        Request inherited = authentication.filterRequest(request("/inherited"), UserCredentials.NONE);
         assertThat(inherited.getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
         assertThat(inherited.getHeader(HeaderName.of("X-API-Key"))).isEqualTo("header-secret");
         assertThat(inherited.getHeader(COOKIE)).isEqualTo("session=cookie-secret");
@@ -177,8 +177,8 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES, SECURITY_SCHEMES));
 
-        assertNoCredentials(authentication.filterRequest(request("/inherited")));
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION))
+        assertNoCredentials(authentication.filterRequest(request("/inherited"), UserCredentials.NONE));
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
@@ -200,7 +200,7 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES));
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the basicAuth security scheme is not declared in components.securitySchemes");
     }
@@ -218,7 +218,7 @@ class TestAuthentication
                 %s
                 """.formatted(SECURITY_SCHEMES));
 
-        assertThat(authentication.filterRequest(request("/unknown")).getHeader(AUTHORIZATION))
+        assertThat(authentication.filterRequest(request("/unknown"), UserCredentials.NONE).getHeader(AUTHORIZATION))
                 .isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
@@ -252,7 +252,7 @@ class TestAuthentication
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES));
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the oauth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser");
     }
@@ -286,7 +286,7 @@ class TestAuthentication
                         .setClientId("client")
                         .setClientSecret("secret"));
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the password flow of the oauth security scheme requires the authentication.username and authentication.password configuration properties");
     }
@@ -325,8 +325,8 @@ class TestAuthentication
                         JSON_UTF_8,
                         "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":30}".formatted(tokenRequests.incrementAndGet()))));
 
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequests).hasValue(1);
     }
 
@@ -371,9 +371,9 @@ class TestAuthentication
                     return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":300}".formatted(tokenRequestBodies.size()));
                 }));
 
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
-        assertThat(authentication.filterRequest(request("/admin")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-2");
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/admin"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-2");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequestBodies).containsExactly(
                 "grant_type=client_credentials&scope=read&client_id=client&client_secret=secret",
                 "grant_type=client_credentials&scope=read+write&client_id=client&client_secret=secret");
@@ -418,8 +418,8 @@ class TestAuthentication
                 .setClientSecret("s3cr3t+/")
                 .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 
-        createAuthentication(spec, config, tokenClient).filterRequest(request("/secured"));
-        createAuthentication(spec, config.setUsername("user").setPassword("password"), tokenClient).filterRequest(request("/secured"));
+        createAuthentication(spec, config, tokenClient).filterRequest(request("/secured"), UserCredentials.NONE);
+        createAuthentication(spec, config.setUsername("user").setPassword("password"), tokenClient).filterRequest(request("/secured"), UserCredentials.NONE);
 
         // RFC 6749 requires encoding the client ID and secret as form values before they're joined with a colon
         assertThat(tokenRequests)
@@ -448,7 +448,7 @@ class TestAuthentication
                     return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
                 }));
 
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Bearer token");
         assertThat(tokenRequests).hasValue(2);
     }
 
@@ -488,7 +488,7 @@ class TestAuthentication
                     return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
                 }));
 
-        authentication.filterRequest(request("/secured"));
+        authentication.filterRequest(request("/secured"), UserCredentials.NONE);
 
         assertThat(tokenRequests).singleElement().satisfies(request -> {
             assertThat(request.getHeader(AUTHORIZATION)).isNull();
@@ -510,9 +510,9 @@ class TestAuthentication
                 .setClientSecret("secret");
 
         createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config, tokenClient)
-                .filterRequest(request("/secured"));
+                .filterRequest(request("/secured"), UserCredentials.NONE);
         createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config.setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC), tokenClient)
-                .filterRequest(request("/secured"));
+                .filterRequest(request("/secured"), UserCredentials.NONE);
 
         assertThat(tokenRequests)
                 .extracting(Request::isFollowRedirects)
@@ -532,16 +532,16 @@ class TestAuthentication
                 .setClientId("client")
                 .setClientSecret("secret");
 
-        assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config, tokenClient).filterRequest(request("/secured")))
+        assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config, tokenClient).filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: " +
                         "the oauth security scheme sets tokenUrl to http://auth.example.com/token, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it");
 
         // the same host as base-uri
         createAuthentication(clientCredentialsSpec("http://localhost:8080/token"), config, tokenClient)
-                .filterRequest(request("/secured"));
+                .filterRequest(request("/secured"), UserCredentials.NONE);
         createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config.setTokenUrl(URI.create("https://auth.example.com/override")), tokenClient)
-                .filterRequest(request("/secured"));
+                .filterRequest(request("/secured"), UserCredentials.NONE);
 
         assertThat(tokenUris).containsExactly(URI.create("http://localhost:8080/token"), URI.create("https://auth.example.com/override"));
     }
@@ -562,9 +562,9 @@ class TestAuthentication
                 .setClientSecret("secret")
                 .setAllowInsecureHttp(true);
 
-        newAuthentication(config, tokenClient).filterRequest(request("/secured"));
+        newAuthentication(config, tokenClient).filterRequest(request("/secured"), UserCredentials.NONE);
         // base-uri is used instead of the declared servers, so their hosts are not trusted
-        assertThatThrownBy(() -> newAuthentication(config.setBaseUri(URI.create("http://api.example.com")), tokenClient).filterRequest(request("/secured")))
+        assertThatThrownBy(() -> newAuthentication(config.setBaseUri(URI.create("http://api.example.com")), tokenClient).filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageEndingWith("sets tokenUrl to http://localhost:8080/token, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it");
 
@@ -577,7 +577,7 @@ class TestAuthentication
     {
         Authentication authentication = createClientCredentialsAuthentication("{\"access_token\":\"s3cr3t\",\"expires_in\":\"soon\"}");
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("s3cr3t"));
     }
 
@@ -587,7 +587,7 @@ class TestAuthentication
     {
         Authentication authentication = createClientCredentialsAuthentication("{\"token_type\":\"Bearer\",\"expires_in\":30}");
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Response of the token endpoint https://localhost:8081/token doesn't include an access_token");
     }
@@ -615,7 +615,7 @@ class TestAuthentication
                 new OpenApiConfig()
                         .setApiKeys("X-API-Key=ab+c/d,session=ab+c/d;e,api_key=ab+c/d%&e"));
 
-        Request request = authentication.filterRequest(request("/secured"));
+        Request request = authentication.filterRequest(request("/secured"), UserCredentials.NONE);
         assertThat(request.getHeader(HeaderName.of("X-API-Key"))).isEqualTo("ab+c/d");
         assertThat(request.getHeader(COOKIE)).isEqualTo("session=ab%2Bc%2Fd%3Be");
         assertThat(request.getUri().getRawQuery()).isEqualTo("api_key=ab%2Bc%2Fd%25%26e");
@@ -644,7 +644,7 @@ class TestAuthentication
                         .setPassword("a~~~"));
 
         // the standard base64 encoding of user:a~~~ ends with +, and base64url would use - instead
-        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjphfn5+");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjphfn5+");
     }
 
     @Test
@@ -679,7 +679,7 @@ class TestAuthentication
         Request request = authentication.filterRequest(prepareGet()
                 .setUri(URI.create(BASE_URI + "/a%2Fb/items?q=x%26admin%3Dtrue#top"))
                 .addHeader(OPENAPI_PATH_HEADER, "/{tenant}/items")
-                .build());
+                .build(), UserCredentials.NONE);
         assertThat(request.getUri()).isEqualTo(URI.create(BASE_URI + "/a%2Fb/items?q=x%26admin%3Dtrue&api_key=query-secret#top"));
     }
 
@@ -709,7 +709,7 @@ class TestAuthentication
                 .setApiKeys("X-API-Key=header-secret")
                 .setUsername("user")
                 .setPassword("password"));
-        Request request = withBasicAuth.filterRequest(request("/secured"));
+        Request request = withBasicAuth.filterRequest(request("/secured"), UserCredentials.NONE);
         assertThat(request.getHeaders().get(AUTHORIZATION)).containsExactly("Basic dXNlcjpwYXNzd29yZA==");
         assertThat(request.getHeader(HeaderName.of("X-API-Key"))).isNull();
         assertThat(request.getUri().getQuery()).isNull();
@@ -717,7 +717,7 @@ class TestAuthentication
         Authentication withoutCredentials = createAuthentication(spec, new OpenApiConfig()
                 .setApiKeys("X-API-Key=header-secret")
                 .setUsername("user"));
-        assertThatThrownBy(() -> withoutCredentials.filterRequest(request("/secured")))
+        assertThatThrownBy(() -> withoutCredentials.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: " +
                         "the apiKeyQuery security scheme requires the api_key key in the authentication.api-keys configuration property; " +
@@ -744,7 +744,7 @@ class TestAuthentication
                         .setAuthenticationType(AuthenticationType.HTTP)
                         .setAuthenticationScheme(AuthenticationScheme.BEARER));
 
-        assertThatThrownBy(() -> authentication.filterRequest(request("/items")))
+        assertThatThrownBy(() -> authentication.filterRequest(request("/items"), UserCredentials.NONE))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("Cannot authenticate the GET /items request, because the http authentication type requires the authentication.bearer-token configuration property");
     }
@@ -771,8 +771,8 @@ class TestAuthentication
         Request request = fromRequest(request("/secured"))
                 .addHeader(COOKIE, "page=2")
                 .build();
-        assertThat(authentication.filterRequest(request).getHeaders().get(COOKIE)).containsExactly("page=2; session=cookie-secret");
-        assertThat(authentication.filterRequest(request("/secured")).getHeaders().get(COOKIE)).containsExactly("session=cookie-secret");
+        assertThat(authentication.filterRequest(request, UserCredentials.NONE).getHeaders().get(COOKIE)).containsExactly("page=2; session=cookie-secret");
+        assertThat(authentication.filterRequest(request("/secured"), UserCredentials.NONE).getHeaders().get(COOKIE)).containsExactly("session=cookie-secret");
     }
 
     @Test
@@ -791,7 +791,7 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES));
 
-        Request request = authentication.filterRequest(request("/items"));
+        Request request = authentication.filterRequest(request("/items"), UserCredentials.NONE);
         assertThat(request.getHeader(OPENAPI_PATH_HEADER)).isNull();
         assertThat(request.getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }

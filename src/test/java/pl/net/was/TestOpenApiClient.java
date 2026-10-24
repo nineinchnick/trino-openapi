@@ -32,6 +32,7 @@ import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import org.junit.jupiter.api.Test;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.ExtraCredentialProvider;
 
 import java.net.URI;
 import java.net.URL;
@@ -46,6 +47,7 @@ import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.util.Collections.nCopies;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,7 +127,7 @@ class TestOpenApiClient
         OpenApiClient client = createPagedClient(requests);
         OpenApiTableHandle table = getPagedTable();
 
-        assertThat(client.getSplitsAfterFirstPage(table, new ProbeLimit(OptionalInt.of(0)), false))
+        assertThat(client.getSplitsAfterFirstPage(SESSION, table, new ProbeLimit(OptionalInt.of(0)), false))
                 .extracting(split -> getFilter(split, "page"))
                 .containsExactly(2L, 3L);
         // the order of parameters is not defined
@@ -141,7 +143,7 @@ class TestOpenApiClient
         OpenApiClient client = createPagedClient(requests);
         OpenApiTableHandle table = getPagedTable();
 
-        assertThat(client.getSplitsAfterFirstPage(table, ProbeLimit.NONE, false))
+        assertThat(client.getSplitsAfterFirstPage(SESSION, table, ProbeLimit.NONE, false))
                 .extracting(split -> getFilter(split, "page"))
                 .containsExactly(2L, 3L);
         assertThat(requests)
@@ -172,7 +174,7 @@ class TestOpenApiClient
     private static OpenApiClient newClient(OpenApiConfig config, OpenApiSpec spec, HttpClient httpClient)
     {
         OpenApiServers servers = new OpenApiServers(config, spec);
-        return new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
+        return new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
     }
 
     private static OpenApiTableHandle getPagedTable()

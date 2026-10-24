@@ -17,6 +17,7 @@ package pl.net.was;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.connector.ConnectorMergeSink;
+import io.trino.spi.connector.ConnectorSession;
 
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.TinyintType.TINYINT;
@@ -25,9 +26,9 @@ public class OpenApiMergeSink
         extends OpenApiPageSink
         implements ConnectorMergeSink
 {
-    public OpenApiMergeSink(OpenApiClient client, OpenApiOutputTableHandle table)
+    public OpenApiMergeSink(OpenApiClient client, ConnectorSession session, OpenApiOutputTableHandle table)
     {
-        super(client, table);
+        super(client, session, table);
     }
 
     @Override
@@ -55,11 +56,11 @@ public class OpenApiMergeSink
 
     private void updatedPage(Page page, Block rowIds, int position, int caseNumber)
     {
-        client.updateRows(table, page, rowIds, position, table.getUpdatedColumns(caseNumber));
+        client.updateRows(session, table, page, rowIds, position, table.getUpdatedColumns(caseNumber));
     }
 
     private void deletedPage(Block rowIds, int position)
     {
-        client.deleteRows(table, rowIds, position);
+        client.deleteRows(session, table, rowIds, position);
     }
 }

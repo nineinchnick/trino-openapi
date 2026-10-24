@@ -31,11 +31,13 @@ import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
+import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Streams;
+import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.common.io.CountingInputStream;
@@ -56,6 +58,7 @@ import io.airlift.slice.Slice;
 import io.airlift.units.DataSize;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
+import io.trino.cache.EvictableCacheBuilder;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
@@ -63,6 +66,7 @@ import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.connector.SortItem;
@@ -78,6 +82,8 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 import pl.net.was.authentication.AuthenticatingHttpClient;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.ExtraCredentialProvider;
+import pl.net.was.authentication.UserCredentials;
 import pl.net.was.cache.CachingHttpClient;
 import pl.net.was.cache.HttpCache;
 
@@ -96,6 +102,7 @@ import java.net.URLDecoder;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -125,6 +132,7 @@ import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.HeaderNames.USER_AGENT;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.slice.Slices.utf8Slice;
+import static io.trino.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
@@ -163,13 +171,22 @@ public class OpenApiClient
     public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
     // OWASP's recommendation for PBKDF2-HMAC-SHA256
     private static final int TOKEN_HASH_ITERATIONS = 210_000;
+    private static final int MAX_HTTP_CACHE_PARTITIONS = 1000;
+    private static final Duration HTTP_CACHE_PARTITION_EXPIRATION = Duration.ofHours(1);
 
     private final OpenApiServers servers;
 
     private final HttpClient httpClient;
     private final Authentication authentication;
     private final DataSize maxResponseSize;
+    private final ExtraCredentialProvider extraCredentialProvider;
     private final Optional<HttpCache> httpCache;
+    private final String serverUris;
+    // hashing credentials with a slow function for every request would make it slower than the request
+    private final Cache<HashCode, String> httpCachePartitions = EvictableCacheBuilder.newBuilder()
+            .maximumSize(MAX_HTTP_CACHE_PARTITIONS)
+            .expireAfterWrite(HTTP_CACHE_PARTITION_EXPIRATION)
+            .build();
     private final OpenApiSpec openApiSpec;
     private final RateLimiter rateLimiter;
     private final RetryPolicy retryPolicy;
@@ -180,6 +197,7 @@ public class OpenApiClient
             CatalogName catalogName,
             @ForUnauthenticatedOpenApi HttpClient httpClient,
             Authentication authentication,
+            ExtraCredentialProvider extraCredentialProvider,
             OpenApiSpec openApiSpec,
             OpenApiServers servers)
     {
@@ -187,6 +205,8 @@ public class OpenApiClient
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.authentication = requireNonNull(authentication, "authentication is null");
         this.maxResponseSize = config.getMaxResponseSize();
+        this.extraCredentialProvider = requireNonNull(extraCredentialProvider, "extraCredentialProvider is null");
+        this.serverUris = getServerUris(servers);
         this.httpCache = config.getHttpCacheDirectory()
                 .map(directory -> new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()));
         this.openApiSpec = openApiSpec;
@@ -194,8 +214,9 @@ public class OpenApiClient
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
     }
 
-    public Iterable<List<?>> getRows(OpenApiTableHandle table, int firstPage, int pageIncrement, boolean revalidateCachedResponses)
+    public Iterable<List<?>> getRows(ConnectorSession session, OpenApiTableHandle table, int firstPage, int pageIncrement, boolean revalidateCachedResponses)
     {
+        UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
         List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, column -> getFilter(column, table.getConstraint()));
@@ -208,7 +229,7 @@ public class OpenApiClient
         boolean followsLinks = pagination.nextPageLinkHeader() && pagination.cursorParam().isEmpty();
         Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty() && cursorColumn.isEmpty() && offsetColumn.isEmpty() && !followsLinks) {
-            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
+            return Streams.stream(makeRequest(credentials, table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
         }
@@ -218,7 +239,7 @@ public class OpenApiClient
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
         if (cursorColumn.isPresent() || followsLinks) {
             return cursorIterator(
-                    next -> getNextPage(pagedTable, httpPath, pathWithParams.getValue(), cursorColumn, next, revalidateCachedResponses),
+                    next -> getNextPage(credentials, pagedTable, httpPath, pathWithParams.getValue(), cursorColumn, next, revalidateCachedResponses),
                     queryLimit.orElse(Long.MAX_VALUE),
                     pagination.maxResults().orElse(Long.MAX_VALUE),
                     pagination.maxPages(),
@@ -227,8 +248,8 @@ public class OpenApiClient
         // without a page number, a page starts after the results the server returned on the previous pages,
         // so they're read one after another, in a single split, because servers can return fewer results than requested
         PageGetter pageGetter = offsetColumn.isPresent()
-                ? (page, readResults) -> getPage(withPage(pagedTable, offsetColumn.get(), readResults), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses)
-                : (page, _) -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses);
+                ? (page, readResults) -> getPage(credentials, withPage(pagedTable, offsetColumn.get(), readResults), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses)
+                : (page, _) -> getPage(credentials, withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses);
         return pageIterator(
                 pageGetter,
                 firstPage - 1,
@@ -349,8 +370,9 @@ public class OpenApiClient
                 .map(pageColumn -> withPage(table, pageColumn, 1));
     }
 
-    public List<OpenApiSplit> getSplitsAfterFirstPage(OpenApiTableHandle table, ProbeLimit probeLimit, boolean revalidateCachedResponses)
+    public List<OpenApiSplit> getSplitsAfterFirstPage(ConnectorSession session, OpenApiTableHandle table, ProbeLimit probeLimit, boolean revalidateCachedResponses)
     {
+        UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, table.getSelectPaths(), column -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
@@ -363,7 +385,7 @@ public class OpenApiClient
         // and the total number of pages would be calculated for the smaller page
         if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && pagination.totalResultsPath().isPresent()) {
             OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().orElseThrow());
-            ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
+            ResultsPage probe = getPage(credentials, probeTable, httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
             serverPageSize = pageSize.orElseThrow();
             pageCount = probe.totalResults().isPresent() && serverPageSize > 0
                     ? OptionalLong.of(ceilDiv(probe.totalResults().orElseThrow(), serverPageSize))
@@ -371,7 +393,7 @@ public class OpenApiClient
         }
         else {
             // the first page is also read by its own split, because rows can't be sent in splits
-            ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
+            ResultsPage firstPage = getPage(credentials, withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
             serverPageSize = Iterables.size(firstPage.rows());
             pageCount = getPageCount(firstPage, pageSize);
         }
@@ -469,16 +491,17 @@ public class OpenApiClient
         return table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
     }
 
-    private ResultsPage getPage(OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean isFirstPage, boolean revalidateCachedResponses)
+    private ResultsPage getPage(UserCredentials credentials, OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean isFirstPage, boolean revalidateCachedResponses)
     {
         // pages after the first are read only after the first one was found, so a missing one is an error, not the end of the results
         boolean notFoundIsEmpty = isFirstPage && isNotFoundEmpty(httpPath, pathParameters);
         // the body must be serialized for every page, since it can contain the page number,
         // and the response handler copies the page number to every row
-        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, notFoundIsEmpty));
+        return makeRequest(credentials, pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, notFoundIsEmpty));
     }
 
     private ResultsPage getNextPage(
+            UserCredentials credentials,
             OpenApiTableHandle table,
             HttpPath httpPath,
             Map<OpenApiColumn, Object> pathParameters,
@@ -487,13 +510,13 @@ public class OpenApiClient
             boolean revalidateCachedResponses)
     {
         if (next.isEmpty()) {
-            return getPage(table, httpPath, pathParameters, true, revalidateCachedResponses);
+            return getPage(credentials, table, httpPath, pathParameters, true, revalidateCachedResponses);
         }
         if (cursorColumn.isPresent()) {
-            return getPage(withCursor(table, cursorColumn.get(), next.get()), httpPath, pathParameters, false, revalidateCachedResponses);
+            return getPage(credentials, withCursor(table, cursorColumn.get(), next.get()), httpPath, pathParameters, false, revalidateCachedResponses);
         }
         // the link already has all query parameters, and the response handler checked that it points to the host of the base URI
-        return sendRequest(table, httpPath, URI.create(next.get()), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, false));
+        return sendRequest(credentials, table, httpPath, URI.create(next.get()), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, false));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
@@ -561,27 +584,31 @@ public class OpenApiClient
         return method == PathItem.HttpMethod.POST || method == PathItem.HttpMethod.PUT || method == PathItem.HttpMethod.PATCH;
     }
 
-    public void insertRows(OpenApiOutputTableHandle table, Page page, int position)
+    public void insertRows(ConnectorSession session, OpenApiOutputTableHandle table, Page page, int position)
     {
-        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position, column -> getRowValue(table, page, position, column), Optional.empty());
+        UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
+        writeRows(credentials, table, "INSERT", table.getTableHandle().getInsertPaths(), page, position, column -> getRowValue(table, page, position, column), Optional.empty());
     }
 
-    public void updateRows(OpenApiOutputTableHandle table, Page page, Block rowIds, int position, Set<OpenApiColumnHandle> updatedColumns)
+    public void updateRows(ConnectorSession session, OpenApiOutputTableHandle table, Page page, Block rowIds, int position, Set<OpenApiColumnHandle> updatedColumns)
     {
+        UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
         List<HttpPath> paths = table.getTableHandle().getUpdatePaths();
         table.getTableHandle().checkHasPaths("UPDATE", paths);
         Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(table.getTableHandle(), "UPDATE", paths, rowIds, position, column -> getRowValue(table, page, position, column));
-        writeRows(table, "UPDATE", paths, page, position, rowValues, Optional.of(updatedColumns));
+        writeRows(credentials, table, "UPDATE", paths, page, position, rowValues, Optional.of(updatedColumns));
     }
 
-    public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
+    public void deleteRows(ConnectorSession session, OpenApiOutputTableHandle table, Block rowIds, int position)
     {
+        UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
         OpenApiTableHandle tableHandle = table.getTableHandle();
         tableHandle.checkHasPaths("DELETE", tableHandle.getDeletePaths());
         Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(tableHandle, "DELETE", tableHandle.getDeletePaths(), rowIds, position, column -> getFilter(column, tableHandle.getConstraint()));
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(tableHandle, tableHandle.getDeletePaths(), rowValues);
         HttpPath httpPath = pathWithParams.getKey();
         makeRequest(
+                credentials,
                 tableHandle,
                 httpPath,
                 pathWithParams.getValue(),
@@ -664,6 +691,7 @@ public class OpenApiClient
     }
 
     private void writeRows(
+            UserCredentials credentials,
             OpenApiOutputTableHandle table,
             String statement,
             List<HttpPath> paths,
@@ -687,6 +715,7 @@ public class OpenApiClient
                 ? serializeUpdatedColumns(table, httpPath, page, position, updatedColumns.get())
                 : serializePage(table, httpPath, page, position);
         makeRequest(
+                credentials,
                 table.getTableHandle(),
                 httpPath,
                 pathWithParams.getValue(),
@@ -750,13 +779,14 @@ public class OpenApiClient
     }
 
     public <T> T makeRequest(
+            UserCredentials credentials,
             OpenApiTableHandle table,
             HttpPath httpPath,
             Map<OpenApiColumn, Object> pathParameters,
             BodyGenerator bodyGenerator,
             ResponseHandler<T, RuntimeException> responseHandler)
     {
-        return makeRequest(table, httpPath, pathParameters, getParameterValues(table, httpPath), false, bodyGenerator, responseHandler);
+        return makeRequest(credentials, table, httpPath, pathParameters, getParameterValues(table, httpPath), false, bodyGenerator, responseHandler);
     }
 
     private Function<OpenApiColumn, Object> getParameterValues(OpenApiTableHandle table, HttpPath httpPath)
@@ -787,6 +817,7 @@ public class OpenApiClient
     }
 
     private <T> T makeRequest(
+            UserCredentials credentials,
             OpenApiTableHandle table,
             HttpPath httpPath,
             Map<OpenApiColumn, Object> pathParameters,
@@ -812,10 +843,11 @@ public class OpenApiClient
         catch (URISyntaxException e) {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, format("Failed to construct the API URL: %s", e));
         }
-        return sendRequest(table, httpPath, uri, valueProvider, revalidateCachedResponses, bodyGenerator, responseHandler);
+        return sendRequest(credentials, table, httpPath, uri, valueProvider, revalidateCachedResponses, bodyGenerator, responseHandler);
     }
 
     private <T> T sendRequest(
+            UserCredentials credentials,
             OpenApiTableHandle table,
             HttpPath httpPath,
             URI uri,
@@ -862,20 +894,32 @@ public class OpenApiClient
                     if (rateLimiter != null) {
                         rateLimiter.acquire();
                     }
-                    return getHttpClient().execute(request, responseHandler);
+                    return getHttpClient(credentials).execute(request, responseHandler);
                 },
                 (failure, attempts, notRetriedReason) -> toTrinoException(table, httpPath, request, failure, attempts, notRetriedReason));
     }
 
-    private HttpClient getHttpClient()
+    private HttpClient getHttpClient(UserCredentials credentials)
     {
-        HttpClient sizeLimitingClient = new SizeLimitingHttpClient(new AuthenticatingHttpClient(httpClient, authentication), maxResponseSize);
+        HttpClient sizeLimitingClient = new SizeLimitingHttpClient(new AuthenticatingHttpClient(httpClient, authentication, credentials), maxResponseSize);
         // the cache is wrapped by decompression, so it stores compressed responses
         return new DecompressingHttpClient(
                 httpCache
-                        .<HttpClient>map(cache -> new CachingHttpClient(sizeLimitingClient, cache, Clock.systemUTC()))
+                        .<HttpClient>map(cache -> new CachingHttpClient(sizeLimitingClient, getHttpCachePartition(cache, credentials), Clock.systemUTC()))
                         .orElse(sizeLimitingClient),
                 maxResponseSize);
+    }
+
+    // the catalog credentials already name the cache directory, and responses got with credentials of a user are stored separately,
+    // in a partition named like the directory, with a slow hash, because file names can be visible to other users of the server
+    private HttpCache getHttpCachePartition(HttpCache cache, UserCredentials credentials)
+    {
+        if (credentials.isEmpty()) {
+            return cache;
+        }
+        String secrets = credentials.toSecretString();
+        HashCode key = Hashing.sha256().hashString(secrets, UTF_8);
+        return cache.partition(uncheckedCacheGet(httpCachePartitions, key, () -> HashCode.fromBytes(hashSecrets(secrets, serverUris)).toString()));
     }
 
     // an operation that is used only by SELECT doesn't change anything, so repeating it is safe, even if it uses POST
@@ -2014,12 +2058,17 @@ public class OpenApiClient
         if (CharMatcher.is('\0').matchesAllOf(tokens)) {
             return new byte[0];
         }
-        PBEKeySpec keySpec = new PBEKeySpec(tokens.toCharArray(), serverUris.getBytes(UTF_8), TOKEN_HASH_ITERATIONS, 256);
+        return hashSecrets(tokens, serverUris);
+    }
+
+    private static byte[] hashSecrets(String secrets, String salt)
+    {
+        PBEKeySpec keySpec = new PBEKeySpec(secrets.toCharArray(), salt.getBytes(UTF_8), TOKEN_HASH_ITERATIONS, 256);
         try {
             return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(keySpec).getEncoded();
         }
         catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Failed to hash the credentials for the HTTP cache directory name", e);
+            throw new IllegalStateException("Failed to hash the credentials for the HTTP cache", e);
         }
         finally {
             keySpec.clearPassword();

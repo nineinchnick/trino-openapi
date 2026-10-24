@@ -296,7 +296,7 @@ public class OpenApiSplitManager
             ProbeLimit probeLimit = getProbeLimit(session)
                     .or(pagination::probeLimit)
                     .orElse(this.probeLimit);
-            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
+            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(session, splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
         }
         // TODO when implementing limits, this is where we'd break down splits more
         return getSplitSource(splits.build(), splitsAfterFirstPages.build());

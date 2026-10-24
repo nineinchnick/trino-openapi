@@ -32,11 +32,13 @@ public class AuthenticatingHttpClient
 
     private final HttpClient delegate;
     private final Authentication authentication;
+    private final UserCredentials userCredentials;
 
-    public AuthenticatingHttpClient(HttpClient delegate, Authentication authentication)
+    public AuthenticatingHttpClient(HttpClient delegate, Authentication authentication, UserCredentials userCredentials)
     {
         this.delegate = requireNonNull(delegate, "delegate is null");
         this.authentication = requireNonNull(authentication, "authentication is null");
+        this.userCredentials = requireNonNull(userCredentials, "userCredentials is null");
     }
 
     /**
@@ -47,26 +49,26 @@ public class AuthenticatingHttpClient
     public <T, E extends Exception> T execute(Request request, ResponseHandler<T, E> responseHandler)
             throws E
     {
-        Request authenticatedRequest = authentication.filterRequest(request);
+        Request authenticatedRequest = authentication.filterRequest(request, userCredentials);
         try {
             return delegate.execute(authenticatedRequest, new RejectedTokenHandler<>(request, authenticatedRequest, responseHandler));
         }
         catch (TokenRefreshedException _) {
             // the server rejects a request with 401 before processing it, so sending it again can't apply it twice
-            return delegate.execute(authentication.filterRequest(request), responseHandler);
+            return delegate.execute(authentication.filterRequest(request, userCredentials), responseHandler);
         }
     }
 
     @Override
     public <T, E extends Exception> HttpResponseFuture<T> executeAsync(Request request, ResponseHandler<T, E> responseHandler)
     {
-        return delegate.executeAsync(authentication.filterRequest(request), responseHandler);
+        return delegate.executeAsync(authentication.filterRequest(request, userCredentials), responseHandler);
     }
 
     @Override
     public StreamingResponse executeStreaming(Request request)
     {
-        return delegate.executeStreaming(authentication.filterRequest(request));
+        return delegate.executeStreaming(authentication.filterRequest(request, userCredentials));
     }
 
     @Override
@@ -114,7 +116,7 @@ public class AuthenticatingHttpClient
         {
             if (response.getStatusCode() == UNAUTHORIZED
                     && response.getHeaders(WWW_AUTHENTICATE).stream().anyMatch(AuthenticatingHttpClient::containsBearerChallenge)
-                    && authentication.refreshRejectedTokens(this.request, authenticatedRequest)) {
+                    && authentication.refreshRejectedTokens(this.request, authenticatedRequest, userCredentials)) {
                 throw new TokenRefreshedException();
             }
             return responseHandler.handle(request, response);
