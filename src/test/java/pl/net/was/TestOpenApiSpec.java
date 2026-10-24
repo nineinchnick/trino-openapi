@@ -26,6 +26,7 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
@@ -68,6 +69,7 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_SPEC;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 import static pl.net.was.TestingOpenApiSpec.createSpec;
@@ -2728,18 +2730,25 @@ class TestOpenApiSpec
         // without errorPath, error messages must not include the response body
         Assertions.assertThat(spec.getErrorPointers(schemaTableName(SCHEMA_NAME, "items"))).isEmpty();
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: many")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of maxPages: many");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxPages: 10", "maxPages: 0")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("maxPages must be positive");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: many")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of maxResults: many");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("maxResults: 1000", "maxResults: 0")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("maxResults must be positive");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("splitStrategy: off", "splitStrategy: sometimes")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of splitStrategy: 'sometimes', must be one of: probe, stride, off");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("strideSplits: 4", "strideSplits: 0")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("strideSplits must be positive");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("probeLimit: 0", "probeLimit: some")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of probeLimit: some");
         Assertions.assertThat(parseSpec(specContents.replace("probeLimit: 0", "probeLimit: none")).getPaginations(schemaTableName(SCHEMA_NAME, "items")).values())
                 .extracting(Pagination::probeLimit)
@@ -2803,14 +2812,19 @@ class TestOpenApiSpec
                 .extracting(Pagination::cursorParam)
                 .containsExactly(Optional.of("cursor"));
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("nextCursorPath: $response.body#/next_cursor", "")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("nextCursorPath or nextPageLinkHeader is required with cursorParam");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("cursorParam is required with nextCursorPath");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "cursorParam: after")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of cursorParam of GET /items: after, the operation has no such parameter");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("type: string\n      x-trino", "type: boolean\n      x-trino")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of cursorParam of GET /items: cursor, the parameter must be a string or an integer, not boolean");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "cursorParam: cursor\n        pageParam: cursor")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid x-trino extension of GET /items: cursorParam can't be used with pageParam");
     }
 
@@ -3089,8 +3103,10 @@ class TestOpenApiSpec
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("upperParam: until", "upperParam: since")))
                 .hasMessage("Invalid value of rangeFilters: parameter since is used more than once in GET /changes");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("            lowerInclusive: true\n", "")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of rangeFilters for updated_at: lowerInclusive is required with lowerParam");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("exact: true", "exact: yes please")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of rangeFilters for updated_at: exact must be true or false, got yes please");
     }
 
@@ -5163,7 +5179,7 @@ class TestOpenApiSpec
                 """);
 
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("$response.body#/data/results", "$response.body#/data/items")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/items, the response has no field items");
     }
 
@@ -5171,14 +5187,14 @@ class TestOpenApiSpec
     public void testResultsPathToScalar()
     {
         Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec("type: string")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
         Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec(
                         """
                         type: integer
                         nullable: true
                         """)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
     }
 
@@ -5235,7 +5251,7 @@ class TestOpenApiSpec
                               type: string
                         - type: string
                         """)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> Assertions.assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
     }
 

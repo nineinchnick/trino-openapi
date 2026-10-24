@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.jetty.JettyHttpClient;
+import io.trino.spi.TrinoException;
 import io.trino.spi.catalog.CatalogName;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,6 +41,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -47,6 +49,7 @@ import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_SPEC;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 @TestInstance(PER_CLASS)
@@ -260,7 +263,7 @@ class TestOpenApiServers
                 """.formatted(OK_RESPONSES));
 
         assertThatThrownBy(() -> getRows(config, "forecast"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("Server URL /v1 of GET /forecast is relative, but spec-location is not a URL, so set base-uri");
         assertThat(getRows(config.setBaseUri(forecastUri), "forecast")).isEmpty();
         assertThat(forecastRequests).containsExactly(URI.create("/forecast"));
@@ -317,7 +320,7 @@ class TestOpenApiServers
                 """.formatted(OK_RESPONSES));
 
         assertThatThrownBy(() -> getRows(config, "forecast"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage("Server URL https://{region}.example.com of GET /forecast uses the variable region, which doesn't have a default value, so set base-uri");
     }
 
@@ -338,7 +341,7 @@ class TestOpenApiServers
                 """.formatted(OK_RESPONSES));
 
         assertThatThrownBy(() -> newServers(config))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("The spec doesn't declare any servers, so set base-uri");
         assertThat(newServers(config.setBaseUri(forecastUri)).getUris()).containsExactly(forecastUri);
     }
@@ -369,7 +372,7 @@ class TestOpenApiServers
                 """.formatted(forecastUri, OK_RESPONSES));
 
         assertThatThrownBy(() -> newServers(config))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("The spec doesn't declare servers for POST /archive, GET /archive, so set base-uri");
     }
 
@@ -398,7 +401,7 @@ class TestOpenApiServers
                 .setBearerToken("token");
 
         assertThatThrownBy(() -> newServers(config))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", forecastUri);
         assertThat(newServers(config.setAllowInsecureHttp(true)).getUris())
                 .containsExactlyInAnyOrder(forecastUri, URI.create("https://api.example.com"));

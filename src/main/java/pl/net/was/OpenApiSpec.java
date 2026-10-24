@@ -29,6 +29,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.hash.Hashing;
 import com.google.common.net.MediaType;
+import com.google.errorprone.annotations.FormatMethod;
 import com.google.inject.Inject;
 import io.airlift.http.client.HttpClient;
 import io.airlift.log.Logger;
@@ -390,11 +391,11 @@ public class OpenApiSpec
         if (extension == null) {
             return ImmutableMap.of();
         }
-        checkArgument(extension instanceof Map<?, ?>, "Invalid value of the document-level %s extension: expected an object", SPEC_EXTENSION);
+        checkSpec(extension instanceof Map<?, ?>, "Invalid value of the document-level %s extension: expected an object", SPEC_EXTENSION);
         // properties of operations set for the whole document would change every operation, which is likely a mistake
         ((Map<?, ?>) extension).forEach((key, value) -> {
-            checkArgument(DOCUMENT_EXTENSION_PROPERTIES.contains(key), "Invalid property of the document-level %s extension: %s, must be one of: %s", SPEC_EXTENSION, key, String.join(", ", DOCUMENT_EXTENSION_PROPERTIES));
-            checkArgument(value instanceof String, "Invalid value of %s: expected a string", key);
+            checkSpec(DOCUMENT_EXTENSION_PROPERTIES.contains(key), "Invalid property of the document-level %s extension: %s, must be one of: %s", SPEC_EXTENSION, key, String.join(", ", DOCUMENT_EXTENSION_PROPERTIES));
+            checkSpec(value instanceof String, "Invalid value of %s: expected a string", key);
         });
         return getMapOfStrings(extension);
     }
@@ -406,7 +407,7 @@ public class OpenApiSpec
         }
         JsonPointer pointer = pointer(documentExtension, ERROR_PATH);
         // an empty pointer selects the whole response, which would include the whole body of error responses of every operation in error messages
-        checkArgument(!pointer.equals(JsonPointer.empty()), "Invalid value of %s: %s, must point to a field of the response", ERROR_PATH, documentExtension.get(ERROR_PATH));
+        checkSpec(!pointer.equals(JsonPointer.empty()), "Invalid value of %s: %s, must point to a field of the response", ERROR_PATH, documentExtension.get(ERROR_PATH));
         return Optional.of(pointer);
     }
 
@@ -414,17 +415,17 @@ public class OpenApiSpec
     {
         String resetHeader = documentExtension.get(RATE_LIMIT_RESET_HEADER);
         if (resetHeader == null) {
-            checkArgument(!documentExtension.containsKey(RATE_LIMIT_RESET_FORMAT), "%s requires %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
-            checkArgument(!documentExtension.containsKey(RATE_LIMIT_REMAINING_HEADER), "%s requires %s", RATE_LIMIT_REMAINING_HEADER, RATE_LIMIT_RESET_HEADER);
+            checkSpec(!documentExtension.containsKey(RATE_LIMIT_RESET_FORMAT), "%s requires %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
+            checkSpec(!documentExtension.containsKey(RATE_LIMIT_REMAINING_HEADER), "%s requires %s", RATE_LIMIT_REMAINING_HEADER, RATE_LIMIT_RESET_HEADER);
             return Optional.empty();
         }
         // a reset time read in the wrong format would make requests wait too long, or retry too early, so it must be declared
         String resetFormat = documentExtension.get(RATE_LIMIT_RESET_FORMAT);
-        checkArgument(resetFormat != null, "%s is required with %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
+        checkSpec(resetFormat != null, "%s is required with %s", RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_RESET_HEADER);
         Optional<RateLimitHeaders.ResetFormat> format = Stream.of(RateLimitHeaders.ResetFormat.values())
                 .filter(value -> value.getSpecValue().equals(resetFormat))
                 .findFirst();
-        checkArgument(format.isPresent(), "Invalid value of %s: %s, must be one of: %s", RATE_LIMIT_RESET_FORMAT, resetFormat, Stream.of(RateLimitHeaders.ResetFormat.values())
+        checkSpec(format.isPresent(), "Invalid value of %s: %s, must be one of: %s", RATE_LIMIT_RESET_FORMAT, resetFormat, Stream.of(RateLimitHeaders.ResetFormat.values())
                 .map(RateLimitHeaders.ResetFormat::getSpecValue)
                 .collect(joining(", ")));
         return Optional.of(new RateLimitHeaders(resetHeader, format.get(), Optional.ofNullable(documentExtension.get(RATE_LIMIT_REMAINING_HEADER))));
@@ -479,7 +480,7 @@ public class OpenApiSpec
             }
             Map.Entry<String, PathItem> baseEntry = getBaseEntry(pathGroup);
             Optional<String> baseTableName = getTableNameExtension(baseEntry.getKey(), baseEntry.getValue());
-            checkArgument(
+            checkSpec(
                     baseTableName.isEmpty() || pathGroup.size() == 2,
                     "Invalid value of %s in %s: the path is merged into several tables, so set %s in the paths with path parameters instead: %s",
                     TABLE_NAME,
@@ -491,7 +492,7 @@ public class OpenApiSpec
                     // in groups of more than 2 paths, path parameters are included to tell the tables apart
                     .forEach(entry -> {
                         Optional<String> tableName = getTableNameExtension(entry.getKey(), entry.getValue());
-                        checkArgument(
+                        checkSpec(
                                 tableName.isEmpty() || baseTableName.isEmpty() || tableName.equals(baseTableName),
                                 "Invalid value of %s in %s and %s: they're mapped to a single table, but set different names: %s, %s",
                                 TABLE_NAME,
@@ -511,9 +512,9 @@ public class OpenApiSpec
     {
         Object pathItemExtension = pathItem.getExtensions() == null ? null : pathItem.getExtensions().get(SPEC_EXTENSION);
         if (pathItemExtension != null) {
-            checkArgument(pathItemExtension instanceof Map<?, ?>, "Invalid value of the %s extension of %s: expected an object", SPEC_EXTENSION, path);
+            checkSpec(pathItemExtension instanceof Map<?, ?>, "Invalid value of the %s extension of %s: expected an object", SPEC_EXTENSION, path);
             // properties of operations set for the whole path item would not be used, which is likely a mistake
-            ((Map<?, ?>) pathItemExtension).keySet().forEach(key -> checkArgument(
+            ((Map<?, ?>) pathItemExtension).keySet().forEach(key -> checkSpec(
                     key.equals(TABLE_NAME),
                     "Invalid property of the %s extension of %s: %s, must be one of: %s",
                     SPEC_EXTENSION,
@@ -530,16 +531,16 @@ public class OpenApiSpec
                 .filter(extension -> extension instanceof Map<?, ?> map && map.containsKey(TABLE_NAME))
                 .map(extension -> ((Map<?, ?>) extension).get(TABLE_NAME))
                 .map(value -> {
-                    checkArgument(value instanceof String name && !name.isBlank(), "Invalid value of %s in %s: expected a table name", TABLE_NAME, path);
+                    checkSpec(value instanceof String name && !name.isBlank(), "Invalid value of %s in %s: expected a table name", TABLE_NAME, path);
                     String name = (String) value;
                     // Trino converts unquoted names in queries to lowercase, so names with uppercase letters could only be used quoted
-                    checkArgument(name.equals(name.toLowerCase(Locale.ENGLISH)), "Invalid value of %s in %s: %s, must be lowercase", TABLE_NAME, path, name);
+                    checkSpec(name.equals(name.toLowerCase(Locale.ENGLISH)), "Invalid value of %s in %s: %s, must be lowercase", TABLE_NAME, path, name);
                     return name;
                 })
                 .distinct()
                 .sorted()
                 .toList();
-        checkArgument(tableNames.size() <= 1, "Invalid value of %s in %s: operations of a path are mapped to a single table, but set different names: %s", TABLE_NAME, path, tableNames);
+        checkSpec(tableNames.size() <= 1, "Invalid value of %s in %s: operations of a path are mapped to a single table, but set different names: %s", TABLE_NAME, path, tableNames);
         return tableNames.stream().findFirst();
     }
 
@@ -936,7 +937,7 @@ public class OpenApiSpec
             resultsPointer = parseJsonPointer(specExtension.get(PAGINATION_RESULTS_PATH));
         }
         catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(PAGINATION_RESULTS_PATH, specExtension.get(PAGINATION_RESULTS_PATH), e.getMessage()));
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s: %s. %s".formatted(PAGINATION_RESULTS_PATH, specExtension.get(PAGINATION_RESULTS_PATH), e.getMessage()), e);
         }
 
         Schema<?> schema = getResponseSchema(new HttpPath(method, path), op);
@@ -1073,14 +1074,14 @@ public class OpenApiSpec
         // the legacy extension is Datadog's, which names nested fields of the request body, like body.page.cursor, in cursorParam
         // the legacy extension is Datadog's, which names nested fields of the request body, like body.page.cursor, in cursorParam
         Map<String, String> paginationExtension = getMapOfStrings(rawExtension);
-        getPaginationParamType(columns, paginationExtension, PAGINATION_CURSOR_PARAM, httpPath).ifPresent(type -> checkArgument(
+        getPaginationParamType(columns, paginationExtension, PAGINATION_CURSOR_PARAM, httpPath).ifPresent(type -> checkSpec(
                 type instanceof VarcharType || type.equals(BIGINT) || type.equals(INTEGER),
                 "Invalid value of %s of %s: %s, the parameter must be a string or an integer, not %s",
                 PAGINATION_CURSOR_PARAM,
                 httpPath,
                 paginationExtension.get(PAGINATION_CURSOR_PARAM),
                 type));
-        getPaginationParamType(columns, paginationExtension, PAGINATION_OFFSET_PARAM, httpPath).ifPresent(type -> checkArgument(
+        getPaginationParamType(columns, paginationExtension, PAGINATION_OFFSET_PARAM, httpPath).ifPresent(type -> checkSpec(
                 type.equals(BIGINT) || type.equals(INTEGER),
                 "Invalid value of %s of %s: %s, the parameter must be an integer, not %s",
                 PAGINATION_OFFSET_PARAM,
@@ -1108,7 +1109,7 @@ public class OpenApiSpec
                 .filter(column -> parameterName.equals(column.getSourceName()))
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .findFirst();
-        checkArgument(parameterColumn.isPresent(), "Invalid value of %s of %s: %s, the operation has no such parameter", extensionName, httpPath, parameterName);
+        checkSpec(parameterColumn.isPresent(), "Invalid value of %s of %s: %s, the operation has no such parameter", extensionName, httpPath, parameterName);
         return Optional.of(parameterColumn.get().getType());
     }
 
@@ -1119,8 +1120,8 @@ public class OpenApiSpec
             return Optional.empty();
         }
         String parameterName = parameter.getName();
-        checkArgument(extension instanceof Map<?, ?>, "Invalid value of the %s extension of parameter %s of %s: expected an object", SPEC_EXTENSION, parameterName, httpPath);
-        ((Map<?, ?>) extension).keySet().forEach(key -> checkArgument(
+        checkSpec(extension instanceof Map<?, ?>, "Invalid value of the %s extension of parameter %s of %s: expected an object", SPEC_EXTENSION, parameterName, httpPath);
+        ((Map<?, ?>) extension).keySet().forEach(key -> checkSpec(
                 PARAMETER_FIELD.equals(key),
                 "Invalid property of the %s extension of parameter %s of %s: %s, must be: %s",
                 SPEC_EXTENSION,
@@ -1129,9 +1130,9 @@ public class OpenApiSpec
                 key,
                 PARAMETER_FIELD));
         Object field = ((Map<?, ?>) extension).get(PARAMETER_FIELD);
-        checkArgument(field instanceof String name && !name.isBlank(), "Invalid value of %s in the %s extension of parameter %s of %s: expected the name of a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
+        checkSpec(field instanceof String name && !name.isBlank(), "Invalid value of %s in the %s extension of parameter %s of %s: expected the name of a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
         // only path parameters identify a resource, and other parameters are usually filters, matching many values of a field
-        checkArgument("path".equals(parameter.getIn()), "Invalid value of %s in the %s extension of parameter %s of %s: only path parameters can be linked to a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
+        checkSpec("path".equals(parameter.getIn()), "Invalid value of %s in the %s extension of parameter %s of %s: only path parameters can be linked to a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
         return Optional.of((String) field);
     }
 
@@ -1154,8 +1155,8 @@ public class OpenApiSpec
                     Optional<OpenApiColumn> fieldColumn = columns.stream()
                             .filter(candidate -> candidate.getSourceName().equals(field) && !candidate.isRequestOnly())
                             .findFirst();
-                    checkArgument(fieldColumn.isPresent(), "Invalid value of %s in the %s extension of parameter %s of %s: %s is not a response field of table %s", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath, field, tableName);
-                    throw new IllegalArgumentException("Invalid value of %s in the %s extension of parameter %s of %s: the parameter has type %s, but field %s has type %s".formatted(
+                    checkSpec(fieldColumn.isPresent(), "Invalid value of %s in the %s extension of parameter %s of %s: %s is not a response field of table %s", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath, field, tableName);
+                    throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s in the %s extension of parameter %s of %s: the parameter has type %s, but field %s has type %s".formatted(
                             PARAMETER_FIELD,
                             SPEC_EXTENSION,
                             parameterName,
@@ -1174,7 +1175,7 @@ public class OpenApiSpec
                                 .map(Map.Entry::getKey))
                         .findFirst()
                         .ifPresent(otherPath -> {
-                            throw new IllegalArgumentException("Parameter %s of %s is linked to field %s in the %s extension, but not in %s, so set the same %s in all operations of the path, or in the parameters of the path".formatted(
+                            throw new TrinoException(OPENAPI_INVALID_SPEC, "Parameter %s of %s is linked to field %s in the %s extension, but not in %s, so set the same %s in all operations of the path, or in the parameters of the path".formatted(
                                     parameterName,
                                     httpPath,
                                     field,
@@ -1191,10 +1192,10 @@ public class OpenApiSpec
         if (!(specExtension instanceof Map<?, ?> extension) || extension.get(PARAMETER_DEFAULTS) == null) {
             return ImmutableMap.of();
         }
-        checkArgument(extension.get(PARAMETER_DEFAULTS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with parameter names as keys", PARAMETER_DEFAULTS);
+        checkSpec(extension.get(PARAMETER_DEFAULTS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with parameter names as keys", PARAMETER_DEFAULTS);
         return ((Map<?, ?>) extension.get(PARAMETER_DEFAULTS)).entrySet().stream()
                 .collect(toImmutableMap(entry -> entry.getKey().toString(), entry -> {
-                    checkArgument(entry.getValue() != null, "Invalid value of %s for %s: expected a value", PARAMETER_DEFAULTS, entry.getKey());
+                    checkSpec(entry.getValue() != null, "Invalid value of %s for %s: expected a value", PARAMETER_DEFAULTS, entry.getKey());
                     return entry.getValue();
                 }));
     }
@@ -1209,11 +1210,11 @@ public class OpenApiSpec
                 .collect(toImmutableMap(Map.Entry::getKey, entry -> {
                     String parameter = entry.getKey();
                     // a page number filter makes the connector request only that page
-                    checkArgument(!parameter.equals(pageParam), "Invalid value of %s: %s is the page number parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
+                    checkSpec(!parameter.equals(pageParam), "Invalid value of %s: %s is the page number parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
                     Optional<OpenApiColumn> column = columns.stream()
                             .filter(candidate -> parameter.equals(candidate.getSourceName()) && isDefaultableParameter(candidate, httpPath))
                             .findFirst();
-                    checkArgument(column.isPresent(), "Invalid value of %s: %s is not an optional query, header, or cookie parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
+                    checkSpec(column.isPresent(), "Invalid value of %s: %s is not an optional query, header, or cookie parameter of %s", PARAMETER_DEFAULTS, parameter, operation);
                     return getNativeDefault(column.get(), entry.getValue(), operation);
                 }));
         return columns.stream()
@@ -1234,7 +1235,7 @@ public class OpenApiSpec
     {
         String parameter = column.getSourceName();
         Type type = column.getType();
-        checkArgument(
+        checkSpec(
                 type.equals(VARCHAR) || type.equals(BIGINT) || type.equals(INTEGER) || type.equals(BOOLEAN),
                 "Invalid value of %s: parameter %s of %s has type %s, but only string, integer, and boolean parameters can have defaults",
                 PARAMETER_DEFAULTS,
@@ -1244,9 +1245,9 @@ public class OpenApiSpec
         boolean matchesType = (type.equals(VARCHAR) && value instanceof String)
                 || ((type.equals(BIGINT) || type.equals(INTEGER)) && (value instanceof Integer || value instanceof Long))
                 || (type.equals(BOOLEAN) && value instanceof Boolean);
-        checkArgument(matchesType, "Invalid value of %s: %s for parameter %s of %s doesn't have type %s", PARAMETER_DEFAULTS, value, parameter, operation, type);
+        checkSpec(matchesType, "Invalid value of %s: %s for parameter %s of %s doesn't have type %s", PARAMETER_DEFAULTS, value, parameter, operation, type);
         Schema<?> schema = column.getSourceType();
-        checkArgument(
+        checkSpec(
                 schema.getEnum() == null || schema.getEnum().stream().anyMatch(allowed -> String.valueOf(allowed).equals(value.toString())),
                 "Invalid value of %s: %s for parameter %s of %s is not one of %s",
                 PARAMETER_DEFAULTS,
@@ -1256,8 +1257,8 @@ public class OpenApiSpec
                 schema.getEnum());
         if (value instanceof Number number) {
             BigDecimal decimal = BigDecimal.valueOf(number.longValue());
-            checkArgument(schema.getMinimum() == null || decimal.compareTo(schema.getMinimum()) >= 0, "Invalid value of %s: %s for parameter %s of %s is less than its minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMinimum());
-            checkArgument(schema.getMaximum() == null || decimal.compareTo(schema.getMaximum()) <= 0, "Invalid value of %s: %s for parameter %s of %s is greater than its maximum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMaximum());
+            checkSpec(schema.getMinimum() == null || decimal.compareTo(schema.getMinimum()) >= 0, "Invalid value of %s: %s for parameter %s of %s is less than its minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMinimum());
+            checkSpec(schema.getMaximum() == null || decimal.compareTo(schema.getMaximum()) <= 0, "Invalid value of %s: %s for parameter %s of %s is greater than its maximum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMaximum());
             return number.longValue();
         }
         if (value instanceof String string) {
@@ -1271,14 +1272,14 @@ public class OpenApiSpec
         if (!(specExtension instanceof Map<?, ?> extension) || extension.get(RANGE_FILTERS) == null) {
             return ImmutableMap.of();
         }
-        checkArgument(extension.get(RANGE_FILTERS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with response fields as keys", RANGE_FILTERS);
+        checkSpec(extension.get(RANGE_FILTERS) instanceof Map<?, ?>, "Invalid value of %s: expected an object with response fields as keys", RANGE_FILTERS);
         return ((Map<?, ?>) extension.get(RANGE_FILTERS)).entrySet().stream()
                 .collect(toImmutableMap(entry -> entry.getKey().toString(), entry -> getRangeFilter(entry.getKey().toString(), entry.getValue())));
     }
 
     private static RangeFilter getRangeFilter(String field, Object value)
     {
-        checkArgument(value instanceof Map<?, ?>, "Invalid value of %s for %s: expected an object", RANGE_FILTERS, field);
+        checkSpec(value instanceof Map<?, ?>, "Invalid value of %s for %s: expected an object", RANGE_FILTERS, field);
         Map<?, ?> properties = (Map<?, ?>) value;
         try {
             return new RangeFilter(
@@ -1286,8 +1287,8 @@ public class OpenApiSpec
                     getRangeBound(properties, RANGE_UPPER_PARAM, RANGE_UPPER_INCLUSIVE),
                     getBoolean(properties, RANGE_EXACT).orElse(false));
         }
-        catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid value of %s for %s: %s".formatted(RANGE_FILTERS, field, e.getMessage()), e);
+        catch (IllegalArgumentException | TrinoException e) {
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s for %s: %s".formatted(RANGE_FILTERS, field, e.getMessage()), e);
         }
     }
 
@@ -1299,7 +1300,7 @@ public class OpenApiSpec
         }
         // a wrong default would make the API skip rows equal to the bound, so it must be declared
         Optional<Boolean> inclusive = getBoolean(properties, inclusiveKey);
-        checkArgument(inclusive.isPresent(), "%s is required with %s", inclusiveKey, parameterKey);
+        checkSpec(inclusive.isPresent(), "%s is required with %s", inclusiveKey, parameterKey);
         return Optional.of(new RangeFilter.Bound(parameter.toString(), inclusive.get()));
     }
 
@@ -1313,7 +1314,7 @@ public class OpenApiSpec
         if (value instanceof Boolean booleanValue) {
             return Optional.of(booleanValue);
         }
-        checkArgument(value.equals("true") || value.equals("false"), "%s must be true or false, got %s", key, value);
+        checkSpec(value.equals("true") || value.equals("false"), "%s must be true or false, got %s", key, value);
         return Optional.of(Boolean.parseBoolean(value.toString()));
     }
 
@@ -1325,14 +1326,14 @@ public class OpenApiSpec
             List<OpenApiColumn> fieldColumns = columns.stream()
                     .filter(column -> field.equals(column.getSourceName()) && !isParameter(column))
                     .toList();
-            checkArgument(!fieldColumns.isEmpty(), "Invalid value of %s: %s is not a response field of %s", RANGE_FILTERS, field, operation);
+            checkSpec(!fieldColumns.isEmpty(), "Invalid value of %s: %s is not a response field of %s", RANGE_FILTERS, field, operation);
             Stream.of(filter.lower(), filter.upper()).flatMap(Optional::stream).forEach(bound -> {
-                checkArgument(boundParameters.add(bound.parameter()), "Invalid value of %s: parameter %s is used more than once in %s", RANGE_FILTERS, bound.parameter(), operation);
+                checkSpec(boundParameters.add(bound.parameter()), "Invalid value of %s: parameter %s is used more than once in %s", RANGE_FILTERS, bound.parameter(), operation);
                 Optional<OpenApiColumn> parameter = columns.stream()
                         .filter(column -> bound.parameter().equals(column.getSourceName()) && RangePushdown.isNonPathParameter(column, httpPath))
                         .findFirst();
-                checkArgument(parameter.isPresent(), "Invalid value of %s: %s is not a query, header, cookie, or body parameter of %s", RANGE_FILTERS, bound.parameter(), operation);
-                fieldColumns.forEach(fieldColumn -> checkArgument(
+                checkSpec(parameter.isPresent(), "Invalid value of %s: %s is not a query, header, cookie, or body parameter of %s", RANGE_FILTERS, bound.parameter(), operation);
+                fieldColumns.forEach(fieldColumn -> checkSpec(
                         fieldColumn.getType().equals(parameter.get().getType()),
                         "Invalid value of %s: parameter %s has type %s, but field %s has type %s",
                         RANGE_FILTERS,
@@ -1453,14 +1454,14 @@ public class OpenApiSpec
         if (schema == null) {
             return;
         }
-        checkArgument(!isArray(schema), "Request body of %s is a form, but its schema is an array, and a form can only send the properties of an object", httpPath);
-        getSchemaProperties(schema).forEach((name, property) -> checkArgument(
+        checkSpec(!isArray(schema), "Request body of %s is a form, but its schema is an array, and a form can only send the properties of an object", httpPath);
+        getSchemaProperties(schema).forEach((name, property) -> checkSpec(
                 !isNestedFormValue(property),
                 "Field %s of the form request body of %s is an object or an array of objects or arrays, which can't be sent as a form field",
                 name,
                 httpPath));
         Map<String, Encoding> encodings = requireNonNullElse(content.get().get(mediaType.get()).getEncoding(), ImmutableMap.of());
-        encodings.forEach((name, encoding) -> checkArgument(
+        encodings.forEach((name, encoding) -> checkSpec(
                 isDefaultFormEncoding(encoding),
                 "Field %s of the form request body of %s has a custom encoding, but only the form style with explode is supported, " +
                         "without allowReserved, and with the text/plain content type",
@@ -1634,11 +1635,11 @@ public class OpenApiSpec
             }
             String name = resultsPointer.getMatchingProperty();
             schema = getAlternativesProperties(schema).get(name);
-            checkArgument(schema != null, "Invalid value of %s of %s: %s, the response has no field %s", PAGINATION_RESULTS_PATH, httpPath, resultsPath, name);
+            checkSpec(schema != null, "Invalid value of %s of %s: %s, the response has no field %s", PAGINATION_RESULTS_PATH, httpPath, resultsPath, name);
             resultsPointer = resultsPointer.tail();
         }
         // a scalar would only fail when reading the response, so it fails when loading the spec instead
-        checkArgument(canProduceRows(schema), "Invalid value of %s of %s: %s, it must point to an array, an object, or a union of them", PAGINATION_RESULTS_PATH, httpPath, resultsPath);
+        checkSpec(canProduceRows(schema), "Invalid value of %s of %s: %s, it must point to an array, an object, or a union of them", PAGINATION_RESULTS_PATH, httpPath, resultsPath);
         return schema;
     }
 
@@ -1928,11 +1929,11 @@ public class OpenApiSpec
     private static Set<SqlOperation> parseSqlOperations(HttpPath httpPath, Object value)
     {
         List<?> values = value instanceof List<?> list ? list : Splitter.on(',').trimResults().splitToList(value.toString());
-        checkArgument(!values.isEmpty(), "Invalid value of %s in %s: it must not be empty", SQL_OPERATION, httpPath);
+        checkSpec(!values.isEmpty(), "Invalid value of %s in %s: it must not be empty", SQL_OPERATION, httpPath);
         return values.stream()
                 .map(element -> {
                     Optional<SqlOperation> sqlOperation = Enums.getIfPresent(SqlOperation.class, String.valueOf(element).trim().toUpperCase(Locale.ENGLISH)).toJavaUtil();
-                    checkArgument(sqlOperation.isPresent(), "Invalid value of %s in %s: '%s', must be one of: select, insert, update, delete", SQL_OPERATION, httpPath, element);
+                    checkSpec(sqlOperation.isPresent(), "Invalid value of %s in %s: '%s', must be one of: select, insert, update, delete", SQL_OPERATION, httpPath, element);
                     return sqlOperation.get();
                 })
                 .collect(toImmutableEnumSet());
@@ -1965,22 +1966,28 @@ public class OpenApiSpec
                             Map<String, String> specExtension = getMapOfStrings(rawExtension);
                             boolean nextPageLinkHeader = rawExtension instanceof Map<?, ?> map && getBoolean(map, PAGINATION_NEXT_PAGE_LINK_HEADER).orElse(false);
                             validatePageParam(specExtension, nextPageLinkHeader, new HttpPath(entry.getKey(), path));
-                            return Pagination.builder()
-                                    .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
-                                    .setTotalResultsPath(responsePath(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
-                                    .setTotalPagesPath(responsePath(specExtension, PAGINATION_TOTAL_PAGES_PATH))
-                                    .setHasMorePath(responsePath(specExtension, PAGINATION_HAS_MORE_PATH))
-                                    .setCursorParam(Optional.ofNullable(specExtension.get(PAGINATION_CURSOR_PARAM)))
-                                    .setNextCursorPath(responsePath(specExtension, PAGINATION_NEXT_CURSOR_PATH))
-                                    .setNextPageLinkHeader(nextPageLinkHeader)
-                                    .setOffsetParam(Optional.ofNullable(specExtension.get(PAGINATION_OFFSET_PARAM)))
-                                    .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
-                                    .setMaxResults(getMaxResults(rawExtension))
-                                    .setSorting(getSorting(specExtension, rawExtension))
-                                    .setSplitStrategy(getSplitStrategy(rawExtension))
-                                    .setStrideSplits(getOptionalInt(rawExtension, PAGINATION_STRIDE_SPLITS))
-                                    .setProbeLimit(getProbeLimit(rawExtension))
-                                    .build();
+                            // pagination and sorting options validate their combinations
+                            try {
+                                return Pagination.builder()
+                                        .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
+                                        .setTotalResultsPath(responsePath(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
+                                        .setTotalPagesPath(responsePath(specExtension, PAGINATION_TOTAL_PAGES_PATH))
+                                        .setHasMorePath(responsePath(specExtension, PAGINATION_HAS_MORE_PATH))
+                                        .setCursorParam(Optional.ofNullable(specExtension.get(PAGINATION_CURSOR_PARAM)))
+                                        .setNextCursorPath(responsePath(specExtension, PAGINATION_NEXT_CURSOR_PATH))
+                                        .setNextPageLinkHeader(nextPageLinkHeader)
+                                        .setOffsetParam(Optional.ofNullable(specExtension.get(PAGINATION_OFFSET_PARAM)))
+                                        .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
+                                        .setMaxResults(getMaxResults(rawExtension))
+                                        .setSorting(getSorting(specExtension, rawExtension))
+                                        .setSplitStrategy(getSplitStrategy(rawExtension))
+                                        .setStrideSplits(getOptionalInt(rawExtension, PAGINATION_STRIDE_SPLITS))
+                                        .setProbeLimit(getProbeLimit(rawExtension))
+                                        .build();
+                            }
+                            catch (IllegalArgumentException e) {
+                                throw new TrinoException(OPENAPI_INVALID_SPEC, e.getMessage(), e);
+                            }
                         }));
     }
 
@@ -1990,9 +1997,9 @@ public class OpenApiSpec
             return;
         }
         // a page is requested either by its number, the number of results before it, or the cursor or the link from the previous page
-        checkArgument(!specExtension.containsKey(PAGINATION_CURSOR_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_CURSOR_PARAM, PAGINATION_PAGE_PARAM);
-        checkArgument(!specExtension.containsKey(PAGINATION_OFFSET_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_OFFSET_PARAM, PAGINATION_PAGE_PARAM);
-        checkArgument(!nextPageLinkHeader, "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_NEXT_PAGE_LINK_HEADER, PAGINATION_PAGE_PARAM);
+        checkSpec(!specExtension.containsKey(PAGINATION_CURSOR_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_CURSOR_PARAM, PAGINATION_PAGE_PARAM);
+        checkSpec(!specExtension.containsKey(PAGINATION_OFFSET_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_OFFSET_PARAM, PAGINATION_PAGE_PARAM);
+        checkSpec(!nextPageLinkHeader, "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_NEXT_PAGE_LINK_HEADER, PAGINATION_PAGE_PARAM);
     }
 
     private static OptionalInt getOptionalInt(Object specExtension, String extensionName)
@@ -2006,7 +2013,7 @@ public class OpenApiSpec
             return OptionalInt.of(value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString()));
         }
         catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(extensionName, value), e);
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s: %s".formatted(extensionName, value), e);
         }
     }
 
@@ -2020,7 +2027,7 @@ public class OpenApiSpec
             return OptionalLong.of(value instanceof Number number ? number.longValue() : Long.parseLong(value.toString()));
         }
         catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_MAX_RESULTS, value), e);
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s: %s".formatted(PAGINATION_MAX_RESULTS, value), e);
         }
     }
 
@@ -2035,12 +2042,12 @@ public class OpenApiSpec
         ImmutableSet.Builder<String> binaryOrderFields = ImmutableSet.builder();
         for (Map.Entry<?, ?> sortValue : sortValues.entrySet()) {
             String field = sortValue.getKey().toString();
-            checkArgument(sortValue.getValue() != null, "Invalid value of %s for %s: expected a value of %s or an object", SORT_VALUES, field, SORT_PARAM);
+            checkSpec(sortValue.getValue() != null, "Invalid value of %s for %s: expected a value of %s or an object", SORT_VALUES, field, SORT_PARAM);
             if (!(sortValue.getValue() instanceof Map<?, ?> properties)) {
                 sortParamValues.put(field, sortValue.getValue().toString());
                 continue;
             }
-            checkArgument(properties.get(SORT_VALUE) != null, "Invalid value of %s for %s: %s is required", SORT_VALUES, field, SORT_VALUE);
+            checkSpec(properties.get(SORT_VALUE) != null, "Invalid value of %s for %s: %s is required", SORT_VALUES, field, SORT_VALUE);
             sortParamValues.put(field, properties.get(SORT_VALUE).toString());
             if (getBoolean(properties, SORT_BINARY_ORDER).orElse(false)) {
                 binaryOrderFields.add(field);
@@ -2067,7 +2074,7 @@ public class OpenApiSpec
             return Optional.of(SplitStrategy.OFF);
         }
         Optional<SplitStrategy> splitStrategy = Enums.getIfPresent(SplitStrategy.class, value.toString().trim().toUpperCase(Locale.ENGLISH)).toJavaUtil();
-        checkArgument(splitStrategy.isPresent(), "Invalid value of %s: '%s', must be one of: %s", PAGINATION_SPLIT_STRATEGY, value, SPLIT_STRATEGIES);
+        checkSpec(splitStrategy.isPresent(), "Invalid value of %s: '%s', must be one of: %s", PAGINATION_SPLIT_STRATEGY, value, SPLIT_STRATEGIES);
         return splitStrategy;
     }
 
@@ -2081,7 +2088,7 @@ public class OpenApiSpec
             return Optional.of(ProbeLimit.fromString(value.toString()));
         }
         catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s".formatted(PAGINATION_PROBE_LIMIT, value), e);
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s: %s".formatted(PAGINATION_PROBE_LIMIT, value), e);
         }
     }
 
@@ -2104,7 +2111,7 @@ public class OpenApiSpec
         if (headerMatcher.matches()) {
             return Optional.of(new ResponsePath.Header(headerMatcher.group(1)));
         }
-        checkArgument(!expression.startsWith(HEADER_PREFIX), "Invalid value of %s: %s, the header name must not be empty or contain spaces or separators", extensionName, expression);
+        checkSpec(!expression.startsWith(HEADER_PREFIX), "Invalid value of %s: %s, the header name must not be empty or contain spaces or separators", extensionName, expression);
         JsonPointer pointer = pointer(specExtension, extensionName);
         if (pointer.equals(JsonPointer.empty())) {
             return Optional.empty();
@@ -2118,7 +2125,7 @@ public class OpenApiSpec
             return parseJsonPointer(specExtension.get(extensionName));
         }
         catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()));
+            throw new TrinoException(OPENAPI_INVALID_SPEC, "Invalid value of %s: %s. %s".formatted(extensionName, specExtension.get(extensionName), e.getMessage()), e);
         }
     }
 
@@ -2572,5 +2579,14 @@ public class OpenApiSpec
     public Optional<RateLimitHeaders> getRateLimitHeaders()
     {
         return rateLimitHeaders;
+    }
+
+    @FormatMethod
+    private static void checkSpec(boolean valid, String messageTemplate, Object... messageArgs)
+    {
+        if (valid) {
+            return;
+        }
+        throw new TrinoException(OPENAPI_INVALID_SPEC, format(messageTemplate, messageArgs));
     }
 }
