@@ -676,7 +676,7 @@ public class TestGithub
     public void selectTopNSortedByApi()
     {
         // the path to get a single pull request can't filter by state, but the connector would filter its rows, so the filter doesn't prevent the pushdown
-        String pulls = "SELECT updated_at FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'all'";
+        String pulls = "SELECT updated_at FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'closed'";
         // sorting by two columns is not pushed down
         LocalDateTime sortedByTrino = (LocalDateTime) computeScalar(pulls + " ORDER BY updated_at DESC, number LIMIT 1");
         MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(getSession(), pulls + " ORDER BY updated_at DESC LIMIT 1");
