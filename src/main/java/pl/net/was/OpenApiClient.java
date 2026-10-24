@@ -1357,7 +1357,7 @@ public class OpenApiClient
         Iterable<JsonNode> resultNodes = List.of(jsonNode);
         List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
         if (resultsPointer != null && !JsonPointer.empty().equals(resultsPointer)) {
-            resultNodes = getResultNodes(request, jsonNode.at(resultsPointer));
+            resultNodes = getResultNodes(request, resultsPointer, jsonNode.at(resultsPointer));
         }
 
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
@@ -1421,7 +1421,7 @@ public class OpenApiClient
         return request.getMethod() + " " + withoutQuery(request.getUri());
     }
 
-    private static Iterable<JsonNode> getResultNodes(Request request, JsonNode resultNode)
+    private static Iterable<JsonNode> getResultNodes(Request request, JsonPointer resultsPointer, JsonNode resultNode)
     {
         if (resultNode instanceof ArrayNode) {
             return resultNode;
@@ -1430,7 +1430,11 @@ public class OpenApiClient
         if (resultNode.isObject()) {
             return List.of(resultNode);
         }
-        throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Results path in the response to %s points to a JSON %s instead of an array", describe(request), resultNode.getNodeType()));
+        // the response is not included, because it might contain sensitive information, and it's in the body log
+        if (resultNode.isMissingNode()) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s has no value at resultsPath %s", describe(request), resultsPointer));
+        }
+        throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of resultsPath %s in the response to %s is a JSON %s, not an array or an object", resultsPointer, describe(request), resultNode.getNodeType()));
     }
 
     private byte[] toBytes(JsonNode rootNode)
