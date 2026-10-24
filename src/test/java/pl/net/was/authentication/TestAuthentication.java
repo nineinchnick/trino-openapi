@@ -379,6 +379,101 @@ class TestAuthentication
     }
 
     @Test
+    void testOAuthClientSecretBasic()
+            throws Exception
+    {
+        List<Request> tokenRequests = new ArrayList<>();
+        HttpClient tokenClient = new TestingHttpClient(request -> {
+            tokenRequests.add(request);
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
+        });
+        // declare both flows, because the password flow is only used when the username and password are set
+        String spec =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        password:
+                          tokenUrl: https://localhost:8081/token
+                          scopes: {}
+                        clientCredentials:
+                          tokenUrl: https://localhost:8081/token
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES);
+        OpenApiConfig config = new OpenApiConfig()
+                .setClientId("client:id")
+                .setClientSecret("s3cr3t+/")
+                .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
+
+        createAuthentication(spec, config, tokenClient).filterRequest(request("/secured"));
+        createAuthentication(spec, config.setUsername("user").setPassword("password"), tokenClient).filterRequest(request("/secured"));
+
+        // RFC 6749 requires encoding the client ID and secret as form values before they're joined with a colon
+        assertThat(tokenRequests)
+                .extracting(request -> request.getHeader(AUTHORIZATION))
+                .containsExactly("Basic Y2xpZW50JTNBaWQ6czNjcjN0JTJCJTJG", "Basic Y2xpZW50JTNBaWQ6czNjcjN0JTJCJTJG");
+        assertThat(tokenRequests)
+                .extracting(TestAuthentication::getBody)
+                .containsExactly("grant_type=client_credentials", "grant_type=password&username=user&password=password");
+    }
+
+    @Test
+    void testOAuthClientSecretBasicWithoutSecret()
+            throws Exception
+    {
+        List<Request> tokenRequests = new ArrayList<>();
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        password:
+                          tokenUrl: https://localhost:8081/token
+                          scopes: {}
+                """.formatted(OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setClientId("public-client")
+                        .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                        .setUsername("user")
+                        .setPassword("password"),
+                new TestingHttpClient(request -> {
+                    tokenRequests.add(request);
+                    return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
+                }));
+
+        authentication.filterRequest(request("/secured"));
+
+        assertThat(tokenRequests).singleElement().satisfies(request -> {
+            assertThat(request.getHeader(AUTHORIZATION)).isNull();
+            assertThat(getBody(request)).isEqualTo("grant_type=password&username=user&password=password&client_id=public-client");
+        });
+    }
+
+    @Test
     void testOAuthTokenRequestDoesNotFollowRedirects()
             throws IOException
     {

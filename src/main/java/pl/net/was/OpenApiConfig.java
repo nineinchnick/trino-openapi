@@ -28,6 +28,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
+import pl.net.was.authentication.ClientAuthenticationMethod;
 
 import java.net.URI;
 import java.util.Map;
@@ -59,6 +60,8 @@ public class OpenApiConfig
 
     private String clientId;
     private String clientSecret;
+    // RFC 6749 requires servers to support client_secret_basic, but client_secret_post was the only method before it could be chosen
+    private ClientAuthenticationMethod clientAuthenticationMethod = ClientAuthenticationMethod.CLIENT_SECRET_POST;
     private URI tokenUrl;
     private boolean allowInsecureHttp;
 
@@ -262,6 +265,20 @@ public class OpenApiConfig
     public OpenApiConfig setClientSecret(String clientSecret)
     {
         this.clientSecret = clientSecret;
+        return this;
+    }
+
+    @NotNull
+    public ClientAuthenticationMethod getClientAuthenticationMethod()
+    {
+        return clientAuthenticationMethod;
+    }
+
+    @Config("authentication.client-auth-method")
+    @ConfigDescription("How the OAuth client ID and secret are sent to the token endpoint: client_secret_basic or client_secret_post")
+    public OpenApiConfig setClientAuthenticationMethod(ClientAuthenticationMethod clientAuthenticationMethod)
+    {
+        this.clientAuthenticationMethod = clientAuthenticationMethod;
         return this;
     }
 

@@ -121,33 +121,34 @@ Trino version it's built for.
 
 # Configuration
 
-| Property                             | Container environment variable      | Default   | Description                                                                                                     |
-| ------------------------------------ | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
-| `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |           | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
-| `base-uri`                           | `OPENAPI_BASE_URI`                  |           | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
-| `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`              |
-| `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                                 |
-| `authentication.username`            | `OPENAPI_USERNAME`                  |           | Username for `http` basic authentication and the OAuth `password` flow                                          |
-| `authentication.password`            | `OPENAPI_PASSWORD`                  |           | Password for `http` basic authentication and the OAuth `password` flow                                          |
-| `authentication.bearer-token`        | `OPENAPI_BEARER_TOKEN`              |           | Token for `http` bearer authentication                                                                          |
-| `authentication.api-key-name`        | `OPENAPI_API_KEY_NAME`              |           | Name of the API key, when the specification doesn't declare it                                                  |
-| `authentication.api-key-value`       | `OPENAPI_API_KEY_VALUE`             |           | Value of the API key                                                                                            |
-| `authentication.api-keys`            | `OPENAPI_API_KEYS`                  |           | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above     |
-| `authentication.client-id`           | `OPENAPI_CLIENT_ID`                 |           | OAuth client ID                                                                                                 |
-| `authentication.client-secret`       | `OPENAPI_CLIENT_SECRET`             |           | OAuth client secret                                                                                             |
-| `authentication.token-url`           | `OPENAPI_TOKEN_URL`                 |           | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
-| `authentication.allow-insecure-http` | `OPENAPI_ALLOW_INSECURE_HTTP`       | `false`   | Allow sending credentials over HTTP, without TLS                                                                |
-| `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
-| `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
-| `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
-| `retry-initial-delay`                | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`      | Delay before the first retry, doubled for every next retry                                                      |
-| `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
-| `domain-expansion-limit`             | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
-| `http-cache.directory`               | `OPENAPI_HTTP_CACHE_DIRECTORY`      |           | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
-| `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
-| `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
-| `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
-| `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`    | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
+| Property                             | Container environment variable      | Default              | Description                                                                                                     |
+| ------------------------------------ | ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
+| `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
+| `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
+| `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
+| `authentication.username`            | `OPENAPI_USERNAME`                  |                      | Username for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.password`            | `OPENAPI_PASSWORD`                  |                      | Password for `http` basic authentication and the OAuth `password` flow                                          |
+| `authentication.bearer-token`        | `OPENAPI_BEARER_TOKEN`              |                      | Token for `http` bearer authentication                                                                          |
+| `authentication.api-key-name`        | `OPENAPI_API_KEY_NAME`              |                      | Name of the API key, when the specification doesn't declare it                                                  |
+| `authentication.api-key-value`       | `OPENAPI_API_KEY_VALUE`             |                      | Value of the API key                                                                                            |
+| `authentication.api-keys`            | `OPENAPI_API_KEYS`                  |                      | Several API keys as `name=value` pairs separated by commas; can't be combined with the two properties above     |
+| `authentication.client-id`           | `OPENAPI_CLIENT_ID`                 |                      | OAuth client ID                                                                                                 |
+| `authentication.client-secret`       | `OPENAPI_CLIENT_SECRET`             |                      | OAuth client secret                                                                                             |
+| `authentication.client-auth-method`  | `OPENAPI_CLIENT_AUTH_METHOD`        | `client_secret_post` | How OAuth client credentials are sent to the token endpoint: `client_secret_basic` or `client_secret_post`      |
+| `authentication.token-url`           | `OPENAPI_TOKEN_URL`                 |                      | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
+| `authentication.allow-insecure-http` | `OPENAPI_ALLOW_INSECURE_HTTP`       | `false`              | Allow sending credentials over HTTP, without TLS                                                                |
+| `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited            | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
+| `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited            | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
+| `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`                  | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
+| `retry-initial-delay`                | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
+| `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`                 | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
+| `domain-expansion-limit`             | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`                | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
+| `http-cache.directory`               | `OPENAPI_HTTP_CACHE_DIRECTORY`      |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
+| `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
+| `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
+| `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`                | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
+| `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`               | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
 
 ## Servers
 
@@ -184,6 +185,13 @@ uses them for every operation, with credentials from the catalog properties:
   requested with the scopes the security requirement lists, and reused for
   operations requiring the same scopes until shortly before it expires. The
   `authorizationCode` and `implicit` flows are not supported.
+
+The client ID and secret are sent in the body of the token request, as
+`client_id` and `client_secret`. Set `authentication.client-auth-method` to
+`client_secret_basic` to send them with HTTP Basic authentication instead,
+which RFC 6749 requires all authorization servers to support, while sending
+them in the body is optional. A client ID without a secret is always sent in the
+body.
 
 When an operation lists several security requirements, the connector uses the
 first one whose credentials are all configured, and fails the query, naming the
