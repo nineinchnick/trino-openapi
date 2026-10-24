@@ -15,6 +15,7 @@
 package pl.net.was;
 
 import com.google.inject.Inject;
+import io.airlift.bootstrap.LifeCycleManager;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.connector.ConnectorPageSinkProvider;
@@ -33,6 +34,7 @@ import static pl.net.was.OpenApiTransactionHandle.INSTANCE;
 public class OpenApiConnector
         implements Connector
 {
+    private final LifeCycleManager lifeCycleManager;
     private final OpenApiMetadata metadata;
     private final OpenApiSplitManager splitManager;
     private final OpenApiRecordSetProvider recordSetProvider;
@@ -41,12 +43,14 @@ public class OpenApiConnector
 
     @Inject
     public OpenApiConnector(
+            LifeCycleManager lifeCycleManager,
             OpenApiMetadata metadata,
             OpenApiSplitManager splitManager,
             OpenApiRecordSetProvider recordSetProvider,
             OpenApiPageSinkProvider pageSinkProvider,
             OpenApiSessionProperties sessionProperties)
     {
+        this.lifeCycleManager = requireNonNull(lifeCycleManager, "lifeCycleManager is null");
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.splitManager = requireNonNull(splitManager, "splitManager is null");
         this.recordSetProvider = requireNonNull(recordSetProvider, "recordSetProvider is null");
@@ -91,5 +95,8 @@ public class OpenApiConnector
     }
 
     @Override
-    public void shutdown() {}
+    public void shutdown()
+    {
+        lifeCycleManager.stop();
+    }
 }

@@ -34,6 +34,7 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.predicate.ValueSet;
+import jakarta.annotation.PreDestroy;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
@@ -97,6 +98,12 @@ public class OpenApiSplitManager
         OpenApiTableHandle tableHandle = (OpenApiTableHandle) table;
         tableHandle.checkHasPaths("SELECT", tableHandle.getSelectPaths());
         return new DynamicFilteringSplitSource(session, table, dynamicFilterColumns);
+    }
+
+    @PreDestroy
+    public void shutdown()
+    {
+        executor.shutdownNow();
     }
 
     private class DynamicFilteringSplitSource
