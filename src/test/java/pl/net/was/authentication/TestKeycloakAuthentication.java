@@ -15,7 +15,6 @@ package pl.net.was.authentication;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.airlift.configuration.InvalidConfigurationException;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.jetty.JettyHttpClient;
@@ -98,7 +97,7 @@ class TestKeycloakAuthentication
     }
 
     private Authentication createAuthentication(OpenApiConfig config)
-            throws IOException, InvalidConfigurationException
+            throws IOException
     {
         // declare both flows to check that the password flow is only used when credentials are configured
         Path specFile = Files.writeString(tempDir.resolve("spec.yaml"),
