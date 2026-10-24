@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
 import com.google.inject.Inject;
 import io.airlift.http.client.BearerTokenProvider;
+import io.airlift.http.client.ClientCredentialsTokenProvider;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpRequestFilter;
@@ -106,7 +107,7 @@ public class Authentication
         this.apiKeyName = config.getApiKeyName();
         this.apiKeyValue = config.getApiKeyValue();
 
-        this.httpClient = requireNonNull(httpClient, "httpClient is null");
+        this.httpClient = new NonRedirectingHttpClient(httpClient);
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
         this.serverUris = servers.getUris();
@@ -372,10 +373,14 @@ public class Authentication
 
     private BearerTokenProvider createTokenProvider(TokenRequest tokenRequest)
     {
+        // Airlift's provider only supports sending the client credentials using HTTP Basic authentication
+        if (tokenRequest.grant().type() == GrantType.CLIENT_CREDENTIALS && isClientSecretBasic()) {
+            return ClientCredentialsTokenProvider.builder(httpClient, URI.create(tokenRequest.tokenUrl()), clientId, clientSecret)
+                    .scopes(tokenRequest.grant().scopes())
+                    .build();
+        }
         Request.Builder request = preparePost()
                 .setUri(URI.create(tokenRequest.tokenUrl()))
-                // following a redirect would send the client secret and the password to another location
-                .setFollowRedirects(false)
                 .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grant()), UTF_8));
         if (isClientSecretBasic()) {

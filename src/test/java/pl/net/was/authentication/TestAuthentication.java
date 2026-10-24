@@ -430,6 +430,28 @@ class TestAuthentication
     }
 
     @Test
+    void testOAuthClientSecretBasicRetriesTokenRequests()
+            throws Exception
+    {
+        AtomicInteger tokenRequests = new AtomicInteger();
+        Authentication authentication = createAuthentication(
+                clientCredentialsSpec("https://localhost:8081/token"),
+                new OpenApiConfig()
+                        .setClientId("client")
+                        .setClientSecret("secret")
+                        .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC),
+                new TestingHttpClient(_ -> {
+                    if (tokenRequests.incrementAndGet() == 1) {
+                        return mockResponse(HttpStatus.SERVICE_UNAVAILABLE, JSON_UTF_8, "{}");
+                    }
+                    return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
+                }));
+
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token");
+        assertThat(tokenRequests).hasValue(2);
+    }
+
+    @Test
     void testOAuthClientSecretBasicWithoutSecret()
             throws Exception
     {
@@ -478,17 +500,22 @@ class TestAuthentication
             throws IOException
     {
         List<Request> tokenRequests = new ArrayList<>();
-        Authentication authentication = createClientCredentialsAuthentication(new TestingHttpClient(request -> {
+        HttpClient tokenClient = new TestingHttpClient(request -> {
             tokenRequests.add(request);
-            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"expires_in\":30}");
-        }));
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":30}");
+        });
+        OpenApiConfig config = new OpenApiConfig()
+                .setClientId("client")
+                .setClientSecret("secret");
 
-        authentication.filterRequest(request("/secured"));
+        createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config, tokenClient)
+                .filterRequest(request("/secured"));
+        createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config.setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC), tokenClient)
+                .filterRequest(request("/secured"));
 
         assertThat(tokenRequests)
-                .singleElement()
                 .extracting(Request::isFollowRedirects)
-                .isEqualTo(false);
+                .containsExactly(false, false);
     }
 
     @Test
