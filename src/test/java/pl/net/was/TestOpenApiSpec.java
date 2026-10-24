@@ -610,6 +610,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.PATH,
                                         new HttpPath(PathItem.HttpMethod.DELETE, paramsPath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build());
 
         OpenApiTableHandle workflowTableHandle = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "repos_actions_workflows"));
@@ -689,6 +690,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.PATH,
                                         new HttpPath(PathItem.HttpMethod.GET, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("repo").setSourceName("repo")
@@ -697,6 +699,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.PATH,
                                         new HttpPath(PathItem.HttpMethod.GET, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
@@ -705,6 +708,7 @@ class TestOpenApiSpec
                                 .setParameterDefaults(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), 100L))
                                 .setIsNullable(true)
                                 .setIsHidden(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
@@ -713,12 +717,14 @@ class TestOpenApiSpec
                                 .setIsNullable(true)
                                 .setIsHidden(true)
                                 .setIsPageNumber(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("workflow_id").setSourceName("workflow_id")
                                 .setType(VARCHAR).setSourceType(nullSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build());
     }
 
@@ -1000,6 +1006,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("max_results").setSourceName("maxResults")
@@ -1008,6 +1015,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields").setSourceName("fields")
@@ -1016,6 +1024,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("expand").setSourceName("expand")
@@ -1024,6 +1033,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("properties").setSourceName("properties")
@@ -1032,6 +1042,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fields_by_keys").setSourceName("fieldsByKeys")
@@ -1040,12 +1051,14 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("fail_fast").setSourceName("failFast")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("reconcile_issues").setSourceName("reconcileIssues")
@@ -1054,6 +1067,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("include_archived_projects").setSourceName("includeArchivedProjects")
@@ -1062,6 +1076,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.GET, path), ParameterLocation.QUERY))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build());
     }
 
@@ -1201,12 +1216,14 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.GET, onePath), ParameterLocation.PATH,
                                         new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("api_key").setSourceName("api_key")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.HEADER))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build());
     }
 
@@ -1446,6 +1463,7 @@ class TestOpenApiSpec
                                 .setType(dataReqType).setSourceType(objectSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, path), ParameterLocation.BODY))
                                 .setComment("A single timeseries query to be executed.")
+                                .setIsRequestOnly(true)
                                 .build());
     }
 
@@ -1589,6 +1607,7 @@ class TestOpenApiSpec
                                           * `ends_with_case_sensitive`
                                           * `contains_case_sensitive`
                                         """)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
@@ -1596,6 +1615,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Specify a zone status to filter by.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("type").setSourceName("type")
@@ -1604,6 +1624,7 @@ class TestOpenApiSpec
                                 .setParameterStyles(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), new ParameterStyle(Parameter.StyleEnum.FORM, false)))
                                 .setIsNullable(true)
                                 .setComment("Zone types to filter by. Multiple types can be specified as a comma-separated list (e.g., ?type=full,partial,secondary). When this parameter is not provided, zones with type \"internal\" are excluded from the results.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("type_2").setSourceName("type")
@@ -1617,6 +1638,7 @@ class TestOpenApiSpec
                                         A full zone implies that DNS is hosted with Cloudflare. A partial zone is
                                         typically a partner-hosted zone or a CNAME setup.
                                         """)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.id").setSourceName("account.id")
@@ -1624,6 +1646,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Filter by an account ID.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.name").setSourceName("account.name")
@@ -1642,6 +1665,7 @@ class TestOpenApiSpec
                                           * `ends_with_case_sensitive`
                                           * `contains_case_sensitive`
                                         """)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
@@ -1649,6 +1673,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Page number of paginated results.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
@@ -1656,6 +1681,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Number of zones per page.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("order").setSourceName("order")
@@ -1663,6 +1689,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Field to order zones by.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("direction").setSourceName("direction")
@@ -1670,6 +1697,7 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Direction to order zones.")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("match").setSourceName("match")
@@ -1677,12 +1705,14 @@ class TestOpenApiSpec
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Whether to match all search requirements or at least one (any).")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account").setSourceName("account")
                                 .setType(RowType.from(List.of(
                                         RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY))
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("zone_id").setSourceName("zone_id")
@@ -1694,6 +1724,7 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.DELETE, onePath), ParameterLocation.PATH))
                                 .setIsNullable(true)
                                 .setComment("Identifier")
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("paused").setSourceName("paused")
@@ -1706,6 +1737,7 @@ class TestOpenApiSpec
                                         true value means the zone will not receive security or performance
                                         benefits.
                                         """)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
@@ -1720,6 +1752,7 @@ class TestOpenApiSpec
                                         associated subscriptions. To view available plans for this zone,
                                         see Zone Plans.
                                         """)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("vanity_name_servers").setSourceName("vanity_name_servers")
@@ -1730,6 +1763,7 @@ class TestOpenApiSpec
                                         """
                                         An array of domains used for custom name servers. This is only
                                         available for Business and Enterprise plans.""")
+                                .setIsRequestOnly(true)
                                 .build());
     }
 
@@ -1935,12 +1969,14 @@ class TestOpenApiSpec
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, postPath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("index").setSourceName("index")
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, postPath), ParameterLocation.PATH))
                                 .setIsNullable(true)
+                                .setIsRequestOnly(true)
                                 .build());
     }
 

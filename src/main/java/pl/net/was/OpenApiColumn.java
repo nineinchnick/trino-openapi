@@ -46,6 +46,7 @@ public class OpenApiColumn
     private final Map<HttpPath, Object> parameterDefaults;
     private final ColumnMetadata metadata;
     private final boolean isPageNumber;
+    private final boolean isRequestOnly;
     private final OpenApiColumnHandle handle;
 
     private OpenApiColumn(
@@ -62,6 +63,7 @@ public class OpenApiColumn
             boolean isNullable,
             boolean isHidden,
             boolean isPageNumber,
+            boolean isRequestOnly,
             String comment)
     {
         this.name = name;
@@ -82,6 +84,7 @@ public class OpenApiColumn
                 .setComment(Optional.ofNullable(comment))
                 .build();
         this.isPageNumber = isPageNumber;
+        this.isRequestOnly = isRequestOnly;
         this.handle = new OpenApiColumnHandle(name, type);
     }
 
@@ -160,6 +163,15 @@ public class OpenApiColumn
         return isPageNumber;
     }
 
+    /**
+     * Request parameters and body fields that aren't also a response field, like ones renamed with the {@code _req} suffix,
+     * so rows can only get their values from predicates.
+     */
+    public boolean isRequestOnly()
+    {
+        return isRequestOnly;
+    }
+
     public OpenApiColumnHandle getHandle()
     {
         return handle;
@@ -193,7 +205,8 @@ public class OpenApiColumn
                 && Objects.equals(rangeFilters, that.rangeFilters)
                 && Objects.equals(parameterDefaults, that.parameterDefaults)
                 && Objects.equals(metadata, that.metadata)
-                && isPageNumber == that.isPageNumber;
+                && isPageNumber == that.isPageNumber
+                && isRequestOnly == that.isRequestOnly;
     }
 
     @Override
@@ -212,13 +225,14 @@ public class OpenApiColumn
                 ", parameterDefaults=" + parameterDefaults +
                 ", metadata=" + metadata +
                 ", isPageNumber=" + isPageNumber +
+                ", isRequestOnly=" + isRequestOnly +
                 '}';
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, parameterDefaults, metadata, isPageNumber);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, rangeFilters, parameterDefaults, metadata, isPageNumber, isRequestOnly);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -246,6 +260,7 @@ public class OpenApiColumn
         private boolean isNullable;
         private boolean isHidden;
         private boolean isPageNumber;
+        private boolean isRequestOnly;
         private String comment;
 
         private Builder() {}
@@ -265,6 +280,7 @@ public class OpenApiColumn
             this.isNullable = handle.getMetadata().isNullable();
             this.isHidden = handle.getMetadata().isHidden();
             this.isPageNumber = handle.isPageNumber();
+            this.isRequestOnly = handle.isRequestOnly();
             this.comment = handle.getMetadata().getComment().orElse(null);
         }
 
@@ -347,6 +363,12 @@ public class OpenApiColumn
             return this;
         }
 
+        public OpenApiColumn.Builder setIsRequestOnly(boolean isRequestOnly)
+        {
+            this.isRequestOnly = isRequestOnly;
+            return this;
+        }
+
         public OpenApiColumn.Builder setComment(String name)
         {
             if (name != null) {
@@ -371,6 +393,7 @@ public class OpenApiColumn
                     isNullable,
                     isHidden,
                     isPageNumber,
+                    isRequestOnly,
                     comment);
         }
     }
