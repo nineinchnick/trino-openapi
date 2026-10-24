@@ -79,7 +79,6 @@ public class Authentication
     private final String apiKeyName;
     private final String apiKeyValue;
 
-    private final URI baseUri;
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
@@ -105,7 +104,6 @@ public class Authentication
         this.apiKeyName = config.getApiKeyName();
         this.apiKeyValue = config.getApiKeyValue();
 
-        this.baseUri = requireNonNull(config.getBaseUri(), "baseUri is null");
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();

@@ -274,6 +274,26 @@
 
     <build>
         <plugins>
+            <!-- same checks as Trino, the compiler doesn't have to be forked because of the flags in .mvn/jvm.config -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.children="append">
+                        <arg>-XDcompilePolicy=simple</arg>
+                        <arg>--should-stop=ifError=FLOW</arg>
+                        <arg>-Xplugin:ErrorProne @${air.main.basedir}/.mvn/errorprone.config -Xep:GuardedBy:ERROR -XepExcludedPaths:.*/target/generated-(|test-)sources/.*</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>com.google.errorprone</groupId>
+                            <artifactId>error_prone_core</artifactId>
+                            <version>${dep.errorprone.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
             <!-- same rules as Trino -->
             <plugin>
                 <groupId>org.gaul</groupId>

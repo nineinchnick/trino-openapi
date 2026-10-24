@@ -183,7 +183,7 @@ public class DateTimeConverter
 
     private static Object toNativeValue(LocalDateTime dateTime, TimestampType type)
     {
-        long nanoOfSecond = round(dateTime.getNano(), max(0, MAX_FRACTION_DIGITS - type.getPrecision()));
+        long nanoOfSecond = round(dateTime.get(NANO_OF_SECOND), max(0, MAX_FRACTION_DIGITS - type.getPrecision()));
         // rounding can carry over to the next second, which adding microseconds handles too
         long epochMicros = multiplyExact(dateTime.toEpochSecond(UTC), MICROSECONDS_PER_SECOND) + nanoOfSecond / NANOSECONDS_PER_MICROSECOND;
         if (type.isShort()) {

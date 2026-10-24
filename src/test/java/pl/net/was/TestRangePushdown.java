@@ -37,6 +37,7 @@ import static io.swagger.v3.oas.models.PathItem.HttpMethod.GET;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static java.time.ZoneOffset.UTC;
+import static java.time.temporal.ChronoField.NANO_OF_SECOND;
 import static java.util.function.Function.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -239,7 +240,7 @@ class TestRangePushdown
     private static long micros(String dateTime)
     {
         LocalDateTime value = LocalDateTime.parse(dateTime);
-        return value.toEpochSecond(UTC) * 1_000_000 + value.getNano() / 1_000;
+        return value.toEpochSecond(UTC) * 1_000_000 + value.get(NANO_OF_SECOND) / 1_000;
     }
 
     private static OpenApiColumn queryParameter(String name, String format, HttpPath httpPath)

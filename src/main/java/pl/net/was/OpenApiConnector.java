@@ -28,7 +28,6 @@ import io.trino.spi.transaction.IsolationLevel;
 import java.util.List;
 
 import static java.util.Objects.requireNonNull;
-import static pl.net.was.OpenApiTransactionHandle.INSTANCE;
 
 public class OpenApiConnector
         implements Connector
@@ -57,7 +56,7 @@ public class OpenApiConnector
     @Override
     public ConnectorTransactionHandle beginTransaction(IsolationLevel isolationLevel, boolean readOnly, boolean autoCommit)
     {
-        return INSTANCE;
+        return OpenApiTransactionHandle.INSTANCE;
     }
 
     @Override
