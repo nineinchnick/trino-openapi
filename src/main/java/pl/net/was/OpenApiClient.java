@@ -748,11 +748,7 @@ public class OpenApiClient
 
     private TrinoException toTrinoException(OpenApiTableHandle table, HttpPath httpPath, Request request, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)
     {
-        String operation = openApiSpec.getOperationId(httpPath)
-                .map(operationId -> "operation " + operationId)
-                .orElse("path " + httpPath.path());
-        // the query string can contain filter values and API keys
-        String context = format("Request %s %s for %s failed", request.getMethod(), withoutQuery(request.getUri()), operation);
+        String context = describeFailedRequest(httpPath, request);
         String attemptsSuffix = attempts > 1 ? format(" after %d attempts", attempts) : "";
         return switch (failure) {
             case HttpRequestFailure.TransportError error -> new TrinoException(
@@ -772,6 +768,15 @@ public class OpenApiClient
                         .orElse(messageWithError));
             }
         };
+    }
+
+    private String describeFailedRequest(HttpPath httpPath, Request request)
+    {
+        String operation = openApiSpec.getOperationId(httpPath)
+                .map(operationId -> "operation " + operationId)
+                .orElse("path " + httpPath.path());
+        // the query string can contain filter values and API keys
+        return format("Request %s %s for %s failed", request.getMethod(), withoutQuery(request.getUri()), operation);
     }
 
     private static String describeRedirect(URI requestUri, HttpRequestFailure.ErrorResponse error)
