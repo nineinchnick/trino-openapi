@@ -30,7 +30,8 @@ public class KeycloakServer
 {
     private static final boolean REUSE = requireNonNullElse(System.getenv("TESTCONTAINERS_REUSE_ENABLE"), "false").equals("true");
     private static final int API_PORT = 8080;
-    private static final String TOKEN_PATH = "/realms/trino-realm/protocol/openid-connect/token";
+    private static final String REALM_PATH = "/realms/trino-realm";
+    private static final String TOKEN_PATH = "/protocol/openid-connect/token";
     private final GenericContainer<?> dockerContainer;
 
     public KeycloakServer()
@@ -51,9 +52,14 @@ public class KeycloakServer
         ReportLeakedContainers.ignoreContainerId(dockerContainer.getContainerId());
     }
 
+    public String getRealmUrl()
+    {
+        return format("http://%s:%s%s", dockerContainer.getHost(), dockerContainer.getMappedPort(API_PORT), REALM_PATH);
+    }
+
     public String getTokenUrl()
     {
-        return format("http://%s:%s%s", dockerContainer.getHost(), dockerContainer.getMappedPort(API_PORT), TOKEN_PATH);
+        return getRealmUrl() + TOKEN_PATH;
     }
 
     @Override
