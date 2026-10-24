@@ -990,6 +990,20 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsWithShortPagesBeforeTheLastOne()
+    {
+        // the server returns fewer items than the declared page size, but the response tells that more pages remain
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.short_page_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.short_page_has_more_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+        // the number of pages is computed from the size of the first page, which is full, because more results follow
+        assertSplits("SELECT name FROM fastapi_probe.default.short_page_items", 2);
+    }
+
+    @Test
     public void itemsWithPageSizeAboveMaximum()
     {
         assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.capped_items WHERE size = 5").getMaterializedRows())

@@ -587,7 +587,9 @@ one of these happens:
   [`parameterDefaults`](#parameter-defaults), or from the parameter's default in
   the spec. The page size is limited by the parameter's `maximum`, if declared,
   because servers often return fewer results than requested when the number is
-  too high.
+  too high. Servers can also return fewer results than the declared page size,
+  so a short page ends pagination only when the response has no value at
+  `totalResultsPath`, `totalPagesPath`, or `hasMorePath`.
 
 Pagination never guesses from page contents. If none of these apply, for
 example when the server returns the last page for every page number past it and
@@ -621,8 +623,9 @@ separate splits:
   is read in a split right away, and the coordinator also requests it to get the
   total, and creates a split for every remaining page. The number of pages is
   the value at `totalPagesPath`, or the value at `totalResultsPath` divided by
-  the page size. When the page size isn't known, it's the number of results on
-  the first page. If the first page has no total, the remaining pages are read
+  the number of results on the first page, which is full when more results
+  follow, even if the server returns fewer results than the declared page
+  size. If the first page has no total, the remaining pages are read
   in a single split. Results with a single page are requested twice. To make
   the extra request cheaper, set `probe-limit` or `probeLimit` to a small page
   size, like `0` or `1`, to request only the total number of results. It's
@@ -644,6 +647,9 @@ separate splits:
   known, the `probe` strategy is used instead, which gets the page size from
   the first page. Otherwise, pages are read in a single split. Results with
   fewer pages than splits make extra requests for pages past the last one.
+  With `totalResultsPath`, splits skip pages using the declared page size, so
+  if the server returns fewer results per page, set `totalPagesPath` or use
+  the `probe` strategy.
 * `off` - read all pages in a single split.
 
 Pages are read one after another when the query has a `LIMIT`, so pagination
