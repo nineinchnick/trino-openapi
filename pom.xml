@@ -274,6 +274,30 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <configuration>
+                    <rules>
+                        <!-- same as Trino -->
+                        <bannedDependencies>
+                            <excludes combine.children="append">
+                                <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                                <exclude>org.yaml:snakeyaml</exclude>
+                                <exclude>com.google.inject:guice</exclude>
+                                <exclude>aopalliance:aopalliance</exclude>
+                                <exclude>javax.inject:javax.inject</exclude>
+                                <exclude>javax.annotation:javax.annotation-api</exclude>
+                                <exclude>com.amazonaws:*</exclude>
+                            </excludes>
+                            <includes combine.children="append">
+                                <include>org.yaml:snakeyaml:2.+</include>
+                            </includes>
+                        </bannedDependencies>
+                    </rules>
+                </configuration>
+            </plugin>
+
+            <plugin>
                 <groupId>org.basepom.maven</groupId>
                 <artifactId>duplicate-finder-maven-plugin</artifactId>
                 <configuration>
