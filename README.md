@@ -674,7 +674,8 @@ paths:
 
 The schema at `resultsPath` must be an array, with a row for every item, an
 object, which is a single row, or a union of them. Loading the spec fails
-otherwise.
+otherwise. A `null` at `resultsPath`, which some APIs send instead of an empty
+list, means there are no rows, so it also ends pagination like an empty page.
 
 If you can't change the API to include the extension in its specification, save
 the specification locally and edit it.

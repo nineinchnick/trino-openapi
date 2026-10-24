@@ -1430,6 +1430,10 @@ public class OpenApiClient
         if (resultNode.isObject()) {
             return List.of(resultNode);
         }
+        // some servers send null instead of an empty list
+        if (resultNode.isNull()) {
+            return List.of();
+        }
         // the response is not included, because it might contain sensitive information, and it's in the body log
         if (resultNode.isMissingNode()) {
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s has no value at resultsPath %s", describe(request), resultsPointer));

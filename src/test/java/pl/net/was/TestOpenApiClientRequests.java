@@ -1106,6 +1106,16 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testNullResultsAreEmpty()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":null}"));
+
+        assertThat(getRows(newConfig(PAGED_SPEC), "paged", null)).isEmpty();
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
     void testNotFoundListFails()
             throws IOException
     {
