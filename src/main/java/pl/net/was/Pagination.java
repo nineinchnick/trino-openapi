@@ -28,6 +28,7 @@ public record Pagination(
         Optional<ResponsePath> hasMorePath,
         Optional<String> cursorParam,
         Optional<ResponsePath> nextCursorPath,
+        boolean nextPageLinkHeader,
         OptionalInt maxPages,
         OptionalLong maxResults,
         Optional<Sorting> sorting,
@@ -46,7 +47,8 @@ public record Pagination(
         requireNonNull(cursorParam, "cursorParam is null");
         requireNonNull(nextCursorPath, "nextCursorPath is null");
         checkArgument(cursorParam.isPresent() || nextCursorPath.isEmpty(), "cursorParam is required with nextCursorPath");
-        checkArgument(cursorParam.isEmpty() || nextCursorPath.isPresent(), "nextCursorPath is required with cursorParam");
+        checkArgument(cursorParam.isEmpty() || nextCursorPath.isPresent() || nextPageLinkHeader, "nextCursorPath or nextPageLinkHeader is required with cursorParam");
+        checkArgument(nextCursorPath.isEmpty() || !nextPageLinkHeader, "nextCursorPath can't be used with nextPageLinkHeader");
         requireNonNull(maxPages, "maxPages is null");
         maxPages.ifPresent(value -> checkArgument(value > 0, "maxPages must be positive"));
         requireNonNull(maxResults, "maxResults is null");
@@ -76,6 +78,7 @@ public record Pagination(
         private Optional<ResponsePath> hasMorePath = Optional.empty();
         private Optional<String> cursorParam = Optional.empty();
         private Optional<ResponsePath> nextCursorPath = Optional.empty();
+        private boolean nextPageLinkHeader;
         private OptionalInt maxPages = OptionalInt.empty();
         private OptionalLong maxResults = OptionalLong.empty();
         private Optional<Sorting> sorting = Optional.empty();
@@ -121,6 +124,12 @@ public record Pagination(
             return this;
         }
 
+        public Builder setNextPageLinkHeader(boolean nextPageLinkHeader)
+        {
+            this.nextPageLinkHeader = nextPageLinkHeader;
+            return this;
+        }
+
         public Builder setMaxPages(OptionalInt maxPages)
         {
             this.maxPages = requireNonNull(maxPages, "maxPages is null");
@@ -159,7 +168,7 @@ public record Pagination(
 
         public Pagination build()
         {
-            return new Pagination(limitParam, totalResultsPath, totalPagesPath, hasMorePath, cursorParam, nextCursorPath, maxPages, maxResults, sorting, splitStrategy, strideSplits, probeLimit);
+            return new Pagination(limitParam, totalResultsPath, totalPagesPath, hasMorePath, cursorParam, nextCursorPath, nextPageLinkHeader, maxPages, maxResults, sorting, splitStrategy, strideSplits, probeLimit);
         }
     }
 }

@@ -51,7 +51,14 @@ public class TestGithub
                 "authentication.type", "http",
                 "authentication.scheme", "bearer",
                 "authentication.bearer-token", requireNonNullElse(System.getenv("GITHUB_TOKEN"), "")));
-        return OpenApiQueryRunner.createQueryRunner(Map.of("github", properties.buildOrThrow()));
+        // the first catalog is the default one of the session
+        return OpenApiQueryRunner.createQueryRunner(ImmutableMap.of(
+                "github", properties.buildOrThrow(),
+                "github_links", ImmutableMap.<String, String>builder()
+                        .putAll(properties.buildOrThrow())
+                        // GitHub numbers pages, but also links to the next one in the Link header
+                        .put("spec-location", "src/test/resources/github-links.yml")
+                        .buildKeepingLast()));
     }
 
     @Test
@@ -655,6 +662,18 @@ public class TestGithub
         assertQuery("SELECT count(*) > 30 FROM repos_releases WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
         assertQuery("SELECT count(*) > 30 FROM repos_tags WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'", "VALUES true");
         assertQuery("SELECT count(*) > 30 FROM users_repos WHERE username = 'nineinchnick'", "VALUES true");
+    }
+
+    @Test
+    public void selectPagesFromLinkHeader()
+    {
+        String tags = "FROM %s.default.repos_tags WHERE owner = 'nineinchnick' AND repo = 'trino-openapi'";
+        long expectedTags = (long) computeScalar("SELECT count(*) " + tags.formatted("github"));
+        assertThat(expectedTags).isGreaterThan(10);
+        // small pages make the connector follow many links
+        assertQuery(
+                "SELECT count(*), count(DISTINCT name) " + tags.formatted("github_links") + " AND per_page = 10",
+                "VALUES (%d, %d)".formatted(expectedTags, expectedTags));
     }
 
     @Test

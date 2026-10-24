@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public sealed interface ResponsePath
@@ -32,6 +33,22 @@ public sealed interface ResponsePath
         public String toString()
         {
             return pointer.toString();
+        }
+    }
+
+    record Header(String name)
+            implements ResponsePath
+    {
+        public Header
+        {
+            requireNonNull(name, "name is null");
+            checkArgument(!name.isBlank(), "header name is blank");
+        }
+
+        @Override
+        public String toString()
+        {
+            return "header " + name;
         }
     }
 }

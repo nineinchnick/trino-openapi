@@ -1,0 +1,37 @@
+openapi: 3.0.0
+info:
+  title: GitHub tags paginated with the Link header
+  version: '1'
+paths:
+  /repos/{owner}/{repo}/tags:
+    get:
+      operationId: repos/list-tags
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      x-trino:
+        nextPageLinkHeader: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
