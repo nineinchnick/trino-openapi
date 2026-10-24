@@ -15,6 +15,7 @@ package pl.net.was;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.io.Resources;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
@@ -31,17 +32,22 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.ExtraCredentialProvider;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static io.airlift.slice.Slices.utf8Slice;
@@ -49,15 +55,20 @@ import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.testing.TestingConnectorSession.SESSION;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.nCopies;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestOpenApiClient
 {
+    @TempDir
+    Path tempDir;
+
     @Test
     void shouldSerializeMapPredicatesInRequestBodies()
     {
@@ -152,6 +163,75 @@ class TestOpenApiClient
                 .containsExactly("page=1");
     }
 
+    @Test
+    void shouldLimitSplitsToMaxPages()
+            throws IOException
+    {
+        OpenApiSpec spec = loadPagedSpec("maxPages: 4");
+        OpenApiClient client = createPagedClient(spec, firstPage(100, 10));
+
+        assertThat(client.getSplitsAfterFirstPage(SESSION, getPagedTable(spec), ProbeLimit.NONE, false))
+                .extracting(split -> getFilter(split, "page"))
+                .containsExactly(2L, 3L, 4L);
+    }
+
+    @Test
+    void shouldLimitSplitsToMaxResults()
+            throws IOException
+    {
+        OpenApiSpec spec = loadPagedSpec("maxResults: 25");
+        OpenApiClient client = createPagedClient(spec, firstPage(100, 10));
+
+        assertThat(client.getSplitsAfterFirstPage(SESSION, getPagedTable(spec), ProbeLimit.NONE, false))
+                .extracting(split -> getFilter(split, "page"))
+                .containsExactly(2L, 3L);
+    }
+
+    @Test
+    void shouldReadPagesInOneSplitWhenProbeHasNoTotal()
+    {
+        OpenApiSpec spec = loadSpec("paged.yml");
+        OpenApiTableHandle table = getPagedTable(spec);
+        OpenApiClient client = createPagedClient(spec, "{\"results\": []}");
+
+        // the number of pages is unknown, so a single split reads them one after another
+        assertThat(client.getSplitsAfterFirstPage(SESSION, table, new ProbeLimit(OptionalInt.of(0)), false))
+                .extracting(OpenApiSplit::getTableHandle, OpenApiSplit::getFirstPage, OpenApiSplit::getPageIncrement)
+                .containsExactly(tuple(table, 2, 1));
+    }
+
+    @Test
+    void shouldReadPagesInOneSplitWhenFullFirstPageHasNoTotal()
+    {
+        OpenApiSpec spec = loadSpec("paged.yml");
+        OpenApiTableHandle table = getPagedTable(spec);
+        OpenApiClient client = createPagedClient(spec, "{\"results\": [%s]}".formatted(String.join(", ", nCopies(10, "{\"name\": \"a\"}"))));
+
+        // the number of pages is unknown, so a single split reads them one after another
+        assertThat(client.getSplitsAfterFirstPage(SESSION, table, ProbeLimit.NONE, false))
+                .extracting(OpenApiSplit::getTableHandle, OpenApiSplit::getFirstPage, OpenApiSplit::getPageIncrement)
+                .containsExactly(tuple(table, 2, 1));
+    }
+
+    @Test
+    void shouldNotSplitShortFirstPageWithoutTotal()
+    {
+        OpenApiSpec spec = loadSpec("paged.yml");
+        OpenApiClient client = createPagedClient(spec, "{\"results\": [%s]}".formatted(String.join(", ", nCopies(5, "{\"name\": \"a\"}"))));
+
+        assertThat(client.getSplitsAfterFirstPage(SESSION, getPagedTable(spec), ProbeLimit.NONE, false)).isEmpty();
+    }
+
+    @Test
+    void shouldNotSplitFirstPageWithoutMore()
+            throws IOException
+    {
+        OpenApiSpec spec = loadPagedSpec("hasMorePath: $response.body#/has_more");
+        OpenApiClient client = createPagedClient(spec, "{\"total\": 100, \"has_more\": false, \"results\": [%s]}".formatted(String.join(", ", nCopies(10, "{\"name\": \"a\"}"))));
+
+        assertThat(client.getSplitsAfterFirstPage(SESSION, getPagedTable(spec), ProbeLimit.NONE, false)).isEmpty();
+    }
+
     private static OpenApiClient createPagedClient(List<URI> requests)
     {
         OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
@@ -162,6 +242,17 @@ class TestOpenApiClient
             requests.add(request.getUri());
             return mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage);
         }));
+    }
+
+    private static OpenApiClient createPagedClient(OpenApiSpec spec, String firstPage)
+    {
+        OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
+        return newClient(config, spec, new TestingHttpClient(_ -> mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage)));
+    }
+
+    private static String firstPage(int totalResults, int pageSize)
+    {
+        return "{\"total\": %d, \"results\": [%s]}".formatted(totalResults, String.join(", ", nCopies(pageSize, "{\"name\": \"a\"}")));
     }
 
     private static OpenApiClient createClient(OpenApiSpec spec)
@@ -181,6 +272,21 @@ class TestOpenApiClient
     private static OpenApiTableHandle getPagedTable()
     {
         return loadSpec("paged.yml").getTableHandle(schemaTableName(SCHEMA_NAME, "items"));
+    }
+
+    private static OpenApiTableHandle getPagedTable(OpenApiSpec spec)
+    {
+        return spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"));
+    }
+
+    private OpenApiSpec loadPagedSpec(String extension)
+            throws IOException
+    {
+        String totalResultsPath = "totalResultsPath: $response.body#/total\n";
+        String spec = Resources.toString(Resources.getResource("paged.yml"), UTF_8);
+        checkArgument(spec.contains(totalResultsPath), "paged.yml has no totalResultsPath");
+        Path specFile = Files.writeString(tempDir.resolve("paged.yml"), spec.replace(totalResultsPath, totalResultsPath + "        " + extension + "\n"));
+        return createSpec(new OpenApiConfig().setSpecLocation(specFile.toString()));
     }
 
     private static Object getFilter(OpenApiSplit split, String columnName)

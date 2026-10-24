@@ -62,6 +62,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Throwables.getStackTraceAsString;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
@@ -483,6 +484,10 @@ class TestOpenApiClientRequests
                     "- name: page\n          in: query\n          schema:\n            type: integer\n",
                     "- name: cursor\n          in: query\n          schema:\n            type: string\n")
             .replace("pageParam: page\n", "cursorParam: cursor\n        nextCursorPath: $response.body#/next\n");
+
+    private static final String INTEGER_CURSOR_SPEC = CURSOR_SPEC.replace(
+            "- name: cursor\n          in: query\n          schema:\n            type: string\n",
+            "- name: cursor\n          in: query\n          schema:\n            type: integer\n");
 
     private static final String OFFSET_SPEC = PAGED_SPEC
             .replace("- name: page\n", "- name: offset\n")
@@ -1589,6 +1594,78 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testIntegerCursorPagination()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":2}"));
+        // servers can send integer cursors as strings, like other big numbers
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":\"3\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":3}],\"next\":null}"));
+
+        assertThat(getRows(newConfig(INTEGER_CURSOR_SPEC), "paged", null)).hasSize(3);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=2"), URI.create("/paged?cursor=3"));
+    }
+
+    @Test
+    void testIntegerCursorThatIsNotAWholeNumberIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"internal-details\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(INTEGER_CURSOR_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("The next cursor is not a whole number, but parameter cursor is an integer")
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testCursorPaginationEndsWithHasMore()
+            throws IOException
+    {
+        // the server sends a cursor with the last page too, so only the flag ends pagination
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"b\",\"has_more\":true}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":\"c\",\"has_more\":false}"));
+
+        assertThat(getRows(newConfig(withPagination(CURSOR_SPEC, "hasMorePath: $response.body#/has_more")), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=b"));
+    }
+
+    @Test
+    void testCursorPaginationEndsWithTotalPages()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"b\",\"pages\":2}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":\"c\",\"pages\":2}"));
+
+        assertThat(getRows(newConfig(withPagination(CURSOR_SPEC, "totalPagesPath: $response.body#/pages")), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=b"));
+    }
+
+    @Test
+    void testCursorPaginationEndsWithMaxPages()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"b\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":\"c\"}"));
+
+        assertThat(getRows(newConfig(withPagination(CURSOR_SPEC, "maxPages: 2")), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=b"));
+    }
+
+    @Test
+    void testHasMoreInHeader()
+            throws IOException
+    {
+        // without the flag, a page that is not empty would not end pagination, because the page size is unknown
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "X-Has-More", "True"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}", "X-Has-More", "false"));
+
+        assertThat(getRows(newConfig(withPagination(PAGED_SPEC, "hasMorePath: $response.header#X-Has-More")), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged?page=1"), URI.create("/paged?page=2"));
+    }
+
+    @Test
     void testOffsetPagination()
             throws IOException
     {
@@ -1672,6 +1749,19 @@ class TestOpenApiClientRequests
         assertThatThrownBy(() -> getRows(newConfig(LINK_SPEC), "paged", null))
                 .hasMessage("Response to GET %s/paged links to the next page on another host, http://127.0.0.1:1/paged, but requests are sent only to the server of the operation, so credentials are not sent to other hosts", baseUri);
         assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testInvalidNextLinkIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "Link", "</paged?page=2&api_key=internal details>; rel=\"next\""));
+
+        assertThatThrownBy(() -> getRows(newConfig(LINK_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/paged has an invalid link to the next page in the Link header", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal details"));
+        assertThat(requestCount).hasValue(1);
     }
 
     @Test
@@ -1796,6 +1886,13 @@ class TestOpenApiClientRequests
                                    items:
                %s
                """.formatted(itemSchema.indent(18).stripTrailing(), itemSchema.indent(22).stripTrailing());
+    }
+
+    private static String withPagination(String spec, String extension)
+    {
+        String resultsPath = "resultsPath: $response.body#/results\n";
+        checkArgument(spec.contains(resultsPath), "spec has no resultsPath");
+        return spec.replace(resultsPath, resultsPath + "        " + extension + "\n");
     }
 
     private OpenApiConfig newConfig()
