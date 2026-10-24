@@ -598,11 +598,12 @@ public class OpenApiClient
         String uriPath = httpPath.path();
         for (Map.Entry<OpenApiColumn, Object> entry : pathParameters.entrySet()) {
             OpenApiColumn column = entry.getKey();
-            String value = getParameterStyle(column, httpPath, ParameterLocation.PATH).serializePathValue(column.getSourceName(), toJsonNode(column, entry.getValue()));
+            String parameterName = column.getParameterName(httpPath);
+            String value = getParameterStyle(column, httpPath, ParameterLocation.PATH).serializePathValue(parameterName, toJsonNode(column, entry.getValue()));
             if (value.isEmpty()) {
                 throw new TrinoException(INVALID_ROW_FILTER, format("Path parameter %s can't be empty", column.getName()));
             }
-            uriPath = uriPath.replace(format("{%s}", column.getSourceName()), value);
+            uriPath = uriPath.replace(format("{%s}", parameterName), value);
         }
         URI uri;
         try {
