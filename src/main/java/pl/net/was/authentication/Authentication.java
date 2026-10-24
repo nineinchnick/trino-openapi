@@ -13,10 +13,10 @@
  */
 package pl.net.was.authentication;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimaps;
 import com.google.inject.Inject;
+import io.airlift.http.client.BearerTokenProvider;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpRequestFilter;
@@ -33,7 +33,6 @@ import pl.net.was.OpenApiSpec;
 
 import java.net.URI;
 import java.net.URLEncoder;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -48,29 +47,20 @@ import static com.google.common.io.BaseEncoding.base64;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
-import static io.airlift.http.client.JsonResponseHandler.createSuccessfulJsonResponseHandler;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
-import static io.airlift.json.JsonCodec.jsonCodec;
 import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
-import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.joining;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
-import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 
 public class Authentication
         implements HttpRequestFilter
 {
-    // RFC 6749 only recommends that token responses include expires_in, so when it's missing,
-    // assume one hour, which is a common default lifetime of access tokens
-    private static final long DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
-    private static final long MAX_TOKEN_REFRESH_MARGIN_SECONDS = 60;
-
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
@@ -88,7 +78,7 @@ public class Authentication
     private final String clientSecret;
     private final Set<URI> serverUris;
     private final URI tokenUrl;
-    private final ConcurrentMap<TokenRequest, TokenWithExpiry> tokens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TokenRequest, BearerTokenProvider> tokenProviders = new ConcurrentHashMap<>();
 
     @Inject
     public Authentication(
@@ -362,9 +352,8 @@ public class Authentication
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
         // TODO use options as scopes
-        TokenWithExpiry tokenWithExpiry = tokens.compute(tokenRequest, (request, cached) ->
-                cached == null || cached.isExpiringSoon() ? fetchTokenWithExpiry(request) : cached);
-        return builder.addHeader(AUTHORIZATION, "Bearer " + tokenWithExpiry.token());
+        String token = tokenProviders.computeIfAbsent(tokenRequest, this::createTokenProvider).getToken();
+        return builder.addHeader(AUTHORIZATION, "Bearer " + token);
     }
 
     private static String getAuthHeader(String scheme, String username, String password)
@@ -377,33 +366,15 @@ public class Authentication
         return input.substring(0, 1).toUpperCase(Locale.ENGLISH) + input.substring(1).toLowerCase(Locale.ENGLISH);
     }
 
-    private TokenWithExpiry fetchTokenWithExpiry(TokenRequest tokenRequest)
+    private BearerTokenProvider createTokenProvider(TokenRequest tokenRequest)
     {
-        TokenResponse response = httpClient.execute(
-                preparePost()
-                        .setUri(URI.create(tokenRequest.tokenUrl()))
-                        // following a redirect would send the client secret and the password to another location
-                        .setFollowRedirects(false)
-                        .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
-                        .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
-                        .build(),
-                // the safe handler doesn't put the response, which holds the token, in exception messages
-                createSuccessfulJsonResponseHandler(jsonCodec(Authentication.TokenResponse.class)));
-        if (response.accessToken() == null) {
-            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response of the token endpoint %s doesn't include an access_token", tokenRequest.tokenUrl()));
-        }
-        long expiresIn = response.expiresIn() != null ? response.expiresIn() : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
-        // a fixed margin would make tokens that expire sooner than it be fetched again on every request
-        long refreshMargin = min(MAX_TOKEN_REFRESH_MARGIN_SECONDS, expiresIn / 2);
-        return new TokenWithExpiry(response.accessToken(), Instant.now().plusSeconds(expiresIn - refreshMargin));
-    }
-
-    private record TokenWithExpiry(String token, Instant refreshAt)
-    {
-        boolean isExpiringSoon()
-        {
-            return Instant.now().isAfter(refreshAt);
-        }
+        return new OAuthTokenProvider(httpClient, preparePost()
+                .setUri(URI.create(tokenRequest.tokenUrl()))
+                // following a redirect would send the client secret and the password to another location
+                .setFollowRedirects(false)
+                .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
+                .build());
     }
 
     private String getBody(GrantType grantType)
@@ -480,9 +451,4 @@ public class Authentication
             return value;
         }
     }
-
-    public record TokenResponse(
-            @JsonProperty("token_type") String tokenType,
-            @JsonProperty("access_token") String accessToken,
-            @JsonProperty("expires_in") Long expiresIn) {}
 }
