@@ -126,6 +126,8 @@ public class OpenApiSpec
     private static final String SQL_OPERATION = "sqlOperation";
     private static final String SORT_PARAM = "sortParam";
     private static final String SORT_VALUES = "sortValues";
+    private static final String SORT_VALUE = "value";
+    private static final String SORT_BINARY_ORDER = "binaryOrder";
     private static final String SORT_DIRECTION_PARAM = "directionParam";
     private static final String SORT_ASCENDING_VALUE = "ascendingValue";
     private static final String SORT_DESCENDING_VALUE = "descendingValue";
@@ -1180,10 +1182,26 @@ public class OpenApiSpec
         if (sortParam == null) {
             return Optional.empty();
         }
-        Object sortValues = rawExtension instanceof Map<?, ?> map ? map.get(SORT_VALUES) : null;
+        Map<?, ?> sortValues = rawExtension instanceof Map<?, ?> map && map.get(SORT_VALUES) instanceof Map<?, ?> values ? values : ImmutableMap.of();
+        ImmutableMap.Builder<String, String> sortParamValues = ImmutableMap.builder();
+        ImmutableSet.Builder<String> binaryOrderFields = ImmutableSet.builder();
+        for (Map.Entry<?, ?> sortValue : sortValues.entrySet()) {
+            String field = sortValue.getKey().toString();
+            checkArgument(sortValue.getValue() != null, "Invalid value of %s for %s: expected a value of %s or an object", SORT_VALUES, field, SORT_PARAM);
+            if (!(sortValue.getValue() instanceof Map<?, ?> properties)) {
+                sortParamValues.put(field, sortValue.getValue().toString());
+                continue;
+            }
+            checkArgument(properties.get(SORT_VALUE) != null, "Invalid value of %s for %s: %s is required", SORT_VALUES, field, SORT_VALUE);
+            sortParamValues.put(field, properties.get(SORT_VALUE).toString());
+            if (getBoolean(properties, SORT_BINARY_ORDER).orElse(false)) {
+                binaryOrderFields.add(field);
+            }
+        }
         return Optional.of(Sorting.builder()
                 .setSortParam(sortParam)
-                .setSortValues(getMapOfStrings(sortValues))
+                .setSortValues(sortParamValues.buildOrThrow())
+                .setBinaryOrderFields(binaryOrderFields.build())
                 .setDirectionParam(specExtension.get(SORT_DIRECTION_PARAM))
                 .setAscendingValue(specExtension.get(SORT_ASCENDING_VALUE))
                 .setDescendingValue(specExtension.get(SORT_DESCENDING_VALUE))

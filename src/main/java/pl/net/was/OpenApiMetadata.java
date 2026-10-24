@@ -247,7 +247,10 @@ public class OpenApiMetadata
             return Optional.empty();
         }
         // servers often sort text ignoring case or using a locale collation, while Trino compares code points
-        if (!isOrderedLikeTrino(column.getType())) {
+        boolean binaryOrdered = sortings.stream()
+                .filter(sorting -> sorting.sortValues().containsKey(column.getSourceName()))
+                .allMatch(sorting -> sorting.binaryOrderFields().contains(column.getSourceName()));
+        if (!isOrderedLikeTrino(column.getType()) && !binaryOrdered) {
             return Optional.empty();
         }
         // rows contain values of request parameters, so sending the sort parameters would change values of their columns

@@ -556,7 +556,7 @@ paths:
 | `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
 | `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
 | `sortParam`         | Parameter that selects the field to sort results by                                                                                                 |
-| `sortValues`        | Map of response field names to the `sortParam` values that sort by them                                                                             |
+| `sortValues`        | Map of response field names to the `sortParam` values that sort by them, see [Pagination](#pagination)                                              |
 | `directionParam`    | Parameter with the sort direction; required with `sortParam`                                                                                        |
 | `ascendingValue`    | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
 | `descendingValue`   | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
@@ -599,9 +599,9 @@ after reading enough rows, when the column is in `sortValues`, so the server
 returns the top rows first. The connector sends `sortParam` and `directionParam`
 only when:
 
-* the column is a number, boolean, `DATE`, or `TIMESTAMP`, because servers
-  often sort text ignoring case or using a locale collation, while Trino
-  compares code points;
+* the column is a number, boolean, `DATE`, or `TIMESTAMP`, or `sortValues`
+  sets `binaryOrder` for it, because servers often sort text ignoring case or
+  using a locale collation, while Trino compares code points;
 * the field is required and not nullable in responses of all operations used
   for `SELECT`, because the server might place nulls differently than
   `NULLS FIRST` or `NULLS LAST` in the query;
@@ -611,6 +611,26 @@ only when:
 
 Otherwise it requests all pages, and Trino sorts the rows. Declare only fields
 that the server sorts the same way as Trino.
+
+For other columns, like `VARCHAR`, the value in `sortValues` can be an object
+with the `sortParam` value in `value`, and `binaryOrder: true`, if the server
+sorts them the same way as Trino. For text, it means comparing code points, so
+`Banana` comes before `apple`:
+
+```yaml
+x-trino:
+  sortParam: "sort"
+  sortValues:
+    updated_at: "updated"
+    login:
+      value: "login"
+      binaryOrder: true
+```
+
+Don't set it for a server that returns `apple`, `Banana`, `cherry`, sorting
+them ignoring case, because `ORDER BY login LIMIT 1` would return `apple`
+instead of `Banana`. Every operation declaring the field in `sortValues` must
+set `binaryOrder` for it.
 
 ### Reading pages concurrently
 
@@ -874,7 +894,8 @@ how they're made.
   `LIMIT` doesn't change the page size sent in requests, and it doesn't stop
   pagination when Trino filters the returned rows. `ORDER BY` is sent only for
   a single number, boolean, `DATE`, or `TIMESTAMP` column declared in
-  `sortValues` that every response includes.
+  `sortValues` that every response includes, or another column with
+  `binaryOrder` set.
 * Only page number pagination is supported, not offset or cursor pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another, unless a

@@ -2683,6 +2683,9 @@ class TestOpenApiSpec
                         sortParam: sort
                         sortValues:
                           updated_at: updated
+                          name:
+                            value: title
+                            binaryOrder: true
                         directionParam: direction
                         ascendingValue: asc
                         descendingValue: desc
@@ -2699,6 +2702,8 @@ class TestOpenApiSpec
                                     updated_at:
                                       type: string
                                       format: date-time
+                                    name:
+                                      type: string
                 """;
         OpenApiSpec spec = parseSpec(specContents);
 
@@ -2708,7 +2713,8 @@ class TestOpenApiSpec
                         Pagination.builder()
                                 .setSorting(Optional.of(Sorting.builder()
                                         .setSortParam("sort")
-                                        .setSortValues(Map.of("updated_at", "updated"))
+                                        .setSortValues(Map.of("updated_at", "updated", "name", "title"))
+                                        .setBinaryOrderFields(Set.of("name"))
                                         .setDirectionParam("direction")
                                         .setAscendingValue("asc")
                                         .setDescendingValue("desc")
@@ -2718,6 +2724,10 @@ class TestOpenApiSpec
                 .hasMessage("directionParam is required with sortParam");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("descendingValue: desc", "")))
                 .hasMessage("descendingValue is required with sortParam");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("value: title", "")))
+                .hasMessage("Invalid value of sortValues for name: value is required");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("binaryOrder: true", "binaryOrder: yes please")))
+                .hasMessage("binaryOrder must be true or false, got yes please");
     }
 
     @Test
