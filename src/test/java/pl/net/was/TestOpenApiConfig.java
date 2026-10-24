@@ -154,6 +154,12 @@ class TestOpenApiConfig
     }
 
     @Test
+    void testBaseUriIsOptional()
+    {
+        assertThat(buildConfig(Map.of("spec-location", "spec.yaml")).getBaseUri()).isNull();
+    }
+
+    @Test
     void testCredentialsOverHttp()
     {
         Map<String, String> properties = Map.of(

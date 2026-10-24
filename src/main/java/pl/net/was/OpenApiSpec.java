@@ -46,6 +46,7 @@ import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -457,6 +458,10 @@ public class OpenApiSpec
         if (openAPI.getSecurity() == null && parser.hasEmptyRootSecurity()) {
             openAPI.setSecurity(new ArrayList<>());
         }
+        // the parser adds a server with the URL / when the document doesn't declare any, which can't be told apart from a declared one later
+        if (!parser.hasRootServers()) {
+            openAPI.setServers(null);
+        }
         return openAPI;
     }
 
@@ -465,6 +470,7 @@ public class OpenApiSpec
     {
         private boolean rootParsed;
         private boolean emptyRootSecurity;
+        private boolean rootServers;
 
         @Override
         public SwaggerParseResult parseJsonNode(String path, JsonNode node, ParseOptions options)
@@ -474,6 +480,8 @@ public class OpenApiSpec
                 rootParsed = true;
                 JsonNode security = node.get("security");
                 emptyRootSecurity = security != null && security.isArray() && security.isEmpty();
+                JsonNode servers = node.get("servers");
+                rootServers = servers != null && servers.isArray() && !servers.isEmpty();
                 // the parser merges allOf alternatives into a single schema, but drops items, so arrays must be merged before
                 mergeArrayAlternatives(node, node);
             }
@@ -483,6 +491,11 @@ public class OpenApiSpec
         boolean hasEmptyRootSecurity()
         {
             return emptyRootSecurity;
+        }
+
+        boolean hasRootServers()
+        {
+            return rootServers;
         }
 
         private static void mergeArrayAlternatives(JsonNode root, JsonNode node)
@@ -682,6 +695,19 @@ public class OpenApiSpec
                 .flatMap(OpenApiSpec::getJsonMediaType)
                 .map(OpenApiSpec::toRequestedMediaType)
                 .orElse(JSON_UTF_8);
+    }
+
+    // only the first server is used, because the others are usually alternatives, like a sandbox, which must be chosen on purpose
+    public Optional<Server> getServer(HttpPath httpPath)
+    {
+        PathItem pathItem = requireNonNullElse(openApi.getPaths(), ImmutableMap.<String, PathItem>of()).get(httpPath.path());
+        checkArgument(pathItem != null, "Path not found: %s", httpPath.path());
+        Operation operation = pathItem.readOperationsMap().get(httpPath.method());
+        checkArgument(operation != null, "Operation not found: %s", httpPath);
+        return Stream.of(operation.getServers(), pathItem.getServers(), openApi.getServers())
+                .filter(servers -> servers != null && !servers.isEmpty())
+                .map(List::getFirst)
+                .findFirst();
     }
 
     private Optional<Operation> getOperation(HttpPath httpPath)

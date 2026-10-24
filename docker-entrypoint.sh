@@ -4,7 +4,7 @@ set -eo pipefail
 
 catalog_dir=/etc/trino/catalog
 
-if [ -n "$OPENAPI_BASE_URI" ]; then
+if [ -n "$OPENAPI_SPEC_LOCATION" ]; then
     # skip properties of environment variables that are not set, to use their default values
     while IFS= read -r line; do
         if [[ $line =~ \$\{ENV:([A-Z_]+)\} && ! -v ${BASH_REMATCH[1]} ]]; then

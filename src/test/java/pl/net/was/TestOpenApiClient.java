@@ -151,10 +151,11 @@ class TestOpenApiClient
         OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
         // 25 results, with 10 on every page, so the probe must be followed by 2 more pages
         String firstPage = "{\"total\": 25, \"results\": [%s]}".formatted(String.join(", ", nCopies(10, "{\"name\": \"a\"}")));
+        OpenApiSpec spec = loadSpec("paged.yml");
         return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(request -> {
             requests.add(request.getUri());
             return mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage);
-        }), loadSpec("paged.yml"), new OpenApiServers(config));
+        }), spec, new OpenApiServers(config, spec));
     }
 
     private static OpenApiClient createClient(OpenApiSpec spec)
@@ -162,7 +163,7 @@ class TestOpenApiClient
         OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
         return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(_ -> {
             throw new UnsupportedOperationException();
-        }), spec, new OpenApiServers(config));
+        }), spec, new OpenApiServers(config, spec));
     }
 
     private static OpenApiTableHandle getPagedTable()
