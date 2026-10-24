@@ -14,8 +14,6 @@
 
 package pl.net.was;
 
-import com.fasterxml.jackson.core.JsonPointer;
-
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -25,9 +23,9 @@ import static java.util.Objects.requireNonNull;
 
 public record Pagination(
         Optional<String> limitParam,
-        JsonPointer totalResultsPointer,
-        JsonPointer totalPagesPointer,
-        JsonPointer hasMorePointer,
+        Optional<ResponsePath> totalResultsPath,
+        Optional<ResponsePath> totalPagesPath,
+        Optional<ResponsePath> hasMorePath,
         OptionalInt maxPages,
         OptionalLong maxResults,
         Optional<Sorting> sorting,
@@ -40,9 +38,9 @@ public record Pagination(
     public Pagination
     {
         requireNonNull(limitParam, "limitParam is null");
-        requireNonNull(totalResultsPointer, "totalResultsPointer is null");
-        requireNonNull(totalPagesPointer, "totalPagesPointer is null");
-        requireNonNull(hasMorePointer, "hasMorePointer is null");
+        requireNonNull(totalResultsPath, "totalResultsPath is null");
+        requireNonNull(totalPagesPath, "totalPagesPath is null");
+        requireNonNull(hasMorePath, "hasMorePath is null");
         requireNonNull(maxPages, "maxPages is null");
         maxPages.ifPresent(value -> checkArgument(value > 0, "maxPages must be positive"));
         requireNonNull(maxResults, "maxResults is null");
@@ -67,9 +65,9 @@ public record Pagination(
     public static class Builder
     {
         private Optional<String> limitParam = Optional.empty();
-        private JsonPointer totalResultsPointer = JsonPointer.empty();
-        private JsonPointer totalPagesPointer = JsonPointer.empty();
-        private JsonPointer hasMorePointer = JsonPointer.empty();
+        private Optional<ResponsePath> totalResultsPath = Optional.empty();
+        private Optional<ResponsePath> totalPagesPath = Optional.empty();
+        private Optional<ResponsePath> hasMorePath = Optional.empty();
         private OptionalInt maxPages = OptionalInt.empty();
         private OptionalLong maxResults = OptionalLong.empty();
         private Optional<Sorting> sorting = Optional.empty();
@@ -85,21 +83,21 @@ public record Pagination(
             return this;
         }
 
-        public Builder setTotalResultsPointer(JsonPointer totalResultsPointer)
+        public Builder setTotalResultsPath(Optional<ResponsePath> totalResultsPath)
         {
-            this.totalResultsPointer = requireNonNull(totalResultsPointer, "totalResultsPointer is null");
+            this.totalResultsPath = requireNonNull(totalResultsPath, "totalResultsPath is null");
             return this;
         }
 
-        public Builder setTotalPagesPointer(JsonPointer totalPagesPointer)
+        public Builder setTotalPagesPath(Optional<ResponsePath> totalPagesPath)
         {
-            this.totalPagesPointer = requireNonNull(totalPagesPointer, "totalPagesPointer is null");
+            this.totalPagesPath = requireNonNull(totalPagesPath, "totalPagesPath is null");
             return this;
         }
 
-        public Builder setHasMorePointer(JsonPointer hasMorePointer)
+        public Builder setHasMorePath(Optional<ResponsePath> hasMorePath)
         {
-            this.hasMorePointer = requireNonNull(hasMorePointer, "hasMorePointer is null");
+            this.hasMorePath = requireNonNull(hasMorePath, "hasMorePath is null");
             return this;
         }
 
@@ -141,7 +139,7 @@ public record Pagination(
 
         public Pagination build()
         {
-            return new Pagination(limitParam, totalResultsPointer, totalPagesPointer, hasMorePointer, maxPages, maxResults, sorting, splitStrategy, strideSplits, probeLimit);
+            return new Pagination(limitParam, totalResultsPath, totalPagesPath, hasMorePath, maxPages, maxResults, sorting, splitStrategy, strideSplits, probeLimit);
         }
     }
 }
