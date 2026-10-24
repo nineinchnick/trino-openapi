@@ -78,6 +78,8 @@ public class JsonTrinoConverter
      */
     public static final String MERGED_UNION_EXTENSION = "x-trino-merged-union";
 
+    private static final int MAX_BIGINT_DIGITS = 19;
+
     private JsonTrinoConverter() {}
 
     /**
@@ -99,10 +101,10 @@ public class JsonTrinoConverter
             return null;
         }
         if (type instanceof IntegerType || type instanceof SmallintType || type instanceof TinyintType) {
-            return jsonNode.isTextual() ? parseText(jsonNode, type, Integer::valueOf) : jsonNode.asInt();
+            return toInteger(jsonNode, type).intValueExact();
         }
         if (type instanceof BigintType) {
-            return jsonNode.isTextual() ? parseText(jsonNode, type, BigInteger::new) : jsonNode.bigIntegerValue();
+            return toInteger(jsonNode, type);
         }
         if (type instanceof RealType) {
             return jsonNode.isTextual() ? parseText(jsonNode, type, Float::valueOf) : jsonNode.floatValue();
@@ -157,6 +159,39 @@ public class JsonTrinoConverter
         throw new RuntimeException(format("Unsupported type %s", type.getClass().getCanonicalName()));
     }
 
+    private static BigInteger toInteger(JsonNode jsonNode, Type type)
+    {
+        BigInteger value = jsonNode.isTextual() ? parseText(jsonNode, type, BigInteger::new) : toIntegerExact(jsonNode, type);
+        Type.Range range = type.getRange().orElseThrow();
+        if (value.compareTo(BigInteger.valueOf((long) range.getMin())) < 0 || value.compareTo(BigInteger.valueOf((long) range.getMax())) > 0) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value doesn't fit in %s", type));
+        }
+        return value;
+    }
+
+    private static BigInteger toIntegerExact(JsonNode jsonNode, Type type)
+    {
+        if (jsonNode.isIntegralNumber()) {
+            return jsonNode.bigIntegerValue();
+        }
+        BigDecimal value;
+        try {
+            value = jsonNode.decimalValue();
+        }
+        catch (NumberFormatException _) {
+            // thrown for NaN and infinite values
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a non-integer JSON number as %s", type));
+        }
+        if (value.stripTrailingZeros().scale() > 0) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a non-integer JSON number as %s", type));
+        }
+        // checked before converting, because values like 1E999999999 would take a lot of memory
+        if (value.precision() - value.scale() > MAX_BIGINT_DIGITS) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value doesn't fit in %s", type));
+        }
+        return value.toBigIntegerExact();
+    }
+
     private static <T> T parseText(JsonNode jsonNode, Type type, Function<String, T> parser)
     {
         try {
@@ -170,6 +205,10 @@ public class JsonTrinoConverter
 
     private static Object toUnscaledValue(BigDecimal value, DecimalType type)
     {
+        if (type.getScale() == 0 && value.stripTrailingZeros().scale() > 0) {
+            // integers with an unsigned 64-bit format are decimals without fractional digits, and must not be rounded like other numbers
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a non-integer JSON number as %s", type));
+        }
         BigDecimal rescaled = value.setScale(type.getScale(), HALF_UP);
         if (overflows(rescaled, type.getPrecision())) {
             throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Value doesn't fit in %s", type));

@@ -2108,6 +2108,8 @@ class TestOpenApiSpec
                         Assertions.tuple("integer", BIGINT),
                         Assertions.tuple("int32", INTEGER),
                         Assertions.tuple("int64", BIGINT),
+                        Assertions.tuple("uint32", BIGINT),
+                        Assertions.tuple("uint64", createDecimalType(20, 0)),
                         Assertions.tuple("number", createDecimalType(18, 8)),
                         Assertions.tuple("float", REAL),
                         Assertions.tuple("double", DOUBLE),
@@ -2214,6 +2216,12 @@ class TestOpenApiSpec
                                    int64:
                                      type: integer
                                      format: int64
+                                   uint32:
+                                     type: integer
+                                     format: uint32
+                                   uint64:
+                                     type: integer
+                                     format: uint64
                                    number:
                                      type: number
                                    float:

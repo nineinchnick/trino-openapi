@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BigIntegerNode;
 import com.fasterxml.jackson.databind.node.DecimalNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.IntNode;
@@ -559,6 +560,72 @@ class JsonTrinoConverterTest
                 .isEqualTo(1.5);
         assertThat(JsonTrinoConverter.convert(TextNode.valueOf("NaN"), DOUBLE, new NumberSchema().format("double")))
                 .isEqualTo(Double.NaN);
+    }
+
+    @Test
+    void shouldConvertIntegersWithinRange()
+    {
+        assertThat(JsonTrinoConverter.convert(LongNode.valueOf(Integer.MIN_VALUE), INTEGER, new IntegerSchema()))
+                .isEqualTo(Integer.MIN_VALUE);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("2.000")), INTEGER, new IntegerSchema()))
+                .isEqualTo(2);
+        assertThat(JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1E3")), BIGINT, new IntegerSchema()))
+                .isEqualTo(BigInteger.valueOf(1000));
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("-9223372036854775808"), BIGINT, new IntegerSchema()))
+                .isEqualTo(BigInteger.valueOf(Long.MIN_VALUE));
+        assertThat(JsonTrinoConverter.convert(BigIntegerNode.valueOf(new BigInteger("18446744073709551615")), createDecimalType(20, 0), new IntegerSchema().format("uint64")))
+                .isEqualTo(Int128.valueOf(new BigInteger("18446744073709551615")));
+    }
+
+    @Test
+    void shouldRejectIntegersOutOfRange()
+    {
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(LongNode.valueOf(3_000_000_000L), INTEGER, new IntegerSchema().format("int32")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in integer");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(BigIntegerNode.valueOf(new BigInteger("9876543210987654321")), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("9876543210987654321"), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("-1E19")), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1E999999999")), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in bigint");
+    }
+
+    @Test
+    void shouldRejectIntegersWithFractionalPart()
+    {
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1.7")), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a non-integer JSON number as bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DoubleNode.valueOf(2.9), INTEGER, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a non-integer JSON number as integer");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DoubleNode.valueOf(Double.NaN), INTEGER, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a non-integer JSON number as integer");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1.5")), createDecimalType(20, 0), new IntegerSchema().format("uint64")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a non-integer JSON number as decimal(20,0)");
+    }
+
+    @Test
+    void shouldRejectIntegersOutOfRangeInNestedValues()
+    {
+        var type = new ArrayType(BIGINT);
+        var schema = new ArraySchema().items(new IntegerSchema());
+        ArrayNode values = new ObjectMapper().createArrayNode()
+                .add(1)
+                .add(new BigInteger("9876543210987654321"));
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(values, type, schema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in bigint");
     }
 
     @Test
