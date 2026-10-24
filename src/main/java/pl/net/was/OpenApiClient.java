@@ -1263,34 +1263,28 @@ public class OpenApiClient
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
         Map<String, Object> recordParams = getRecordFilterValues(table, httpPath);
-        String rowId = encodeRowId(getRowIdColumns(table), column -> recordParams.get(column.getSourceName()));
+        Set<OpenApiColumn> rowIdColumns = ImmutableSet.copyOf(getRowIdColumns(table));
 
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
-                resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowId, recordParams, jsonRecord));
+                resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowIdColumns, recordParams, jsonRecord));
             }
         }
         else {
-            resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowId, recordParams, jsonNode));
+            resultRecordsBuilder.addAll(convertJsonToRecords(request, table, httpPath, resultsPointer, rowIdColumns, recordParams, jsonNode));
         }
 
         return resultRecordsBuilder.build();
     }
 
-    private static String encodeRowId(List<OpenApiColumn> rowIdColumns, Function<OpenApiColumn, Object> nativeValues)
-    {
-        // values are kept the way they're sent in requests, and names of columns are unique, unlike names of parameters of different operations
-        ObjectNode rowId = OBJECT_MAPPER.createObjectNode();
-        for (OpenApiColumn column : rowIdColumns) {
-            Object value = nativeValues.apply(column);
-            if (value != null) {
-                rowId.set(column.getName(), toJsonNode(column, toParameterValue(column, value)));
-            }
-        }
-        return rowId.toString();
-    }
-
-    private Iterable<List<?>> convertJsonToRecords(Request request, OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, String rowId, Map<String, Object> recordParams, JsonNode jsonNode)
+    private Iterable<List<?>> convertJsonToRecords(
+            Request request,
+            OpenApiTableHandle table,
+            HttpPath httpPath,
+            JsonPointer resultsPointer,
+            Set<OpenApiColumn> rowIdColumns,
+            Map<String, Object> recordParams,
+            JsonNode jsonNode)
     {
         if (!jsonNode.isObject()) {
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s contains a JSON %s where an object was expected", describe(request), jsonNode.getNodeType()));
@@ -1305,20 +1299,36 @@ public class OpenApiClient
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
         for (JsonNode resultNode : resultNodes) {
             List<Object> recordBuilder = new ArrayList<>();
+            // values are kept the way they're sent in requests, and names of columns are unique, unlike names of parameters of different operations
+            ObjectNode rowId = OBJECT_MAPPER.createObjectNode();
+            int rowIdField = -1;
             for (OpenApiColumn column : columns) {
                 if (column.getName().equals(ROW_ID)) {
                     // TODO this is dangerous, make it configurable and required?
-                    recordBuilder.add(rowId);
+                    rowIdField = recordBuilder.size();
+                    recordBuilder.add(null);
                     continue;
                 }
                 String parameterName = column.getSourceName();
                 JsonNode sourceNode = column.getEnvelopePaths().contains(httpPath) ? jsonNode : resultNode;
                 // request parameters are usually not included in the response, so copy them from predicates
                 if (isPredicate(column, httpPath, null) && (column.isRequestOnly() || !sourceNode.has(parameterName))) {
-                    recordBuilder.add(recordParams.getOrDefault(parameterName, null));
+                    Object value = recordParams.getOrDefault(parameterName, null);
+                    recordBuilder.add(value);
+                    if (value != null && rowIdColumns.contains(column)) {
+                        rowId.set(column.getName(), toJsonNode(column, toParameterValue(column, value)));
+                    }
                     continue;
                 }
-                recordBuilder.add(convertToRecordValue(request, column, sourceNode.get(parameterName)));
+                JsonNode value = sourceNode.get(parameterName);
+                recordBuilder.add(convertToRecordValue(request, column, value));
+                // rows of a list are different resources, so they're identified by the values in the response, not by the filters
+                if (value != null && !value.isNull() && rowIdColumns.contains(column)) {
+                    rowId.set(column.getName(), value);
+                }
+            }
+            if (rowIdField != -1) {
+                recordBuilder.set(rowIdField, rowId.toString());
             }
             resultRecordsBuilder.add(recordBuilder);
         }
