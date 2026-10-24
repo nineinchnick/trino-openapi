@@ -2395,6 +2395,34 @@ class TestOpenApiSpec
                """.formatted(version);
     }
 
+    private static String resultsPathSpec(String resultsSchema)
+    {
+        return """
+               openapi: 3.0.0
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /items:
+                   get:
+                     x-trino:
+                       resultsPath: $response.body#/data/results
+                     responses:
+                       "200":
+                         description: Items
+                         content:
+                           application/json:
+                             schema:
+                               type: object
+                               properties:
+                                 data:
+                                   type: object
+                                   properties:
+                                     results:
+               %s
+               """.formatted(resultsSchema.indent(24).stripTrailing());
+    }
+
     private static String itemsSpec(String components)
     {
         // a non-standard type makes the spec look it up as a named schema in components
@@ -4393,6 +4421,22 @@ class TestOpenApiSpec
                             Assertions.tuple("content", VARCHAR, true),
                             Assertions.tuple("size", BIGINT, true));
         }
+    }
+
+    @Test
+    public void testResultsPathToMissingField()
+    {
+        String specContents = resultsPathSpec(
+                """
+                type: object
+                properties:
+                  name:
+                    type: string
+                """);
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("$response.body#/data/results", "$response.body#/data/items")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/items, the response has no field items");
     }
 
     @Test

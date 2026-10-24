@@ -662,7 +662,7 @@ public class OpenApiSpec
 
         Schema<?> schema = getResponseSchema(op);
         if (schema != null) {
-            Schema<?> resultsSchema = getResultsSchema(schema, resultsPointer);
+            Schema<?> resultsSchema = getResultsSchema(new HttpPath(method, path), specExtension.get(PAGINATION_RESULTS_PATH), schema, resultsPointer);
             Map<String, Schema> resultsProperties = getAlternativesProperties(resultsSchema);
             boolean hasEnvelope = !resultsPointer.equals(JsonPointer.empty());
             List<String> requiredProperties = getRequiredProperties(schema);
@@ -1138,7 +1138,7 @@ public class OpenApiSpec
                 .collect(toImmutableList());
     }
 
-    private Schema<?> getResultsSchema(Schema<?> schema, JsonPointer resultsPointer)
+    private Schema<?> getResultsSchema(HttpPath httpPath, String resultsPath, Schema<?> schema, JsonPointer resultsPointer)
     {
         while (resultsPointer != JsonPointer.empty()) {
             if (resultsPointer.getMatchingIndex() != -1) {
@@ -1148,9 +1148,7 @@ public class OpenApiSpec
             }
             String name = resultsPointer.getMatchingProperty();
             schema = getAlternativesProperties(schema).get(name);
-            if (schema == null) {
-                throw new IllegalArgumentException("Invalid value of %s: unknown field %s".formatted(JSON_POINTER_PATTERN, resultsPointer));
-            }
+            checkArgument(schema != null, "Invalid value of %s of %s: %s, the response has no field %s", PAGINATION_RESULTS_PATH, httpPath, resultsPath, name);
             // TODO validate that the schema is an array?
             resultsPointer = resultsPointer.tail();
         }
