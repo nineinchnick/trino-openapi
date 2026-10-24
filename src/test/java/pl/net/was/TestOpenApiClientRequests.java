@@ -562,6 +562,38 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testRetriesBodyReadFailuresWithHttpCache()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig()
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(truncatedBody());
+        responses.add(respond(200, "[{\"id\": 1}]", "Cache-Control", "max-age=60"));
+
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testBodyReadFailureWithHttpCacheIncludesRequestContext()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig()
+                .setMaxRetries(1)
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(truncatedBody());
+        responses.add(truncatedBody());
+
+        assertThatThrownBy(() -> getRows(config, "items", "s3cr3t"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_CONNECTION_ERROR.toErrorCode()))
+                .hasMessageStartingWith("Request GET %s/items for operation listItems failed after 2 attempts: ", baseUri)
+                .hasCauseInstanceOf(IOException.class)
+                .message()
+                .doesNotContain("s3cr3t");
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
     void testDocumentErrorPathWithCompressedResponse()
             throws IOException
     {
@@ -751,6 +783,19 @@ class TestOpenApiClientRequests
     {
         return _ -> {
             throw new IOException("Closing the connection without a response");
+        };
+    }
+
+    private static HttpHandler truncatedBody()
+    {
+        return exchange -> {
+            exchange.getResponseHeaders().add("Cache-Control", "max-age=60");
+            exchange.sendResponseHeaders(200, 100);
+            OutputStream output = exchange.getResponseBody();
+            output.write("[{\"id\":".getBytes(UTF_8));
+            output.flush();
+            // closing the exchange before the declared length was sent closes the connection
+            exchange.close();
         };
     }
 

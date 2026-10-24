@@ -25,7 +25,6 @@ import io.airlift.http.client.ResponseHandler;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 
 import static java.util.Objects.requireNonNull;
 
@@ -50,7 +49,8 @@ record BufferedResponse(int statusCode, ListMultimap<HeaderName, String> headers
                 return new BufferedResponse(response.getStatusCode(), ImmutableListMultimap.copyOf(response.getHeaders()), input.readAllBytes());
             }
             catch (IOException e) {
-                throw new UncheckedIOException(e);
+                // like a connection reset, or a body over the maximum length, which the caller's handler gets as a failure without the cache
+                throw new FailedRequestException(e);
             }
         }
     };

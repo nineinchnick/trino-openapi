@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.ConnectException;
+import java.net.SocketException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -354,6 +355,36 @@ class TestCachingHttpClient
         });
 
         assertThat(client.execute(get(ITEMS), BODY)).startsWith("failed:");
+    }
+
+    @Test
+    void testBodyReadFailuresArePassedToResponseHandler()
+    {
+        List<Response> responses = new ArrayList<>(List.of(
+                new TestingResponse(HttpStatus.OK, ImmutableListMultimap.of(CACHE_CONTROL, "max-age=60"), new InputStream()
+                {
+                    @Override
+                    public int read()
+                            throws IOException
+                    {
+                        throw new SocketException("Connection reset");
+                    }
+
+                    @Override
+                    public int read(byte[] buffer, int offset, int length)
+                            throws IOException
+                    {
+                        throw new SocketException("Connection reset");
+                    }
+                }),
+                response(HttpStatus.OK, "second", CACHE_CONTROL, "max-age=60")));
+        CachingHttpClient client = client(_ -> responses.removeFirst());
+
+        // without the cache, the caller's handler reads the body, and reports the failure, so it's retried like other transport errors
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("failed: java.net.SocketException: Connection reset");
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 second");
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 second");
+        assertThat(serverRequests).hasSize(2);
     }
 
     private CachingHttpClient client(Function<Request, Response> server)
