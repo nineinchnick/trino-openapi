@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
+import io.airlift.units.Duration;
 import io.trino.spi.NodeManager;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -47,12 +48,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -69,6 +73,7 @@ public class OpenApiSplitManager
     private final OpenApiClient client;
     private final NodeManager nodeManager;
     private final Optional<Double> maxSplitsPerSecond;
+    private final Optional<Double> maxScanRequestsPerSecond;
     private final int domainExpansionLimit;
     private final SplitStrategy splitStrategy;
     private final ProbeLimit probeLimit;
@@ -82,6 +87,7 @@ public class OpenApiSplitManager
         this.client = requireNonNull(client, "client is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.maxSplitsPerSecond = config.getMaxSplitsPerSecond();
+        this.maxScanRequestsPerSecond = config.getMaxScanRequestsPerSecond();
         this.domainExpansionLimit = config.getDomainExpansionLimit();
         this.splitStrategy = config.getSplitStrategy();
         this.probeLimit = config.getProbeLimit();
@@ -265,7 +271,7 @@ public class OpenApiSplitManager
                             .build(),
                     httpPath));
         }
-        ImmutableList.Builder<ConnectorSplit> splits = ImmutableList.builder();
+        ImmutableList.Builder<OpenApiSplit> splits = ImmutableList.builder();
         ImmutableList.Builder<Supplier<List<ConnectorSplit>>> splitsAfterFirstPages = ImmutableList.builder();
         // splits for multiple values of predicates are already read concurrently,
         // and probing for the number of pages of each would only add requests;
@@ -296,10 +302,25 @@ public class OpenApiSplitManager
             ProbeLimit probeLimit = getProbeLimit(session)
                     .or(pagination::probeLimit)
                     .orElse(this.probeLimit);
-            splitsAfterFirstPages.add(() -> ImmutableList.copyOf(client.getSplitsAfterFirstPage(session, splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
+            // the number of the remaining pages is known only after reading the first one, so their splits share the rate separately
+            splitsAfterFirstPages.add(() -> withRequestRates(client.getSplitsAfterFirstPage(session, splitTable.table(), probeLimit, !isHttpCacheEnabled(session))));
         }
         // TODO when implementing limits, this is where we'd break down splits more
-        return getSplitSource(splits.build(), splitsAfterFirstPages.build());
+        return getSplitSource(withRequestRates(splits.build()), splitsAfterFirstPages.build());
+    }
+
+    private List<ConnectorSplit> withRequestRates(List<OpenApiSplit> splits)
+    {
+        if (maxScanRequestsPerSecond.isEmpty() || splits.isEmpty()) {
+            return ImmutableList.copyOf(splits);
+        }
+        double scanRequestsPerSecond = maxScanRequestsPerSecond.get();
+        double splitRequestsPerSecond = scanRequestsPerSecond / splits.size();
+        return IntStream.range(0, splits.size())
+                .mapToObj(index -> splits.get(index).withRequestRate(new SplitRequestRate(
+                        splitRequestsPerSecond,
+                        new Duration(index * 1000.0 / scanRequestsPerSecond, MILLISECONDS))))
+                .collect(toImmutableList());
     }
 
     private record SplitTable(OpenApiTableHandle table, HttpPath httpPath) {}

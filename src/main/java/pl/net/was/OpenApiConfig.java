@@ -78,6 +78,7 @@ public class OpenApiConfig
     private boolean allowInsecureHttp;
 
     private Optional<Double> maxRequestsPerSecond = Optional.empty();
+    private Optional<Double> maxScanRequestsPerSecond = Optional.empty();
     private Optional<Double> maxSplitsPerSecond = Optional.empty();
 
     private int maxRetries = 3;
@@ -483,6 +484,20 @@ public class OpenApiConfig
     public OpenApiConfig setMaxRequestsPerSecond(Double maxRequestsPerSecond)
     {
         this.maxRequestsPerSecond = Optional.ofNullable(maxRequestsPerSecond);
+        return this;
+    }
+
+    @NotNull
+    public Optional<@DecimalMin(value = "0", inclusive = false, message = "must be greater than 0") Double> getMaxScanRequestsPerSecond()
+    {
+        return maxScanRequestsPerSecond;
+    }
+
+    @Config("max-scan-requests-per-second")
+    @ConfigDescription("Maximum number of HTTP requests per second from all nodes reading a table in a query, divided between its splits; unlimited if not set")
+    public OpenApiConfig setMaxScanRequestsPerSecond(Double maxScanRequestsPerSecond)
+    {
+        this.maxScanRequestsPerSecond = Optional.ofNullable(maxScanRequestsPerSecond);
         return this;
     }
 

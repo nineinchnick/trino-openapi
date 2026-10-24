@@ -77,6 +77,7 @@ class TestOpenApiConfig
                 .setTokenUrl(null)
                 .setAllowInsecureHttp(false)
                 .setMaxRequestsPerSecond(null)
+                .setMaxScanRequestsPerSecond(null)
                 .setMaxSplitsPerSecond(null)
                 .setMaxRetries(3)
                 .setRetryInitialDelay(new Duration(1, SECONDS))
@@ -116,6 +117,7 @@ class TestOpenApiConfig
                 .put("authentication.token-url", "https://auth.example.com/token")
                 .put("authentication.allow-insecure-http", "true")
                 .put("max-requests-per-second", "10")
+                .put("max-scan-requests-per-second", "20")
                 .put("max-splits-per-second", "0.5")
                 .put("max-retries", "5")
                 .put("retry-initial-delay", "100ms")
@@ -152,6 +154,7 @@ class TestOpenApiConfig
                 .setTokenUrl(URI.create("https://auth.example.com/token"))
                 .setAllowInsecureHttp(true)
                 .setMaxRequestsPerSecond(10.0)
+                .setMaxScanRequestsPerSecond(20.0)
                 .setMaxSplitsPerSecond(0.5)
                 .setMaxRetries(5)
                 .setRetryInitialDelay(new Duration(100, MILLISECONDS))
@@ -379,6 +382,12 @@ class TestOpenApiConfig
                 .buildOrThrow()))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("Invalid configuration property max-splits-per-second: must be greater than 0");
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("max-scan-requests-per-second", "0")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("Invalid configuration property max-scan-requests-per-second: must be greater than 0");
     }
 
     @Test
