@@ -54,6 +54,7 @@ public class OpenApiTableHandle
     private final OptionalLong limit;
     private final Optional<SortItem> sortItem;
     private final TupleDomain<ColumnHandle> rowFilter;
+    private final String specHash;
 
     private OpenApiTableHandle(
             SchemaTableName schemaTableName,
@@ -64,7 +65,8 @@ public class OpenApiTableHandle
             TupleDomain<ColumnHandle> constraint,
             OptionalLong limit,
             Optional<SortItem> sortItem,
-            TupleDomain<ColumnHandle> rowFilter)
+            TupleDomain<ColumnHandle> rowFilter,
+            String specHash)
     {
         this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
         this.selectPaths = ImmutableList.copyOf(requireNonNull(selectPaths, "selectPaths is null"));
@@ -75,6 +77,7 @@ public class OpenApiTableHandle
         this.limit = requireNonNull(limit, "limit is null");
         this.sortItem = requireNonNull(sortItem, "sortItem is null");
         this.rowFilter = requireNonNull(rowFilter, "rowFilter is null");
+        this.specHash = requireNonNull(specHash, "specHash is null");
     }
 
     // Trino only shares jackson-annotations with plugins, so handles can't be deserialized through a builder;
@@ -89,9 +92,10 @@ public class OpenApiTableHandle
             @JsonProperty("constraint") TupleDomain<ColumnHandle> constraint,
             @JsonProperty("limit") OptionalLong limit,
             @JsonProperty("sortItem") Optional<SortItem> sortItem,
-            @JsonProperty("rowFilter") TupleDomain<ColumnHandle> rowFilter)
+            @JsonProperty("rowFilter") TupleDomain<ColumnHandle> rowFilter,
+            @JsonProperty("specHash") String specHash)
     {
-        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter);
+        return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter, specHash);
     }
 
     public static Builder builder(SchemaTableName schemaTableName)
@@ -109,7 +113,8 @@ public class OpenApiTableHandle
                 .setConstraint(constraint)
                 .setLimit(limit)
                 .setSortItem(sortItem)
-                .setRowFilter(rowFilter);
+                .setRowFilter(rowFilter)
+                .setSpecHash(specHash);
     }
 
     @JsonProperty
@@ -184,6 +189,15 @@ public class OpenApiTableHandle
         return rowFilter;
     }
 
+    /**
+     * Identifies the spec of the node that created the handle, so other nodes can check if they loaded the same one.
+     */
+    @JsonProperty
+    public String getSpecHash()
+    {
+        return specHash;
+    }
+
     @Override
     public String toString()
     {
@@ -219,7 +233,8 @@ public class OpenApiTableHandle
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
                 + SizeOf.sizeOf(limit)
                 + SizeOf.sizeOf(sortItem, item -> SizeOf.estimatedSizeOf(item.getName()))
-                + rowFilter.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes());
+                + rowFilter.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
+                + SizeOf.estimatedSizeOf(specHash);
     }
 
     public OpenApiTableHandle cloneWithConstraint(TupleDomain<ColumnHandle> constraint)
@@ -391,6 +406,7 @@ public class OpenApiTableHandle
         private OptionalLong limit = OptionalLong.empty();
         private Optional<SortItem> sortItem = Optional.empty();
         private TupleDomain<ColumnHandle> rowFilter = TupleDomain.all();
+        private String specHash = "";
 
         private Builder(SchemaTableName schemaTableName)
         {
@@ -445,9 +461,15 @@ public class OpenApiTableHandle
             return this;
         }
 
+        public Builder setSpecHash(String specHash)
+        {
+            this.specHash = requireNonNull(specHash, "specHash is null");
+            return this;
+        }
+
         public OpenApiTableHandle build()
         {
-            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter);
+            return new OpenApiTableHandle(schemaTableName, selectPaths, insertPaths, updatePaths, deletePaths, constraint, limit, sortItem, rowFilter, specHash);
         }
     }
 }

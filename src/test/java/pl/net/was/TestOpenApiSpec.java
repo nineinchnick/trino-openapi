@@ -5413,6 +5413,6 @@ class TestOpenApiSpec
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
-        return new OpenApiSpec(result.getOpenAPI());
+        return new OpenApiSpec(result.getOpenAPI(), "test");
     }
 }

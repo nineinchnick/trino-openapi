@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
+import com.google.common.hash.Hashing;
 import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import io.airlift.http.client.HttpClient;
@@ -52,6 +53,7 @@ import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.swagger.v3.parser.util.DeserializationUtils;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
@@ -100,6 +102,8 @@ import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;
+import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparingInt;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
@@ -109,6 +113,7 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_SPEC_MISMATCH;
 
 public class OpenApiSpec
 {
@@ -177,6 +182,7 @@ public class OpenApiSpec
     private final List<SecurityRequirement> securityRequirements;
     private final Optional<RateLimitHeaders> rateLimitHeaders;
     private final Optional<JsonPointer> documentErrorPointer;
+    private final String specHash;
 
     @Inject
     public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
@@ -184,9 +190,15 @@ public class OpenApiSpec
         this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")));
     }
 
-    OpenApiSpec(OpenAPI openApi)
+    private OpenApiSpec(ParsedSpec parsedSpec)
+    {
+        this(parsedSpec.openApi(), parsedSpec.hash());
+    }
+
+    OpenApiSpec(OpenAPI openApi, String specHash)
     {
         this.openApi = requireNonNull(openApi, "openApi is null");
+        this.specHash = requireNonNull(specHash, "specHash is null");
         Map<String, String> documentExtension = getDocumentExtension(openApi);
         this.rateLimitHeaders = getRateLimitHeaders(documentExtension);
         // errors are usually reported the same way by all operations of an API
@@ -233,7 +245,7 @@ public class OpenApiSpec
                 errorPointers.put(tableName, errorPointers(firstEntry.getValue(), firstEntry.getKey()));
                 resultsPointers.put(tableName, resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
                 paginations.put(tableName, paginations(firstEntry.getValue(), firstEntry.getKey()));
-                handles.put(tableName, tableHandle(tableName, tablePaths));
+                handles.put(tableName, tableHandle(tableName, tablePaths, specHash));
                 continue;
             }
             Map.Entry<String, PathItem> baseEntry = getBaseEntry(groupEntry.getValue());
@@ -275,7 +287,7 @@ public class OpenApiSpec
                                         paginations(entry.getValue(), entry.getKey()).entrySet().stream())
                                 .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue)));
 
-                        handles.put(tableName, tableHandle(tableName, tablePaths));
+                        handles.put(tableName, tableHandle(tableName, tablePaths, specHash));
                     });
         }
         Map<String, OpenApiTableHandle> allHandles = handles.buildOrThrow();
@@ -465,7 +477,7 @@ public class OpenApiSpec
         return key.replaceAll("/\\{[^\\}]+\\}", "");
     }
 
-    private static OpenAPI parse(OpenApiConfig config, HttpClient httpClient)
+    private static ParsedSpec parse(OpenApiConfig config, HttpClient httpClient)
     {
         // specs of large APIs, like Datadog, exceed the default limit of 3 MB for YAML documents,
         // which protects against untrusted input, but the spec location is set by the catalog administrator.
@@ -493,8 +505,10 @@ public class OpenApiSpec
         if (!parser.hasRootServers()) {
             openAPI.setServers(null);
         }
-        return openAPI;
+        return new ParsedSpec(openAPI, parser.getRootHash());
     }
+
+    private record ParsedSpec(OpenAPI openApi, String hash) {}
 
     private static class PreprocessingParser
             extends OpenAPIV3Parser
@@ -502,6 +516,7 @@ public class OpenApiSpec
         private boolean rootParsed;
         private boolean emptyRootSecurity;
         private boolean rootServers;
+        private String rootHash;
 
         @Override
         public SwaggerParseResult parseJsonNode(String path, JsonNode node, ParseOptions options)
@@ -509,6 +524,8 @@ public class OpenApiSpec
             // the root document is parsed first, before any external references are resolved
             if (!rootParsed) {
                 rootParsed = true;
+                // the parsed document, unlike its text, doesn't change when the spec is only reformatted, or when it's converted between JSON and YAML
+                rootHash = Hashing.sha256().hashString(node.toString(), UTF_8).toString();
                 JsonNode security = node.get("security");
                 emptyRootSecurity = security != null && security.isArray() && security.isEmpty();
                 JsonNode servers = node.get("servers");
@@ -527,6 +544,11 @@ public class OpenApiSpec
         boolean hasRootServers()
         {
             return rootServers;
+        }
+
+        String getRootHash()
+        {
+            return rootHash;
         }
 
         private static void mergeArrayAlternatives(JsonNode root, JsonNode node)
@@ -636,6 +658,21 @@ public class OpenApiSpec
     public Map<String, List<OpenApiColumn>> getTables()
     {
         return tables;
+    }
+
+    /**
+     * Fails if the table handle was created by a node that loaded a different spec, like the coordinator before the spec changed,
+     * because this node could map the table to other columns, paths, or pagination.
+     */
+    public void checkSameSpec(OpenApiTableHandle table)
+    {
+        if (table.getSpecHash().equals(specHash)) {
+            return;
+        }
+        throw new TrinoException(OPENAPI_SPEC_MISMATCH, format(
+                "Table %s was planned with a different OpenAPI spec than this node loaded, because the spec at spec-location changed after the coordinator loaded it; "
+                        + "restart the catalog on all nodes, or use a spec that doesn't change",
+                table.getSchemaTableName()));
     }
 
     public OpenApiTableHandle getTableHandle(SchemaTableName name)
@@ -2191,9 +2228,10 @@ public class OpenApiSpec
                 && !column.getMetadata().isHidden();
     }
 
-    private static OpenApiTableHandle tableHandle(String tableName, Map<SqlOperation, List<HttpPath>> tablePaths)
+    private static OpenApiTableHandle tableHandle(String tableName, Map<SqlOperation, List<HttpPath>> tablePaths, String specHash)
     {
         return OpenApiTableHandle.builder(SchemaTableName.schemaTableName(SCHEMA_NAME, tableName))
+                .setSpecHash(specHash)
                 .setSelectPaths(tablePaths.getOrDefault(SqlOperation.SELECT, ImmutableList.of()))
                 .setInsertPaths(tablePaths.getOrDefault(SqlOperation.INSERT, ImmutableList.of()))
                 .setUpdatePaths(tablePaths.getOrDefault(SqlOperation.UPDATE, ImmutableList.of()))
