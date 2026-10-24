@@ -58,8 +58,11 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.lang.Float.floatToIntBits;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -180,6 +183,36 @@ class TestOpenApiClientRequests
             %s
                     '404':
                       description: No items
+            """.formatted(OK_RESPONSES);
+
+    private static final String NUMBER_PARAMETERS_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /measurements/{size}:
+                get:
+                  operationId: listMeasurements
+                  parameters:
+                    - name: size
+                      in: path
+                      required: true
+                      schema:
+                        type: number
+                        format: double
+                    - name: weight
+                      in: query
+                      schema:
+                        type: number
+                        format: float
+                    - name: density
+                      in: header
+                      schema:
+                        type: number
+                        format: double
+            %s
             """.formatted(OK_RESPONSES);
 
     private static final String DELETE_SPEC =
@@ -345,6 +378,18 @@ class TestOpenApiClientRequests
     {
         assertThat(getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", "a")).isEmpty();
         assertThat(requestUris).containsExactly(URI.create("/a/items"));
+    }
+
+    @Test
+    void testNumberParametersWithoutScientificNotation()
+            throws IOException
+    {
+        assertThat(getRowsMatching(newConfig(NUMBER_PARAMETERS_SPEC), "measurements", Map.of(
+                "size", Domain.singleValue(DOUBLE, 1.0e7),
+                "weight", Domain.singleValue(REAL, (long) floatToIntBits(2.5e-7f)),
+                "density", Domain.singleValue(DOUBLE, 1.0e-5)))).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/measurements/10000000?weight=0.00000025"));
+        assertThat(requestHeaders.peek().getFirst("density")).isEqualTo("0.00001");
     }
 
     @Test
