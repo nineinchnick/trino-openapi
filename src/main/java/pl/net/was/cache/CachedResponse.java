@@ -62,6 +62,8 @@ public record CachedResponse(
 {
     // headers that describe the stored body, so they're not updated from a 304 response, see RFC 9111, section 3.2
     private static final Set<String> BODY_HEADERS = Set.of("content-length", "content-encoding", "transfer-encoding", "content-range");
+    // they belong to the exchange they were sent in, and can carry session tokens, so they're neither stored, nor replayed with a stored response
+    private static final Set<String> UNSTORED_HEADERS = Set.of("set-cookie", "set-cookie2", "authentication-info", "proxy-authentication-info");
 
     public CachedResponse
     {
@@ -82,6 +84,7 @@ public record CachedResponse(
     static CachedResponse fromResponse(Request request, BufferedResponse response, long requestTimeMillis, long responseTimeMillis)
     {
         List<Header> headers = response.headers().entries().stream()
+                .filter(entry -> !UNSTORED_HEADERS.contains(entry.getKey().toString().toLowerCase(Locale.ENGLISH)))
                 .map(entry -> new Header(entry.getKey().toString(), entry.getValue()))
                 .collect(toImmutableList());
         return new CachedResponse(
@@ -98,7 +101,7 @@ public record CachedResponse(
     {
         Set<String> updatedNames = notModifiedHeaders.keySet().stream()
                 .map(name -> name.toString().toLowerCase(Locale.ENGLISH))
-                .filter(name -> !BODY_HEADERS.contains(name))
+                .filter(name -> !BODY_HEADERS.contains(name) && !UNSTORED_HEADERS.contains(name))
                 .collect(toImmutableSet());
         ImmutableList.Builder<Header> headers = ImmutableList.builder();
         this.headers.stream()

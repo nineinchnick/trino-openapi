@@ -34,6 +34,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,21 +56,25 @@ import static io.airlift.http.client.HeaderNames.IF_MODIFIED_SINCE;
 import static io.airlift.http.client.HeaderNames.IF_NONE_MATCH;
 import static io.airlift.http.client.HeaderNames.LAST_MODIFIED;
 import static io.airlift.http.client.HeaderNames.PRAGMA;
+import static io.airlift.http.client.HeaderNames.SET_COOKIE;
 import static io.airlift.http.client.HeaderNames.VARY;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.units.DataSize.Unit.KILOBYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 class TestCachingHttpClient
 {
     private static final URI ITEMS = URI.create("http://example.com/items");
     private static final URI OTHER_ITEMS = URI.create("http://example.com/other-items");
     private static final HeaderName ITEM_IDS = HeaderName.of("X-Item-Ids");
+    private static final HeaderName AUTHENTICATION_INFO = HeaderName.of("Authentication-Info");
 
     @TempDir
     Path cacheDirectory;
@@ -358,6 +363,45 @@ class TestCachingHttpClient
     }
 
     @Test
+    void testSessionHeadersAreNotStored()
+            throws IOException
+    {
+        CachingHttpClient client = client(request -> request.getHeaders().containsKey(IF_NONE_MATCH)
+                ? response(HttpStatus.NOT_MODIFIED, "", CACHE_CONTROL, "max-age=60", SET_COOKIE, "session=revalidated")
+                : response(HttpStatus.OK, "first", ETAG, "\"v1\"", SET_COOKIE, "session=s3cr3t", AUTHENTICATION_INFO, "nextnonce=\"n0nc3\""));
+
+        assertThat(client.execute(get(ITEMS), HEADERS)).contains("set-cookie=[session=s3cr3t]", "authentication-info=[nextnonce=\"n0nc3\"]");
+        assertThat(client.execute(get(ITEMS), HEADERS)).doesNotContain("set-cookie", "authentication-info");
+        assertThat(client.execute(get(ITEMS), HEADERS)).doesNotContain("set-cookie", "authentication-info");
+        assertThat(serverRequests).hasSize(2);
+        try (Stream<Path> files = Files.list(cacheDirectory)) {
+            for (Path file : files.toList()) {
+                assertThat(Files.readString(file, ISO_8859_1)).doesNotContain("s3cr3t", "n0nc3", "revalidated");
+            }
+        }
+    }
+
+    @Test
+    void testOnlyOwnerCanReadStoredResponses()
+            throws IOException
+    {
+        assumeThat(cacheDirectory.getFileSystem().supportedFileAttributeViews()).contains("posix");
+        Path catalogDirectory = cacheDirectory.resolve("catalog");
+        Path existingCatalogDirectory = Files.createDirectory(cacheDirectory.resolve("existing"), PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxr-xr-x")));
+        new HttpCache(existingCatalogDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        HttpCache cache = new HttpCache(catalogDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        client(cache, _ -> response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60")).execute(get(ITEMS), BODY);
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(catalogDirectory))).isEqualTo("rwx------");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(existingCatalogDirectory))).isEqualTo("rwx------");
+        try (Stream<Path> files = Files.list(catalogDirectory)) {
+            assertThat(files.toList())
+                    .singleElement()
+                    .satisfies(file -> assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file))).isEqualTo("rw-------"));
+        }
+    }
+
+    @Test
     void testBodyReadFailuresArePassedToResponseHandler()
     {
         List<Response> responses = new ArrayList<>(List.of(
@@ -444,6 +488,21 @@ class TestCachingHttpClient
             catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
+        }
+    };
+
+    private static final ResponseHandler<String, RuntimeException> HEADERS = new ResponseHandler<>()
+    {
+        @Override
+        public String handleException(Request request, Exception exception)
+        {
+            throw new AssertionError(exception);
+        }
+
+        @Override
+        public String handle(Request request, Response response)
+        {
+            return response.getHeaders().asMap().toString();
         }
     };
 
