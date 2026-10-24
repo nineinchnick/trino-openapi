@@ -90,11 +90,14 @@ public class OpenApiMetadata
             Optional<ConnectorTableVersion> startVersion,
             Optional<ConnectorTableVersion> endVersion)
     {
-        OpenApiTableHandle handle = spec.getTableHandle(schemaTableName);
         if (startVersion.isPresent() || endVersion.isPresent()) {
             throw new TrinoException(StandardErrorCode.NOT_SUPPORTED, "This connector does not support versioned tables");
         }
-        return handle;
+        // the engine decides what a missing table means for the statement, so it must not fail here
+        if (!schemaTableName.getSchemaName().equals(SCHEMA_NAME) || !spec.getTables().containsKey(schemaTableName.getTableName())) {
+            return null;
+        }
+        return spec.getTableHandle(schemaTableName);
     }
 
     @Override

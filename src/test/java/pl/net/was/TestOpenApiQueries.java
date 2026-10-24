@@ -243,7 +243,6 @@ public class TestOpenApiQueries
     }
 
     @Test
-    @Disabled("getTableHandle throws TableNotFoundException for a missing table instead of returning null, so Trino can't check if the table exists")
     public void unsupportedDdlOfMissingTables()
     {
         assertQueryFails("SELECT * FROM petstore.default.missing", ".*Table 'petstore.default.missing' does not exist");
