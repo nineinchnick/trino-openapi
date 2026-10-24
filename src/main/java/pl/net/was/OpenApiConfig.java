@@ -56,6 +56,7 @@ public class OpenApiConfig
 
     private String clientId;
     private String clientSecret;
+    private URI tokenUrl;
 
     private double maxRequestsPerSecond = Double.MAX_VALUE;
     private double maxSplitsPerSecond = Double.MAX_VALUE;
@@ -250,6 +251,19 @@ public class OpenApiConfig
     public OpenApiConfig setClientSecret(String clientSecret)
     {
         this.clientSecret = clientSecret;
+        return this;
+    }
+
+    public URI getTokenUrl()
+    {
+        return tokenUrl;
+    }
+
+    @Config("authentication.token-url")
+    @ConfigDescription("OAuth token endpoint, used instead of the tokenUrl of the spec")
+    public OpenApiConfig setTokenUrl(URI tokenUrl)
+    {
+        this.tokenUrl = tokenUrl;
         return this;
     }
 

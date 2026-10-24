@@ -42,9 +42,11 @@ public class PetStoreServer
     private static final String SPEC_PATH = "/api/v3/openapi.json";
     private final GenericContainer<?> dockerContainer;
     private final File specFile;
+    private final String tokenUrl;
 
     public PetStoreServer(KeycloakServer keycloakServer)
     {
+        tokenUrl = keycloakServer.getTokenUrl();
         // Use the oldest supported OpenAPI version
         dockerContainer = new GenericContainer<>("swaggerapi/petstore3:unstable")
                 .withReuse(REUSE)
@@ -87,6 +89,11 @@ public class PetStoreServer
     private String getContainerSpecUrl()
     {
         return format("http://%s:%s%s", dockerContainer.getHost(), dockerContainer.getMappedPort(API_PORT), SPEC_PATH);
+    }
+
+    public String getTokenUrl()
+    {
+        return tokenUrl;
     }
 
     public String getApiUrl()

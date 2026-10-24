@@ -87,10 +87,12 @@ class TestKeycloakAuthentication
                 .isEqualTo("service-account-sample-client-id");
     }
 
-    private static OpenApiConfig clientConfig()
+    private OpenApiConfig clientConfig()
     {
         return new OpenApiConfig()
                 .setBaseUri(BASE_URI)
+                // Keycloak runs on another host than the API, and without TLS
+                .setTokenUrl(URI.create(keycloakServer.getTokenUrl()))
                 .setAuthenticationType(AuthenticationType.OAUTH)
                 .setClientId("sample-client-id")
                 .setClientSecret("secret");

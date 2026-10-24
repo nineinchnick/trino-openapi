@@ -241,7 +241,7 @@ class TestAuthentication
                       flows:
                         authorizationCode:
                           authorizationUrl: http://localhost:8081/authorize
-                          tokenUrl: http://localhost:8081/token
+                          tokenUrl: https://localhost:8081/token
                           scopes: {}
                         implicit:
                           authorizationUrl: http://localhost:8081/authorize
@@ -275,7 +275,7 @@ class TestAuthentication
                       type: oauth2
                       flows:
                         password:
-                          tokenUrl: http://localhost:8081/token
+                          tokenUrl: https://localhost:8081/token
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()
@@ -311,7 +311,7 @@ class TestAuthentication
                       type: oauth2
                       flows:
                         clientCredentials:
-                          tokenUrl: http://localhost:8081/token
+                          tokenUrl: https://localhost:8081/token
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()
@@ -347,6 +347,34 @@ class TestAuthentication
     }
 
     @Test
+    void testOAuthTokenUrlFromSpec()
+            throws IOException
+    {
+        List<URI> tokenUris = new ArrayList<>();
+        HttpClient tokenClient = new TestingHttpClient(request -> {
+            tokenUris.add(request.getUri());
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"expires_in\":30}");
+        });
+        OpenApiConfig config = new OpenApiConfig()
+                .setAuthenticationType(AuthenticationType.OAUTH)
+                .setClientId("client")
+                .setClientSecret("secret");
+
+        assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config, tokenClient).filterRequest(request("/secured")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: " +
+                        "the oauth security scheme sets tokenUrl to http://auth.example.com/token, which doesn't use HTTPS and has a different host than base-uri, so set authentication.token-url to use it");
+
+        // the same host as base-uri
+        createAuthentication(clientCredentialsSpec("http://localhost:8080/token"), config, tokenClient)
+                .filterRequest(request("/secured"));
+        createAuthentication(clientCredentialsSpec("http://auth.example.com/token"), config.setTokenUrl(URI.create("https://auth.example.com/override")), tokenClient)
+                .filterRequest(request("/secured"));
+
+        assertThat(tokenUris).containsExactly(URI.create("http://localhost:8080/token"), URI.create("https://auth.example.com/override"));
+    }
+
+    @Test
     void testOAuthTokenResponseIsNotInErrors()
             throws IOException
     {
@@ -364,7 +392,7 @@ class TestAuthentication
 
         assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
-                .hasMessage("Response of the token endpoint http://localhost:8081/token doesn't include an access_token");
+                .hasMessage("Response of the token endpoint https://localhost:8081/token doesn't include an access_token");
     }
 
     @Test
@@ -605,6 +633,30 @@ class TestAuthentication
         return createClientCredentialsAuthentication(new TestingHttpClient(_ -> mockResponse(HttpStatus.OK, JSON_UTF_8, tokenResponse)));
     }
 
+    private static String clientCredentialsSpec(String tokenUrl)
+    {
+        return """
+               openapi: 3.0.0
+               info:
+                 title: test
+                 version: '1'
+               security:
+                 - oauth: []
+               paths:
+                 /secured:
+                   get:
+               %s
+               components:
+                 securitySchemes:
+                   oauth:
+                     type: oauth2
+                     flows:
+                       clientCredentials:
+                         tokenUrl: %s
+                         scopes: {}
+               """.formatted(OPERATION_RESPONSES, tokenUrl);
+    }
+
     private Authentication createClientCredentialsAuthentication(HttpClient tokenClient)
             throws IOException
     {
@@ -626,7 +678,7 @@ class TestAuthentication
                       type: oauth2
                       flows:
                         clientCredentials:
-                          tokenUrl: http://localhost:8081/token
+                          tokenUrl: https://localhost:8081/token
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()

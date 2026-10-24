@@ -90,7 +90,9 @@ public class TestOpenApiQueries
                 "authentication.api-key-value", "special-key"));
         petStoreProperties.putAll(Map.of(
                 "authentication.client-id", "sample-client-id",
-                "authentication.client-secret", "secret"));
+                "authentication.client-secret", "secret",
+                // the test servers use HTTP, and Keycloak runs on another port than the API
+                "authentication.token-url", petStoreServer.getTokenUrl()));
 
         ImmutableMap.Builder<String, String> fastApiProperties = ImmutableMap.builder();
         fastApiProperties.putAll(Map.of(
