@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.io.BaseEncoding.base64;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
@@ -58,6 +59,7 @@ import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.joining;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 import static pl.net.was.authentication.AuthenticationScheme.BEARER;
+import static pl.net.was.authentication.ClientAuthenticationMethod.CLIENT_SECRET_BASIC;
 
 public class Authentication
         implements HttpRequestFilter
@@ -78,6 +80,7 @@ public class Authentication
     private final String clientId;
     private final String clientSecret;
     private final Set<URI> serverUris;
+    private final ClientAuthenticationMethod clientAuthenticationMethod;
     private final URI tokenUrl;
     private final ConcurrentMap<TokenRequest, BearerTokenProvider> tokenProviders = new ConcurrentHashMap<>();
 
@@ -107,6 +110,7 @@ public class Authentication
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
         this.serverUris = servers.getUris();
+        this.clientAuthenticationMethod = config.getClientAuthenticationMethod();
         this.tokenUrl = config.getTokenUrl();
     }
 
@@ -368,13 +372,29 @@ public class Authentication
 
     private BearerTokenProvider createTokenProvider(TokenRequest tokenRequest)
     {
-        return new OAuthTokenProvider(httpClient, preparePost()
+        Request.Builder request = preparePost()
                 .setUri(URI.create(tokenRequest.tokenUrl()))
                 // following a redirect would send the client secret and the password to another location
                 .setFollowRedirects(false)
                 .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grant()), UTF_8))
-                .build());
+                .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grant()), UTF_8));
+        if (isClientSecretBasic()) {
+            request.setHeader(AUTHORIZATION, getClientSecretBasicHeader());
+        }
+        return new OAuthTokenProvider(httpClient, request.build());
+    }
+
+    // the client secret is the password of HTTP Basic authentication, so a client without one can only identify itself with client_id in the body
+    private boolean isClientSecretBasic()
+    {
+        return clientAuthenticationMethod == CLIENT_SECRET_BASIC && !isNullOrEmpty(clientId) && !isNullOrEmpty(clientSecret);
+    }
+
+    private String getClientSecretBasicHeader()
+    {
+        // RFC 6749, section 2.3.1, requires encoding the client ID and secret as form values before joining them
+        String credentials = URLEncoder.encode(clientId, UTF_8) + ":" + URLEncoder.encode(clientSecret, UTF_8);
+        return "Basic " + base64().encode(credentials.getBytes(UTF_8));
     }
 
     private String getBody(TokenGrant grant)
@@ -389,10 +409,10 @@ public class Authentication
         if (!grant.scopes().isEmpty()) {
             params.put("scope", String.join(" ", grant.scopes()));
         }
-        if (clientId != null && !clientId.isEmpty()) {
+        if (!isClientSecretBasic() && !isNullOrEmpty(clientId)) {
             params.put("client_id", clientId);
         }
-        if (clientSecret != null && !clientSecret.isEmpty()) {
+        if (!isClientSecretBasic() && !isNullOrEmpty(clientSecret)) {
             params.put("client_secret", clientSecret);
         }
 

@@ -23,6 +23,7 @@ import io.airlift.units.Duration;
 import org.junit.jupiter.api.Test;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
+import pl.net.was.authentication.ClientAuthenticationMethod;
 
 import java.net.URI;
 import java.util.Map;
@@ -63,6 +64,7 @@ class TestOpenApiConfig
                 .setApiKeyValue(null)
                 .setClientId(null)
                 .setClientSecret(null)
+                .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                 .setTokenUrl(null)
                 .setAllowInsecureHttp(false)
                 .setMaxRequestsPerSecond(null)
@@ -93,6 +95,7 @@ class TestOpenApiConfig
                 .put("authentication.api-key-value", "secret")
                 .put("authentication.client-id", "client")
                 .put("authentication.client-secret", "client-secret")
+                .put("authentication.client-auth-method", "client_secret_basic")
                 .put("authentication.token-url", "https://auth.example.com/token")
                 .put("authentication.allow-insecure-http", "true")
                 .put("max-requests-per-second", "10")
@@ -120,6 +123,7 @@ class TestOpenApiConfig
                 .setApiKeyValue("secret")
                 .setClientId("client")
                 .setClientSecret("client-secret")
+                .setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .setTokenUrl(URI.create("https://auth.example.com/token"))
                 .setAllowInsecureHttp(true)
                 .setMaxRequestsPerSecond(10.0)
