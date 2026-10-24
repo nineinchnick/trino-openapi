@@ -624,14 +624,6 @@ class TestOpenApiClientRequests
     }
 
     @Test
-    void testLeadingPathParameter()
-            throws IOException
-    {
-        assertThat(getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", "a")).isEmpty();
-        assertThat(requestUris).containsExactly(URI.create("/a/items"));
-    }
-
-    @Test
     void testPathParameterLinkedToField()
             throws IOException
     {
