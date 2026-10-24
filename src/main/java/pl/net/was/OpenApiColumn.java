@@ -41,6 +41,7 @@ public class OpenApiColumn
     private final Map<HttpPath, ParameterLocation> requiresPredicate;
     private final Map<HttpPath, ParameterLocation> optionalPredicate;
     private final Map<HttpPath, ParameterStyle> parameterStyles;
+    private final Map<HttpPath, String> parameterNames;
     private final Set<HttpPath> responseRequiredPaths;
     private final Set<HttpPath> envelopePaths;
     private final Map<HttpPath, RangeFilter> rangeFilters;
@@ -58,6 +59,7 @@ public class OpenApiColumn
             Map<HttpPath, ParameterLocation> requiresPredicate,
             Map<HttpPath, ParameterLocation> optionalPredicate,
             Map<HttpPath, ParameterStyle> parameterStyles,
+            Map<HttpPath, String> parameterNames,
             Set<HttpPath> responseRequiredPaths,
             Set<HttpPath> envelopePaths,
             Map<HttpPath, RangeFilter> rangeFilters,
@@ -75,6 +77,7 @@ public class OpenApiColumn
         this.requiresPredicate = ImmutableMap.copyOf(requiresPredicate);
         this.optionalPredicate = ImmutableMap.copyOf(optionalPredicate);
         this.parameterStyles = ImmutableMap.copyOf(parameterStyles);
+        this.parameterNames = ImmutableMap.copyOf(parameterNames);
         this.responseRequiredPaths = ImmutableSet.copyOf(responseRequiredPaths);
         this.envelopePaths = ImmutableSet.copyOf(envelopePaths);
         this.rangeFilters = ImmutableMap.copyOf(rangeFilters);
@@ -124,6 +127,19 @@ public class OpenApiColumn
     public Map<HttpPath, ParameterStyle> getParameterStyles()
     {
         return parameterStyles;
+    }
+
+    /**
+     * Names of the request parameters of this column, by operation, when they're different from its source name.
+     */
+    public Map<HttpPath, String> getParameterNames()
+    {
+        return parameterNames;
+    }
+
+    public String getParameterName(HttpPath httpPath)
+    {
+        return parameterNames.getOrDefault(httpPath, sourceName);
     }
 
     /**
@@ -212,6 +228,7 @@ public class OpenApiColumn
                 && Objects.equals(requiresPredicate, that.requiresPredicate)
                 && Objects.equals(optionalPredicate, that.optionalPredicate)
                 && Objects.equals(parameterStyles, that.parameterStyles)
+                && Objects.equals(parameterNames, that.parameterNames)
                 && Objects.equals(responseRequiredPaths, that.responseRequiredPaths)
                 && Objects.equals(envelopePaths, that.envelopePaths)
                 && Objects.equals(rangeFilters, that.rangeFilters)
@@ -232,6 +249,7 @@ public class OpenApiColumn
                 ", requiresPredicate=" + requiresPredicate +
                 ", optionalPredicate=" + optionalPredicate +
                 ", parameterStyles=" + parameterStyles +
+                ", parameterNames=" + parameterNames +
                 ", responseRequiredPaths=" + responseRequiredPaths +
                 ", envelopePaths=" + envelopePaths +
                 ", rangeFilters=" + rangeFilters +
@@ -245,7 +263,7 @@ public class OpenApiColumn
     @Override
     public int hashCode()
     {
-        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, responseRequiredPaths, envelopePaths, rangeFilters, parameterDefaults, metadata, isPageNumber, isRequestOnly);
+        return Objects.hash(name, sourceName, type, sourceType, requiresPredicate, optionalPredicate, parameterStyles, parameterNames, responseRequiredPaths, envelopePaths, rangeFilters, parameterDefaults, metadata, isPageNumber, isRequestOnly);
     }
 
     public static OpenApiColumn.Builder builder()
@@ -267,6 +285,7 @@ public class OpenApiColumn
         private final SortedMap<HttpPath, ParameterLocation> requiresPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterLocation> optionalPredicate = new TreeMap<>();
         private final SortedMap<HttpPath, ParameterStyle> parameterStyles = new TreeMap<>();
+        private final SortedMap<HttpPath, String> parameterNames = new TreeMap<>();
         private final SortedSet<HttpPath> responseRequiredPaths = new TreeSet<>();
         private final SortedSet<HttpPath> envelopePaths = new TreeSet<>();
         private final SortedMap<HttpPath, RangeFilter> rangeFilters = new TreeMap<>();
@@ -288,6 +307,7 @@ public class OpenApiColumn
             this.requiresPredicate.putAll(handle.getRequiresPredicate());
             this.optionalPredicate.putAll(handle.getOptionalPredicate());
             this.parameterStyles.putAll(handle.getParameterStyles());
+            this.parameterNames.putAll(handle.getParameterNames());
             this.responseRequiredPaths.addAll(handle.getResponseRequiredPaths());
             this.envelopePaths.addAll(handle.getEnvelopePaths());
             this.rangeFilters.putAll(handle.getRangeFilters());
@@ -338,6 +358,12 @@ public class OpenApiColumn
         public OpenApiColumn.Builder setParameterStyles(Map<HttpPath, ParameterStyle> parameterStyles)
         {
             this.parameterStyles.putAll(requireNonNull(parameterStyles, "parameterStyles is null"));
+            return this;
+        }
+
+        public OpenApiColumn.Builder setParameterNames(Map<HttpPath, String> parameterNames)
+        {
+            this.parameterNames.putAll(requireNonNull(parameterNames, "parameterNames is null"));
             return this;
         }
 
@@ -409,6 +435,7 @@ public class OpenApiColumn
                     requiresPredicate,
                     optionalPredicate,
                     parameterStyles,
+                    parameterNames,
                     responseRequiredPaths,
                     envelopePaths,
                     rangeFilters,
