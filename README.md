@@ -447,6 +447,13 @@ get values from the query filters, and when it uses an operation with a request
 body, like a `POST` marked with `sqlOperation: delete`, the body includes the
 filters on its fields.
 
+When a row doesn't have the values of the path parameters, like a row read from
+a list without a filter on a parameter that is not linked to a field, the
+statement fails, instead of sending a request that changes another resource, or
+none. Filter on the parameter, or link it to a field. Filters with more than one
+value on other parameters of these requests fail too, because a request can only
+send one.
+
 A write succeeds if the server responds with any `2xx` status. Writes are not
 transactional: if a statement fails halfway, the rows already sent stay
 changed.

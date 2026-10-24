@@ -358,6 +358,15 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void deleteRowsWithoutIdentifiers()
+    {
+        // the item_id path parameter is not linked to a response field, so rows of the list don't have its value
+        assertQueryFails(
+                "DELETE FROM fastapi.default.writable_items",
+                "Cannot DELETE rows of table writable_items, because they don't have values of the path parameters that identify their resources: item_id \\(column item_id\\) of DELETE /writable_items/\\{item_id\\}\\. .*");
+    }
+
+    @Test
     public void insertAndUpdateConstantArrays()
     {
         // constants of queries reading many rows are run-length encoded

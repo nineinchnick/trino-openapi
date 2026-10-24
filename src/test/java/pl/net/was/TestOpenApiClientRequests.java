@@ -313,6 +313,19 @@ class TestOpenApiClientRequests
                       type: string
             """;
 
+    private static final String DELETE_WITH_REASON_SPEC = DELETE_SPEC.replace(
+            """
+                  operationId: deleteItem
+            """,
+            """
+                  operationId: deleteItem
+                  parameters:
+                    - name: reason
+                      in: query
+                      schema:
+                        type: string
+            """);
+
     private static final String PAGED_SPEC =
             """
             openapi: 3.0.0
@@ -650,6 +663,31 @@ class TestOpenApiClientRequests
         deleteRow(newConfig(DELETE_SPEC), constraint, "{\"id\":\"1\"}");
         deleteRow(newConfig(DELETE_SPEC), constraint, "{\"id\":\"2\"}");
         assertThat(requestUris).containsExactly(URI.create("/items/1"), URI.create("/items/2"));
+    }
+
+    @Test
+    void testDeleteFailsWithoutRowIdentifiers()
+            throws IOException
+    {
+        assertThatThrownBy(() -> deleteRow(newConfig(DELETE_SPEC), TupleDomain.all(), "{}"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_ROW_FILTER.toErrorCode()))
+                .hasMessage("Cannot DELETE rows of table items, because they don't have values of the path parameters that identify their resources: id (column id) of DELETE /items/{id}. " +
+                        "Filter on the columns of these parameters, or link the parameters to the response fields with the same values, using the field property of the x-trino extension of the parameters");
+        assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void testDeleteFailsWithSeveralValuesOfParameter()
+            throws IOException
+    {
+        Map<String, OpenApiColumn> columns = new OpenApiSpec(newConfig(DELETE_WITH_REASON_SPEC)).getTables().get("items").stream()
+                .collect(toImmutableMap(OpenApiColumn::getName, identity()));
+        TupleDomain<ColumnHandle> constraint = TupleDomain.withColumnDomains(Map.of(
+                columns.get("reason").getHandle(), Domain.multipleValues(VARCHAR, List.of(utf8Slice("duplicate"), utf8Slice("spam")))));
+        assertThatThrownBy(() -> deleteRow(newConfig(DELETE_WITH_REASON_SPEC), constraint, "{\"id\":\"1\"}"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_ROW_FILTER.toErrorCode()))
+                .hasMessage("Filter on reason has more than one value, but a request can only send one");
+        assertThat(requestCount).hasValue(0);
     }
 
     @Test
