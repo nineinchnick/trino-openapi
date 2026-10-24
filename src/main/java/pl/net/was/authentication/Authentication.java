@@ -32,6 +32,7 @@ import pl.net.was.OpenApiSpec;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,8 +49,7 @@ import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.json.JsonCodec.jsonCodec;
-import static io.trino.spi.StandardErrorCode.CONFIGURATION_INVALID;
-import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
+import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -114,14 +114,16 @@ public class Authentication
     {
         URI uri = request.getUri();
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
+        String path = request.getHeader(OPENAPI_PATH_HEADER);
         Request.Builder builder = fromRequest(request);
-        List<SecurityRequirement> requirements = getRequirements(request.getHeader(OPENAPI_PATH_HEADER), method);
+        List<SecurityRequirement> requirements = getRequirements(path, method);
+        String requestName = method + " " + path;
         // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
         if (requirements != null) {
-            applyAuthFilters(builder, requirements, uri);
+            applyCredentials(builder, uri, selectCredentials(requestName, requirements));
             return builder.build();
         }
-        applyDefaultAuth(builder, uri);
+        applyCredentials(builder, uri, getDefaultCredentials(requestName));
         return builder.build();
     }
 
@@ -135,60 +137,159 @@ public class Authentication
         return securityRequirements;
     }
 
-    private void applyDefaultAuth(Request.Builder builder, URI uri)
+    private List<Credential> selectCredentials(String requestName, List<SecurityRequirement> requirements)
     {
-        switch (defaultAuthenticationType) {
-            case NONE -> {}
+        if (requirements.isEmpty()) {
+            return List.of();
+        }
+        // only one of the requirements needs to be satisfied, and nothing is added to the request until one is found,
+        // so credentials of different requirements are never mixed
+        List<String> problems = new ArrayList<>();
+        for (SecurityRequirement requirement : requirements) {
+            List<Credential> credentials = new ArrayList<>();
+            List<String> requirementProblems = new ArrayList<>();
+            for (String schemeName : requirement.keySet()) {
+                switch (resolveScheme(schemeName)) {
+                    case Resolved(Credential credential) -> credentials.add(credential);
+                    case Unresolved(String problem) -> requirementProblems.add(problem);
+                }
+            }
+            if (requirementProblems.isEmpty()) {
+                return credentials;
+            }
+            problems.add(String.join(", ", requirementProblems));
+        }
+        throw new TrinoException(INVALID_CATALOG_PROPERTY, format(
+                "Cannot authenticate the %s request, because none of its security requirements can be satisfied: %s",
+                requestName,
+                String.join("; ", problems)));
+    }
+
+    private List<Credential> getDefaultCredentials(String requestName)
+    {
+        String subject = format("the %s authentication type", defaultAuthenticationType.name().toLowerCase(Locale.ENGLISH));
+        return switch (defaultAuthenticationType) {
+            case NONE -> List.of();
             case API_KEY -> {
                 SecurityScheme scheme = new SecurityScheme();
                 scheme.setIn(SecurityScheme.In.HEADER);
-                applyApiKeyAuth(builder, uri, scheme);
+                yield requireResolved(requestName, resolveApiKey(subject, scheme));
             }
-            case HTTP -> applyHttpAuth(builder, null);
+            case HTTP -> requireResolved(requestName, resolveHttp(subject, null));
             case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
-        }
+        };
     }
 
-    private void applyAuthFilters(Request.Builder builder, List<SecurityRequirement> requirements, URI uri)
+    private static List<Credential> requireResolved(String requestName, Resolution resolution)
     {
-        // only one of the requirements needs to be satisfied - test which methods are configured, pick first one, and only fail if there are none
-        for (SecurityRequirement requirement : requirements) {
-            try {
-                requirement.forEach((name, _) -> {
-                    SecurityScheme securitySchema = securitySchemas.get(name);
-                    requireNonNull(securitySchema, "securitySchema is null");
-                    switch (securitySchema.getType()) {
-                        case APIKEY -> applyApiKeyAuth(builder, uri, securitySchema);
-                        case HTTP -> applyHttpAuth(builder, securitySchema.getScheme());
-                        case OAUTH2 -> applyOAuth(builder, getTokenRequest(name, securitySchema.getFlows()));
-                        default -> throw new IllegalArgumentException(format("Unsupported security schema %s", securitySchema.getType()));
-                    }
-                });
-                return;
-            }
-            catch (NullPointerException ignored) {
-                // ignore
-            }
-        }
+        return switch (resolution) {
+            case Resolved(Credential credential) -> List.of(credential);
+            case Unresolved(String problem) -> throw new TrinoException(INVALID_CATALOG_PROPERTY, format("Cannot authenticate the %s request, because %s", requestName, problem));
+        };
     }
 
-    private void applyApiKeyAuth(Request.Builder builder, URI uri, SecurityScheme scheme)
+    private Resolution resolveScheme(String schemeName)
+    {
+        String subject = format("the %s security scheme", schemeName);
+        SecurityScheme securitySchema = securitySchemas.get(schemeName);
+        if (securitySchema == null) {
+            return new Unresolved(format("%s is not declared in components.securitySchemes", subject));
+        }
+        return switch (securitySchema.getType()) {
+            case APIKEY -> resolveApiKey(subject, securitySchema);
+            case HTTP -> resolveHttp(subject, securitySchema.getScheme());
+            case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows());
+            default -> new Unresolved(format("%s has the unsupported %s type", subject, securitySchema.getType()));
+        };
+    }
+
+    private Resolution resolveApiKey(String subject, SecurityScheme scheme)
     {
         String name = requireNonNullElse(scheme.getName(), apiKeyName);
-        requireNonNull(name, "Cannot use API Key authentication method, authentication.api-key-name configuration property is not set");
-        String value;
-        if (!apiKeys.isEmpty()) {
-            value = apiKeys.get(name);
-            requireNonNull(value, format("Missing API Key %s in authentication.api-keys configuration property", name));
+        if (name == null) {
+            return missing(subject, List.of("authentication.api-key-name"));
         }
-        else {
-            value = requireNonNull(apiKeyValue, "Cannot use API Key authentication method, authentication.api-key-value configuration property is not set");
+        if (scheme.getIn() == null) {
+            return new Unresolved(format("%s doesn't declare where to send the API key", subject));
         }
-        switch (scheme.getIn()) {
-            case COOKIE -> builder.addHeader(COOKIE, encodePair(name, value));
-            case HEADER -> builder.addHeader(HeaderName.of(name), value);
-            case QUERY -> builder.setUri(appendQuery(uri, encodePair(name, value)));
-            default -> throw new IllegalArgumentException(format("Unsupported security schema `in` type: %s", scheme.getIn()));
+        String value = apiKeys.isEmpty() ? apiKeyValue : apiKeys.get(name);
+        if (value == null) {
+            return missing(subject, List.of(apiKeys.isEmpty() ? "authentication.api-key-value" : format("%s key in the authentication.api-keys", name)));
+        }
+        return new Resolved(switch (scheme.getIn()) {
+            case COOKIE -> new CookieCredential(encodePair(name, value));
+            case HEADER -> new HeaderCredential(HeaderName.of(name), value);
+            case QUERY -> new QueryCredential(encodePair(name, value));
+        });
+    }
+
+    private Resolution resolveHttp(String subject, String scheme)
+    {
+        scheme = requireNonNullElse(scheme, defaultAuthenticationScheme);
+        if (scheme.toUpperCase(Locale.ENGLISH).equals(BEARER.toString())) {
+            if (bearerToken == null) {
+                return missing(subject, List.of("authentication.bearer-token"));
+            }
+            return new Resolved(new HeaderCredential(AUTHORIZATION, "Bearer " + bearerToken));
+        }
+        List<String> missingProperties = new ArrayList<>();
+        if (username == null) {
+            missingProperties.add("authentication.username");
+        }
+        if (password == null) {
+            missingProperties.add("authentication.password");
+        }
+        if (!missingProperties.isEmpty()) {
+            return missing(subject, missingProperties);
+        }
+        return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, username, password)));
+    }
+
+    private Resolution resolveOAuth(String subject, OAuthFlows flows)
+    {
+        // the authorizationCode and implicit flows require a user to log in using a browser, so only flows that don't need user interaction can be used
+        OAuthFlow passwordFlow = flows == null ? null : flows.getPassword();
+        OAuthFlow clientCredentialsFlow = flows == null ? null : flows.getClientCredentials();
+        if (passwordFlow != null && username != null && password != null) {
+            return resolveTokenRequest(subject, passwordFlow, GrantType.PASSWORD);
+        }
+        if (clientCredentialsFlow != null) {
+            return resolveTokenRequest(subject, clientCredentialsFlow, GrantType.CLIENT_CREDENTIALS);
+        }
+        if (passwordFlow != null) {
+            return missing("the password flow of " + subject, List.of("authentication.username", "authentication.password"));
+        }
+        return new Unresolved(format("%s must declare a password or clientCredentials flow, because other flows require a user to log in using a browser", subject));
+    }
+
+    private static Resolution resolveTokenRequest(String subject, OAuthFlow flow, GrantType grantType)
+    {
+        // specs written for older versions of the connector could only set authorizationUrl, so keep using it when tokenUrl is missing
+        String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
+        if (tokenUrl == null) {
+            return new Unresolved(format("%s doesn't set tokenUrl", subject));
+        }
+        return new Resolved(new OAuthCredential(new TokenRequest(tokenUrl, grantType)));
+    }
+
+    private static Resolution missing(String subject, List<String> properties)
+    {
+        return new Unresolved(format("%s requires the %s configuration %s", subject, String.join(" and ", properties), properties.size() == 1 ? "property" : "properties"));
+    }
+
+    private void applyCredentials(Request.Builder builder, URI uri, List<Credential> credentials)
+    {
+        List<String> queryParameters = new ArrayList<>();
+        for (Credential credential : credentials) {
+            switch (credential) {
+                case HeaderCredential(HeaderName name, String value) -> builder.addHeader(name, value);
+                case CookieCredential(String pair) -> builder.addHeader(COOKIE, pair);
+                case QueryCredential(String pair) -> queryParameters.add(pair);
+                case OAuthCredential(TokenRequest tokenRequest) -> applyOAuth(builder, tokenRequest);
+            }
+        }
+        if (!queryParameters.isEmpty()) {
+            builder.setUri(appendQuery(uri, String.join("&", queryParameters)));
         }
     }
 
@@ -209,50 +310,6 @@ public class Authentication
             result.append('#').append(uri.getRawFragment());
         }
         return URI.create(result.toString());
-    }
-
-    private Request.Builder applyHttpAuth(Request.Builder builder, String scheme)
-    {
-        scheme = requireNonNullElse(scheme, defaultAuthenticationScheme);
-        String value;
-        if (scheme.toUpperCase(Locale.ENGLISH).equals(BEARER.toString())) {
-            value = "Bearer " + bearerToken;
-        }
-        else {
-            value = getAuthHeader(scheme, username, password);
-        }
-        return builder.addHeader(AUTHORIZATION, value);
-    }
-
-    private TokenRequest getTokenRequest(String schemeName, OAuthFlows flows)
-    {
-        // the authorizationCode and implicit flows require a user to log in using a browser, so only flows that don't need user interaction can be used
-        OAuthFlow passwordFlow = flows == null ? null : flows.getPassword();
-        OAuthFlow clientCredentialsFlow = flows == null ? null : flows.getClientCredentials();
-        if (passwordFlow != null && username != null && password != null) {
-            return new TokenRequest(getTokenUrl(schemeName, passwordFlow), GrantType.PASSWORD);
-        }
-        if (clientCredentialsFlow != null) {
-            return new TokenRequest(getTokenUrl(schemeName, clientCredentialsFlow), GrantType.CLIENT_CREDENTIALS);
-        }
-        if (passwordFlow != null) {
-            throw new TrinoException(CONFIGURATION_INVALID, format(
-                    "The password flow of the %s OAuth security scheme requires the authentication.username and authentication.password configuration properties",
-                    schemeName));
-        }
-        throw new TrinoException(NOT_SUPPORTED, format(
-                "The %s OAuth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser",
-                schemeName));
-    }
-
-    private static String getTokenUrl(String schemeName, OAuthFlow flow)
-    {
-        // specs written for older versions of the connector could only set authorizationUrl, so keep using it when tokenUrl is missing
-        String tokenUrl = flow.getTokenUrl() != null ? flow.getTokenUrl() : flow.getAuthorizationUrl();
-        if (tokenUrl == null) {
-            throw new TrinoException(NOT_SUPPORTED, format("The %s OAuth security scheme doesn't set tokenUrl", schemeName));
-        }
-        return tokenUrl;
     }
 
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
@@ -321,6 +378,28 @@ public class Authentication
     {
         return format("%s=%s", key, URLEncoder.encode(value, UTF_8));
     }
+
+    private sealed interface Credential {}
+
+    private record HeaderCredential(HeaderName name, String value)
+            implements Credential {}
+
+    private record CookieCredential(String pair)
+            implements Credential {}
+
+    private record QueryCredential(String pair)
+            implements Credential {}
+
+    private record OAuthCredential(TokenRequest tokenRequest)
+            implements Credential {}
+
+    private sealed interface Resolution {}
+
+    private record Resolved(Credential credential)
+            implements Resolution {}
+
+    private record Unresolved(String problem)
+            implements Resolution {}
 
     private record TokenRequest(String tokenUrl, GrantType grantType)
     {
