@@ -29,7 +29,6 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
-import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
@@ -82,6 +81,7 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
 import pl.net.was.authentication.AuthenticatingHttpClient;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.ExtraCredentialProvider;
 import pl.net.was.authentication.UserCredentials;
 import pl.net.was.cache.CachingHttpClient;
@@ -197,10 +197,12 @@ public class OpenApiClient
             CatalogName catalogName,
             @ForUnauthenticatedOpenApi HttpClient httpClient,
             Authentication authentication,
+            CatalogCredentials catalogCredentials,
             ExtraCredentialProvider extraCredentialProvider,
             OpenApiSpec openApiSpec,
             OpenApiServers servers)
     {
+        requireNonNull(catalogCredentials, "catalogCredentials is null");
         this.servers = servers;
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.authentication = requireNonNull(authentication, "authentication is null");
@@ -208,7 +210,7 @@ public class OpenApiClient
         this.extraCredentialProvider = requireNonNull(extraCredentialProvider, "extraCredentialProvider is null");
         this.serverUris = getServerUris(servers);
         this.httpCache = config.getHttpCacheDirectory()
-                .map(directory -> new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()));
+                .map(directory -> new HttpCache(getHttpCacheDirectory(catalogCredentials, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()));
         this.openApiSpec = openApiSpec;
         this.rateLimiter = config.getMaxRequestsPerSecond().map(RateLimiter::create).orElse(null);
         this.retryPolicy = new RetryPolicy(
@@ -2037,21 +2039,21 @@ public class OpenApiClient
 
     // responses depend on the server and the account, so a catalog created again with the same name, but other servers or another account,
     // can't reuse responses of the previous one; passwords and client secrets are left out, because the username or client ID already identify the account
-    private static Path getHttpCacheDirectory(OpenApiConfig config, OpenApiServers servers, CatalogName catalogName, String directory)
+    private static Path getHttpCacheDirectory(CatalogCredentials credentials, OpenApiServers servers, CatalogName catalogName, String directory)
     {
         Hasher hasher = Hashing.sha256().newHasher();
         String serverUris = getServerUris(servers);
         Stream.concat(
                         Stream.of(
                                 serverUris,
-                                config.getAuthenticationType().name(),
-                                config.getAuthenticationScheme().name(),
-                                config.getUsername(),
-                                config.getClientId(),
-                                config.getApiKeyName()),
-                        new TreeMap<>(config.getApiKeys()).keySet().stream())
-                .forEach(value -> hasher.putString(nullToEmpty(value), UTF_8).putByte((byte) 0));
-        hasher.putBytes(hashTokens(config, serverUris));
+                                credentials.getAuthenticationType().name(),
+                                credentials.getAuthenticationScheme().name(),
+                                credentials.getUsername().orElse(""),
+                                credentials.getClientId().orElse(""),
+                                credentials.getApiKeyName().orElse("")),
+                        new TreeMap<>(credentials.getApiKeys()).keySet().stream())
+                .forEach(value -> hasher.putString(value, UTF_8).putByte((byte) 0));
+        hasher.putBytes(hashTokens(credentials, serverUris));
         return Path.of(directory, catalogName + "-" + hasher.hash());
     }
 
@@ -2065,12 +2067,11 @@ public class OpenApiClient
 
     // bearer tokens and API key values are the only identity of their accounts, and the directory name is visible to other users,
     // so they're hashed with a slow function, which makes guessing them from the name impractical
-    private static byte[] hashTokens(OpenApiConfig config, String serverUris)
+    private static byte[] hashTokens(CatalogCredentials credentials, String serverUris)
     {
         String tokens = Stream.concat(
-                        Stream.of(config.getBearerToken(), config.getApiKeyValue()),
-                        new TreeMap<>(config.getApiKeys()).values().stream())
-                .map(Strings::nullToEmpty)
+                        Stream.of(credentials.getBearerToken().orElse(""), credentials.getApiKeyValue().orElse("")),
+                        new TreeMap<>(credentials.getApiKeys()).values().stream())
                 .collect(joining("\0"));
         if (CharMatcher.is('\0').matchesAllOf(tokens)) {
             return new byte[0];

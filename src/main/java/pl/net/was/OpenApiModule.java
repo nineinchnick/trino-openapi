@@ -18,6 +18,7 @@ import com.google.inject.Binder;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.airlift.units.DataSize;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.ExtraCredentialProvider;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
 
@@ -47,6 +48,7 @@ public class OpenApiModule
                 .withConfigDefaults(config -> config.setMaxResponseContentLength(DataSize.of(1, GIGABYTE)));
         binder.bind(OpenApiServers.class).in(SINGLETON);
         binder.bind(Authentication.class).in(SINGLETON);
+        binder.bind(CatalogCredentials.class).in(SINGLETON);
         binder.bind(ExtraCredentialProvider.class).in(SINGLETON);
         // the max-response-size catalog property limits responses after they're decompressed, also the ones that are not compressed,
         // so the limit of the client, which applies to compressed bytes, would only make responses that are not compressed fail earlier

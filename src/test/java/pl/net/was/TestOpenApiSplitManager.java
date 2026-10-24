@@ -27,6 +27,7 @@ import io.trino.testing.TestingNodeManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.ExtraCredentialProvider;
 
 import java.io.IOException;
@@ -174,7 +175,7 @@ class TestOpenApiSplitManager
             throw new AssertionError("Unexpected request to " + request.getUri());
         });
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
         return new OpenApiSplitManager(spec, client, TestingNodeManager.create(), config);
     }
 
