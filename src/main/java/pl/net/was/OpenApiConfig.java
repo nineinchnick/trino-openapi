@@ -85,6 +85,7 @@ public class OpenApiConfig
 
     @Config("spec-location")
     @ConfigDescription("Path to the OpenAPI spec file")
+    @ConfigSecuritySensitive
     public OpenApiConfig setSpecLocation(String value)
     {
         this.specLocation = value;
@@ -180,6 +181,8 @@ public class OpenApiConfig
     }
 
     @Config("authentication.api-keys")
+    @ConfigDescription("Comma-separated list of API key names and values, like name1=value1,name2=value2")
+    @ConfigSecuritySensitive
     public OpenApiConfig setApiKeys(String apiKeys)
             throws InvalidConfigurationException
     {
