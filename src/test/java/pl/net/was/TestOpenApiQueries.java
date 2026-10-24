@@ -296,26 +296,49 @@ public class TestOpenApiQueries
     @Test
     public void insertUpdateDeleteNote()
     {
-        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 1");
-        assertUpdate("INSERT INTO fastapi.default.notes (note_id, text) VALUES (1, 'first')", 1);
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE id = 1");
+        assertUpdate("INSERT INTO fastapi.default.notes (id, text) VALUES (1, 'first')", 1);
         assertQuery(
-                "SELECT id, text FROM fastapi.default.notes WHERE note_id = 1",
+                "SELECT id, text FROM fastapi.default.notes WHERE id = 1",
                 "VALUES (1, 'first')");
         // notes can be updated using PATCH and PUT, and PATCH requests only include the updated columns
-        assertUpdate("UPDATE fastapi.default.notes SET text = 'second' WHERE note_id = 1", 1);
+        assertUpdate("UPDATE fastapi.default.notes SET text = 'second' WHERE id = 1", 1);
         assertQuery(
-                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE id = 1",
                 "VALUES (1, 'second', NULL, 'text')");
-        assertUpdate("UPDATE fastapi.default.notes SET priority = 2 WHERE note_id = 1", 1);
+        assertUpdate("UPDATE fastapi.default.notes SET priority = 2 WHERE id = 1", 1);
         assertQuery(
-                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE id = 1",
                 "VALUES (1, 'second', 2, 'priority')");
-        assertUpdate("UPDATE fastapi.default.notes SET priority = NULL WHERE note_id = 1", 1);
+        assertUpdate("UPDATE fastapi.default.notes SET priority = NULL WHERE id = 1", 1);
         assertQuery(
-                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE note_id = 1",
+                "SELECT id, text, priority, array_join(patched_fields, ',') FROM fastapi.default.notes WHERE id = 1",
                 "VALUES (1, 'second', NULL, 'priority')");
-        assertUpdate("DELETE FROM fastapi.default.notes WHERE note_id = 1", 1);
-        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 1");
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE id = 1", 1);
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE id = 1");
+    }
+
+    @Test
+    public void selectByPathParameterLinkedToField()
+    {
+        // the note_id path parameter is linked to the id field, so they're a single column
+        assertThat(computeActual("SELECT column_name FROM fastapi.information_schema.columns WHERE table_name = 'notes'").getOnlyColumnAsSet())
+                .contains("id")
+                .doesNotContain("note_id");
+        assertUpdate("INSERT INTO fastapi.default.notes (id, text) VALUES (11, 'linked first'), (12, 'linked second')", 2);
+        // without a filter on the column, rows are read from the list of notes, and have their own values of it
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.notes WHERE text LIKE 'linked %'",
+                "VALUES (11, 'linked first'), (12, 'linked second')");
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.notes WHERE id = 12",
+                "VALUES (12, 'linked second')");
+        assertQuery(
+                "SELECT id, text FROM fastapi.default.notes WHERE id IN (11, 12, 13)",
+                "VALUES (11, 'linked first'), (12, 'linked second')");
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE id = 11", 1);
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE id = 12", 1);
+        assertQueryReturnsEmptyResult("SELECT id FROM fastapi.default.notes WHERE text LIKE 'linked %'");
     }
 
     @Test
@@ -1300,7 +1323,7 @@ public class TestOpenApiQueries
     @Test
     public void notFound()
     {
-        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE note_id = 404");
+        assertQueryReturnsEmptyResult("SELECT text FROM fastapi.default.notes WHERE id = 404");
         assertQueryFails(
                 "SELECT * FROM fastapi.default.retired_items",
                 "Request GET http://[^ ?]+/retired_items for operation list_retired_items_retired_items_get failed with HTTP 404: \"Not Found\"");
