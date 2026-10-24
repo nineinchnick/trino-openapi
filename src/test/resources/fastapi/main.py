@@ -295,8 +295,8 @@ product_reviews = {
 # kept as raw JSON, because Python floats can't hold all decimal values exactly
 numbers = [
     '{"id": 1, "real_value": -1.5, "decimal_value": 1234567890.12345678, '
-    '"real_values": [1.5, -2.25], "decimal_values": [0.00000001, -9999999999.99999999], '
-    '"decimal_map": {"a": 1234567890.12345678}}',
+    '"real_values": [1.5, -2.25], "decimal_values": [0.0000000001, -9999999999999999999999999999.9999999999], '
+    '"decimal_map": {"a": 1710950954154}}',
 ]
 
 NUMBERS_SCHEMA = {

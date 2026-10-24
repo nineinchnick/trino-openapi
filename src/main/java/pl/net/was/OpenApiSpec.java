@@ -1428,8 +1428,8 @@ public class OpenApiSpec
         return switch (format) {
             case "float" -> REAL;
             case "double" -> DOUBLE;
-            // arbitrary scale and precision but should fit most numbers
-            case null, default -> createDecimalType(18, 8);
+            // the widest decimal, with more fractional digits than most APIs send, and room for large values, like timestamps in milliseconds
+            case null, default -> createDecimalType(38, 10);
         };
     }
 

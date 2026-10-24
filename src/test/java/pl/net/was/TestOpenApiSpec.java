@@ -1487,7 +1487,7 @@ class TestOpenApiSpec
                 RowType.field("activated_on", TIMESTAMP_MILLIS),
                 RowType.field("cname_suffix", VARCHAR),
                 RowType.field("created_on", TIMESTAMP_MILLIS),
-                RowType.field("development_mode", createDecimalType(18, 8)),
+                RowType.field("development_mode", createDecimalType(38, 10)),
                 RowType.field("id", VARCHAR),
                 RowType.field("meta", RowType.from(List.of(
                         RowType.field("cdn_only", BOOLEAN),
@@ -1519,11 +1519,11 @@ class TestOpenApiSpec
         RowType result3Type = RowType.from(List.of(
                 RowType.field("id", VARCHAR)));
         RowType resultInfoType = RowType.from(List.of(
-                RowType.field("count", createDecimalType(18, 8)),
-                RowType.field("page", createDecimalType(18, 8)),
-                RowType.field("per_page", createDecimalType(18, 8)),
-                RowType.field("total_count", createDecimalType(18, 8)),
-                RowType.field("total_pages", createDecimalType(18, 8))));
+                RowType.field("count", createDecimalType(38, 10)),
+                RowType.field("page", createDecimalType(38, 10)),
+                RowType.field("per_page", createDecimalType(38, 10)),
+                RowType.field("total_count", createDecimalType(38, 10)),
+                RowType.field("total_pages", createDecimalType(38, 10))));
         Assertions.assertThat(columns)
                 .containsExactly(
                         OpenApiColumn.builder()
@@ -1645,14 +1645,14 @@ class TestOpenApiSpec
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setType(createDecimalType(38, 10)).setSourceType(numberSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Page number of paginated results.")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("per_page").setSourceName("per_page")
-                                .setType(createDecimalType(18, 8)).setSourceType(numberSchema)
+                                .setType(createDecimalType(38, 10)).setSourceType(numberSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
                                 .setComment("Number of zones per page.")
@@ -2110,7 +2110,7 @@ class TestOpenApiSpec
                         Assertions.tuple("int64", BIGINT),
                         Assertions.tuple("uint32", BIGINT),
                         Assertions.tuple("uint64", createDecimalType(20, 0)),
-                        Assertions.tuple("number", createDecimalType(18, 8)),
+                        Assertions.tuple("number", createDecimalType(38, 10)),
                         Assertions.tuple("float", REAL),
                         Assertions.tuple("double", DOUBLE),
                         Assertions.tuple("boolean", BOOLEAN),
