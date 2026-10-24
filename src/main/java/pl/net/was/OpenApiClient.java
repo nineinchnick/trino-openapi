@@ -229,7 +229,13 @@ public class OpenApiClient
         // without a cursor parameter, the link is the whole URI of the next page
         boolean followsLinks = pagination.nextPageLinkHeader() && pagination.cursorParam().isEmpty();
         Predicate<List<?>> rowFilter = getRowFilter(table);
+        // retries are sent while sending a single request, so they count only against max-requests-per-second, not the split's share of the scan's rate
+        Runnable acquireSplitRequest = split.getRequestRate()
+                .map(SplitRateLimiter::new)
+                .<Runnable>map(limiter -> limiter::acquire)
+                .orElse(() -> {});
         if (pageColumn.isEmpty() && cursorColumn.isEmpty() && offsetColumn.isEmpty() && !followsLinks) {
+            acquireSplitRequest.run();
             return Streams.stream(makeRequest(credentials, table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
@@ -244,7 +250,8 @@ public class OpenApiClient
                     queryLimit.orElse(Long.MAX_VALUE),
                     pagination.maxResults().orElse(Long.MAX_VALUE),
                     pagination.maxPages(),
-                    rowFilter);
+                    rowFilter,
+                    acquireSplitRequest);
         }
         // without a page number, a page starts after the results the server returned on the previous pages,
         // so they're read one after another, in a single split, because servers can return fewer results than requested
@@ -260,7 +267,8 @@ public class OpenApiClient
                 split.getPageIncrement(),
                 getPageSize(table, httpPath),
                 pagination.maxPages(),
-                rowFilter);
+                rowFilter,
+                acquireSplitRequest);
     }
 
     private Predicate<List<?>> getRowFilter(OpenApiTableHandle table)
@@ -1871,7 +1879,8 @@ public class OpenApiClient
             int pageIncrement,
             OptionalLong pageSize,
             OptionalInt maxPages,
-            Predicate<List<?>> rowFilter)
+            Predicate<List<?>> rowFilter,
+            Runnable acquireRequest)
     {
         return () -> new Iterator<>()
         {
@@ -1908,6 +1917,7 @@ public class OpenApiClient
 
             private void fetchPage()
             {
+                acquireRequest.run();
                 ResultsPage resultsPage = getter.get(page, resultSize);
                 int fetchedPage = page;
                 page += pageIncrement;
@@ -1947,7 +1957,8 @@ public class OpenApiClient
             long rowLimit,
             long maxResults,
             OptionalInt maxPages,
-            Predicate<List<?>> rowFilter)
+            Predicate<List<?>> rowFilter,
+            Runnable acquireRequest)
     {
         return () -> new Iterator<>()
         {
@@ -1985,6 +1996,7 @@ public class OpenApiClient
 
             private void fetchPage()
             {
+                acquireRequest.run();
                 ResultsPage resultsPage = getter.apply(cursor);
                 pageCount += 1;
                 resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));

@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -120,6 +121,10 @@ public class TestOpenApiQueries
                 "fastapi_stride", ImmutableMap.<String, String>builder()
                         .putAll(fastApiProperties.buildOrThrow())
                         .put("split-strategy", "stride")
+                        .buildOrThrow(),
+                "fastapi_scan_rate", ImmutableMap.<String, String>builder()
+                        .putAll(fastApiProperties.buildOrThrow())
+                        .put("max-scan-requests-per-second", "2")
                         .buildOrThrow(),
                 "echo", Map.of(
                         "spec-location", "src/test/resources/echo.yml",
@@ -1456,6 +1461,17 @@ public class TestOpenApiQueries
         assertSplits(withSession("split_strategy", "stride"), "SELECT name FROM fastapi.default.items WHERE per_page = 1", 3);
         assertSplits(withSession("probe_limit", "0"), "SELECT name FROM fastapi_probe.default.items WHERE per_page = 1", 2);
         assertQueryFails(withSession("probe_limit", "few"), "SELECT name FROM fastapi_probe.default.items", ".*Invalid probe limit: 'few', must be a number or none.*");
+    }
+
+    @Test
+    public void scanRequestRate()
+    {
+        // every value is read in a separate split, and their first requests are half a second apart, even on different nodes
+        long start = System.nanoTime();
+        assertQuery(
+                "SELECT text FROM fastapi_scan_rate.default.comments WHERE comment_id IN (1, 2, 3)",
+                "VALUES 'First', 'Second', 'Third'");
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isGreaterThanOrEqualTo(Duration.ofSeconds(1));
     }
 
     @Test

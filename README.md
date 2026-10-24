@@ -147,6 +147,7 @@ Trino version it's built for.
 | `authentication.token-url`                     | `OPENAPI_TOKEN_URL`                     |                      | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
 | `authentication.allow-insecure-http`           | `OPENAPI_ALLOW_INSECURE_HTTP`           | `false`              | Allow sending credentials over HTTP, without TLS                                                                |
 | `max-requests-per-second`                      | `OPENAPI_MAX_REQUESTS_PER_SECOND`       | unlimited            | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
+| `max-scan-requests-per-second`                 | `OPENAPI_SCAN_REQUESTS_PER_SECOND`      | unlimited            | Maximum HTTP requests per second reading a table in a query, from all nodes; see [Request rate](#request-rate)  |
 | `max-splits-per-second`                        | `OPENAPI_MAX_SPLITS_PER_SECOND`         | unlimited            | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
 | `max-retries`                                  | `OPENAPI_MAX_RETRIES`                   | `3`                  | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
 | `retry-initial-delay`                          | `OPENAPI_RETRY_INITIAL_DELAY`           | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
@@ -361,6 +362,39 @@ the limit. The `max-response-content-length` of the client limits only the
 compressed size, and defaults to `1GB`, so it doesn't fail responses below
 `max-response-size` earlier.
 
+## Request rate
+
+`max-requests-per-second` limits the requests sent by every Trino node, so with
+N nodes running splits, the API can get up to N times as many requests per
+second. To make it a limit for the whole cluster, set it to the limit of the API
+divided by the number of worker nodes, plus the coordinator, if it runs splits,
+with `node-scheduler.include-coordinator=true`.
+
+`max-scan-requests-per-second` limits the requests sent to read a table in a
+query, from all nodes. The coordinator divides it equally between the splits it
+creates for the table, and every split waits between its requests, so it doesn't
+send more than its share. Splits usually start at about the same time, so
+instead of sending their first requests at once, every next split delays its
+first request by another second divided by `max-scan-requests-per-second`. When
+both properties are set, a request waits for both.
+
+It's an upper bound of a single table scan, not of the whole cluster:
+
+* every scan gets the whole rate, so concurrent queries, or a query reading the
+  same table twice, like a self-join, can send more requests;
+* a split's share doesn't grow when other splits finish, so when some splits
+  read more pages than others, like for different values of an `IN` list, the
+  scan sends fewer requests than the limit allows. A scan with a single split,
+  which is how pages are read by default, gets the whole rate;
+* splits that start later, because there are more of them than threads to run
+  them, still wait for their delay, so reading many splits with only a few
+  requests each can take longer than the rate requires;
+* with the `probe` split strategy, the split reading the first page and the
+  splits created after the coordinator reads it share the rate separately, and
+  the requests the coordinator sends to create splits count only against
+  `max-requests-per-second`;
+* [retries](#retries) count only against `max-requests-per-second`.
+
 ## Retries
 
 Requests that fail with a transient error are retried up to `max-retries`
@@ -432,17 +466,18 @@ Declare `rateLimitRemainingHeader` if the API sends the reset header in every
 response, like GitHub, because otherwise a `403 Forbidden` caused by missing
 permissions would be retried too.
 
-Retries count against `max-requests-per-second`, like any other request.
+Retries count against `max-requests-per-second`, like any other request, but
+not against the share of `max-scan-requests-per-second` of a split.
 Error responses, including exceeded rate limits, are never stored in the
 [HTTP cache](#http-cache), and they don't remove a cached response, so a retry
 can revalidate it.
 
 Waiting before a retry, up to `retry-max-delay`, which is 1 minute by default,
-and waiting for `max-requests-per-second`, blocks the thread that sends the
-request, which is usually a Trino driver thread. Driver threads are shared by
-all queries running on a node, so when many splits wait at the same time, other
-queries, also ones not using this connector, can run slower, or wait for a free
-thread.
+and waiting for `max-requests-per-second` or `max-scan-requests-per-second`,
+blocks the thread that sends the request, which is usually a Trino driver
+thread. Driver threads are shared by all queries running on a node, so when many
+splits wait at the same time, other queries, also ones not using this connector,
+can run slower, or wait for a free thread.
 
 ## HTTP cache
 
@@ -1139,8 +1174,8 @@ Pages are read one after another when the query has a `LIMIT`, so pagination
 can stop once it's reached. The `probe` strategy is not used when filters on
 multiple values, like `IN` lists, already read every value in a separate split.
 Splits are still limited by `maxPages`, `maxResults`, `max-requests-per-second`,
-and `max-splits-per-second`. Rows from different pages can be returned in any
-order.
+`max-scan-requests-per-second`, and `max-splits-per-second`. Rows from different
+pages can be returned in any order.
 
 The `split_strategy` and `probe_limit` catalog session properties override both
 the spec and the catalog properties for a single query, for all its tables in

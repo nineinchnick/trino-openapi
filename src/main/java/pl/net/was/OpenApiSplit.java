@@ -21,8 +21,10 @@ import io.trino.spi.HostAddress;
 import io.trino.spi.connector.ConnectorSplit;
 
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Objects.requireNonNull;
 
 public class OpenApiSplit
         implements ConnectorSplit
@@ -32,23 +34,37 @@ public class OpenApiSplit
     private final OpenApiTableHandle tableHandle;
     private final int firstPage;
     private final int pageIncrement;
+    private final Optional<SplitRequestRate> requestRate;
 
     public OpenApiSplit(OpenApiTableHandle tableHandle)
     {
         this(tableHandle, 1, 1);
     }
 
+    public OpenApiSplit(OpenApiTableHandle tableHandle, int firstPage, int pageIncrement)
+    {
+        this(tableHandle, firstPage, pageIncrement, Optional.empty());
+    }
+
+    // Trino can't deserialize splits using a private creator
     @JsonCreator
     public OpenApiSplit(
             @JsonProperty("tableHandle") OpenApiTableHandle tableHandle,
             @JsonProperty("firstPage") int firstPage,
-            @JsonProperty("pageIncrement") int pageIncrement)
+            @JsonProperty("pageIncrement") int pageIncrement,
+            @JsonProperty("requestRate") Optional<SplitRequestRate> requestRate)
     {
         checkArgument(firstPage > 0, "firstPage must be positive");
         checkArgument(pageIncrement > 0, "pageIncrement must be positive");
         this.tableHandle = tableHandle;
         this.firstPage = firstPage;
         this.pageIncrement = pageIncrement;
+        this.requestRate = requireNonNull(requestRate, "requestRate is null");
+    }
+
+    public OpenApiSplit withRequestRate(SplitRequestRate requestRate)
+    {
+        return new OpenApiSplit(tableHandle, firstPage, pageIncrement, Optional.of(requestRate));
     }
 
     @Override
@@ -82,9 +98,17 @@ public class OpenApiSplit
         return pageIncrement;
     }
 
+    @JsonProperty("requestRate")
+    public Optional<SplitRequestRate> getRequestRate()
+    {
+        return requestRate;
+    }
+
     @Override
     public long getRetainedSizeInBytes()
     {
-        return (long) INSTANCE_SIZE + tableHandle.getRetainedSizeInBytes();
+        return (long) INSTANCE_SIZE
+                + tableHandle.getRetainedSizeInBytes()
+                + SizeOf.sizeOf(requestRate, SplitRequestRate::getRetainedSizeInBytes);
     }
 }
