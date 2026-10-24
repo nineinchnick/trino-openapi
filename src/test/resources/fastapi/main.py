@@ -1182,6 +1182,10 @@ def custom_openapi():
     delimited_ids["explode"] = False
     header_ids = openapi_schema["paths"]["/items_by_header"]["get"]["parameters"][0]
     header_ids["schema"] = {"type": "array", "items": {"type": "integer"}}
+    # the path parameter identifies a note by the value of its id field
+    for operation in openapi_schema["paths"]["/notes/{note_id}"].values():
+        note_id = next(parameter for parameter in operation["parameters"] if parameter["name"] == "note_id")
+        note_id["x-trino"] = {"field": "id"}
     # FastAPI never generates path item parameters
     item_path = openapi_schema["paths"]["/items/{item_id}"]
     item_path["parameters"] = item_path["get"].pop("parameters")
