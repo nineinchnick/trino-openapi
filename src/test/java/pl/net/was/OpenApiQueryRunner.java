@@ -14,15 +14,22 @@
 
 package pl.net.was;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Level;
 import io.airlift.log.Logger;
 import io.airlift.log.Logging;
 import io.trino.Session;
 import io.trino.plugin.memory.MemoryPlugin;
+import io.trino.spi.Plugin;
+import io.trino.spi.connector.Connector;
+import io.trino.spi.connector.ConnectorContext;
+import io.trino.spi.connector.ConnectorFactory;
 import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
 
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 
 import static com.google.common.base.Verify.verify;
@@ -34,6 +41,12 @@ public class OpenApiQueryRunner
     private OpenApiQueryRunner() {}
 
     public static QueryRunner createQueryRunner(Map<String, Map<String, String>> catalogProperties)
+            throws Exception
+    {
+        return createQueryRunner(catalogProperties, 2);
+    }
+
+    public static QueryRunner createQueryRunner(Map<String, Map<String, String>> catalogProperties, int workerCount)
             throws Exception
     {
         Logging logger = Logging.initialize();
@@ -49,16 +62,24 @@ public class OpenApiQueryRunner
                 .setSchema("default")
                 .build();
 
-        ImmutableMap.Builder<String, String> extraProperties = ImmutableMap.<String, String>builder();
+        // workers can't listen on the same port
+        ImmutableMap.Builder<String, String> coordinatorProperties = ImmutableMap.<String, String>builder();
         if (System.getenv("TRINO_PORT") != null) {
-            extraProperties.put("http-server.http.port", System.getenv("TRINO_PORT"));
+            coordinatorProperties.put("http-server.http.port", System.getenv("TRINO_PORT"));
         }
 
         QueryRunner queryRunner = DistributedQueryRunner.builder(defaultSession)
-                .setExtraProperties(extraProperties.buildOrThrow())
-                .setWorkerCount(0)
+                .setCoordinatorProperties(coordinatorProperties.buildOrThrow())
+                .setWorkerCount(workerCount)
                 .build();
-        queryRunner.installPlugin(new OpenApiPlugin());
+        queryRunner.installPlugin(new Plugin()
+        {
+            @Override
+            public Iterable<ConnectorFactory> getConnectorFactories()
+            {
+                return ImmutableList.of(new NodeLocalHttpCacheConnectorFactory(new OpenApiConnectorFactory()));
+            }
+        });
         queryRunner.installPlugin(new MemoryPlugin());
 
         queryRunner.createCatalog("memory", "memory");
@@ -106,5 +127,30 @@ public class OpenApiQueryRunner
         Logger log = Logger.get(OpenApiQueryRunner.class);
         log.info("======== SERVER STARTED ========");
         log.info("\n====\n%s\n====", queryRunner.getCoordinator().getBaseUrl());
+    }
+
+    // all nodes get the same catalog properties, but in a cluster every node has its own disk, so give each node its own HTTP cache directory
+    private record NodeLocalHttpCacheConnectorFactory(ConnectorFactory delegate)
+            implements ConnectorFactory
+    {
+        private static final String HTTP_CACHE_DIRECTORY = "http-cache.directory";
+
+        @Override
+        public String getName()
+        {
+            return delegate.getName();
+        }
+
+        @Override
+        public Connector create(String catalogName, Map<String, String> config, ConnectorContext context)
+        {
+            String directory = config.get(HTTP_CACHE_DIRECTORY);
+            if (directory == null) {
+                return delegate.create(catalogName, config, context);
+            }
+            Map<String, String> nodeConfig = new HashMap<>(config);
+            nodeConfig.put(HTTP_CACHE_DIRECTORY, Path.of(directory).resolve(context.getCurrentNode().getNodeIdentifier()).toString());
+            return delegate.create(catalogName, nodeConfig, context);
+        }
     }
 }
