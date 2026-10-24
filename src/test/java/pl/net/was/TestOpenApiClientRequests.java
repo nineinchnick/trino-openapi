@@ -211,6 +211,19 @@ class TestOpenApiClientRequests
                                 type: string
             """;
 
+    private static final String PAGED_PATH_PARAMETER_SPEC = PAGED_SPEC
+            .replace("  /paged:\n", "  /{tenant}/paged:\n")
+            .replace(
+                    "      parameters:\n",
+                    """
+                          parameters:
+                            - name: tenant
+                              in: path
+                              required: true
+                              schema:
+                                type: string
+                    """);
+
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
     private final Queue<URI> requestUris = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
@@ -808,6 +821,29 @@ class TestOpenApiClientRequests
         responses.add(respond(404, "{\"message\":\"Not Found\"}"));
 
         assertThat(getRows(newConfig(DECLARED_NOT_FOUND_SPEC), "items", null)).isEmpty();
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testNotFoundPageAfterFirstFails()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"total\":2}"));
+        responses.add(respond(404, "{\"message\":\"Not Found\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_PATH_PARAMETER_SPEC), "paged", "tenant", "a"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/a/paged for operation listPaged failed with HTTP 404", baseUri);
+        assertThat(requestUris).containsExactly(URI.create("/a/paged?page=1"), URI.create("/a/paged?page=2"));
+    }
+
+    @Test
+    void testNotFoundFirstPageWithPathParametersIsEmpty()
+            throws IOException
+    {
+        responses.add(respond(404, "{\"message\":\"Not Found\"}"));
+
+        assertThat(getRows(newConfig(PAGED_PATH_PARAMETER_SPEC), "paged", "tenant", "missing")).isEmpty();
         assertThat(requestCount).hasValue(1);
     }
 

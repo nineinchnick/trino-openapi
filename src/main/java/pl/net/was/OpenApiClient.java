@@ -188,7 +188,7 @@ public class OpenApiClient
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty()) {
-            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, pathWithParams.getValue())).rows())
+            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
         }
@@ -198,7 +198,7 @@ public class OpenApiClient
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         return pageIterator(
-                page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), revalidateCachedResponses),
+                page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses),
                 firstPage - 1,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
@@ -331,7 +331,7 @@ public class OpenApiClient
         // and the total number of pages would be calculated for the smaller page
         if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && !JsonPointer.empty().equals(pagination.totalResultsPointer())) {
             OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().orElseThrow());
-            ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), revalidateCachedResponses);
+            ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
             serverPageSize = pageSize.orElseThrow();
             pageCount = probe.totalResults().isPresent() && serverPageSize > 0
                     ? OptionalLong.of(ceilDiv(probe.totalResults().orElseThrow(), serverPageSize))
@@ -339,7 +339,7 @@ public class OpenApiClient
         }
         else {
             // the first page is also read by its own split, because rows can't be sent in splits
-            ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), revalidateCachedResponses);
+            ResultsPage firstPage = getPage(withPage(table, pageColumn, 1), httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
             serverPageSize = Iterables.size(firstPage.rows());
             pageCount = getPageCount(firstPage, pageSize);
         }
@@ -406,11 +406,13 @@ public class OpenApiClient
         return table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
     }
 
-    private ResultsPage getPage(OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean revalidateCachedResponses)
+    private ResultsPage getPage(OpenApiTableHandle pageTable, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters, boolean isFirstPage, boolean revalidateCachedResponses)
     {
+        // pages after the first are read only after the first one was found, so a missing one is an error, not the end of the results
+        boolean notFoundIsEmpty = isFirstPage && isNotFoundEmpty(httpPath, pathParameters);
         // the body must be serialized for every page, since it can contain the page number,
         // and the response handler copies the page number to every row
-        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, pathParameters));
+        return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, notFoundIsEmpty));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
@@ -449,14 +451,14 @@ public class OpenApiClient
                 .findFirst();
     }
 
-    private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters)
+    private JsonResponseHandler getResponseHandler(OpenApiTableHandle table, HttpPath httpPath, boolean notFoundIsEmpty)
     {
         return new JsonResponseHandler(
                 table,
                 httpPath,
                 openApiSpec.getResultsPointers(table.getSchemaTableName()).get(httpPath),
                 openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()),
-                isNotFoundEmpty(httpPath, pathParameters));
+                notFoundIsEmpty);
     }
 
     private boolean isNotFoundEmpty(HttpPath httpPath, Map<OpenApiColumn, Object> pathParameters)
