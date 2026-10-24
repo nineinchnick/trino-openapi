@@ -36,12 +36,14 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -50,9 +52,8 @@ import static io.airlift.http.client.HeaderNames.PRAGMA;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.READ;
-import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 import static java.nio.file.StandardOpenOption.WRITE;
 import static java.util.Objects.requireNonNull;
 
@@ -67,6 +68,7 @@ public final class HttpCache
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String ENTRY_SUFFIX = ".entry";
     private static final String TEMPORARY_SUFFIX = ".tmp";
+    private static final Duration STALE_TEMPORARY_FILE_AGE = Duration.ofHours(1);
     private static final String KEY_SEPARATOR = "-";
     // they only say how the request should be served, not which response it gets
     private static final Set<HeaderName> CACHE_DIRECTIVE_HEADERS = Set.of(CACHE_CONTROL, PRAGMA);
@@ -135,7 +137,8 @@ public final class HttpCache
     {
         String key = key(request);
         Path file = entryFile(key);
-        Path temporaryFile = directory.resolve(key + TEMPORARY_SUFFIX);
+        // other processes can share the directory, and write the same entry at the same time
+        Path temporaryFile = directory.resolve(key + "." + UUID.randomUUID() + TEMPORARY_SUFFIX);
         try {
             byte[] metadata = OBJECT_MAPPER.writeValueAsBytes(new Metadata(
                     response.statusCode(),
@@ -220,20 +223,34 @@ public final class HttpCache
         try (Stream<Path> files = Files.list(directory)) {
             for (Path file : files.toList()) {
                 String name = file.getFileName().toString();
-                if (name.endsWith(TEMPORARY_SUFFIX)) {
-                    // left by a write that didn't finish
-                    deleteQuietly(file);
-                    continue;
+                try {
+                    if (name.endsWith(TEMPORARY_SUFFIX)) {
+                        deleteIfStale(file);
+                        continue;
+                    }
+                    if (!name.endsWith(ENTRY_SUFFIX)) {
+                        continue;
+                    }
+                    String key = name.substring(0, name.length() - ENTRY_SUFFIX.length());
+                    long accessMillis = Files.getLastModifiedTime(file).toMillis();
+                    entries.put(key, new Entry(Files.size(file), accessMillis, accessMillis));
                 }
-                if (!name.endsWith(ENTRY_SUFFIX)) {
-                    continue;
+                catch (NoSuchFileException e) {
+                    // moved or removed by another process sharing the directory
                 }
-                String key = name.substring(0, name.length() - ENTRY_SUFFIX.length());
-                long accessMillis = Files.getLastModifiedTime(file).toMillis();
-                entries.put(key, new Entry(Files.size(file), accessMillis, accessMillis));
             }
         }
         evict();
+    }
+
+    // a temporary file is left by a write that didn't finish, but it can also be a write still in progress in another process
+    private static void deleteIfStale(Path temporaryFile)
+            throws IOException
+    {
+        if (System.currentTimeMillis() - Files.getLastModifiedTime(temporaryFile).toMillis() < STALE_TEMPORARY_FILE_AGE.toMillis()) {
+            return;
+        }
+        deleteQuietly(temporaryFile);
     }
 
     private void touch(String key, Path file)
@@ -263,7 +280,7 @@ public final class HttpCache
                 .putInt(metadata.length)
                 .flip();
         ByteBuffer[] buffers = {header, ByteBuffer.wrap(metadata), ByteBuffer.wrap(body)};
-        Set<OpenOption> options = Set.of(CREATE, WRITE, TRUNCATE_EXISTING);
+        Set<OpenOption> options = Set.of(CREATE_NEW, WRITE);
         FileAttribute<?>[] attributes = isPosix() ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE)} : new FileAttribute<?>[0];
         try (FileChannel channel = FileChannel.open(file, options, attributes)) {
             while (buffers[2].hasRemaining()) {

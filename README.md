@@ -146,7 +146,7 @@ Trino version it's built for.
 | `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
 | `domain-expansion-limit`             | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`     | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
 | `http-cache.directory`               | `OPENAPI_HTTP_CACHE_DIRECTORY`      |           | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
-| `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog; the least recently used responses are removed above it                  |
+| `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`     | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
 | `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
 | `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
 | `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`    | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
@@ -310,16 +310,25 @@ user running Trino can read them, and it doesn't store the `Set-Cookie` and
   if the server responds with `304 Not Modified`, the cached response is used.
   Some APIs, like GitHub, don't count such requests against rate limits.
 * A successful `INSERT`, `UPDATE`, or `DELETE` removes cached responses of the
-  same URL, for all values of header and cookie parameters.
+  same URL, for all values of header and cookie parameters, on the node that
+  ran it.
 * A response that can't be stored removes the cached one, if it's successful,
   or says that the resource doesn't exist, with `404 Not Found` or `410 Gone`.
   Other errors, like exceeded rate limits or server failures, say nothing about
   the resource, so the cached response is kept, and can be revalidated later.
-* When the cache is bigger than `http-cache.max-size`, the least recently used
-  responses are removed. Responses bigger than `http-cache.max-entry-size` are
+* When the cache of a node is bigger than `http-cache.max-size`, the least
+  recently used responses are removed. Responses bigger than `http-cache.max-entry-size` are
   not cached.
 * Compressed responses are cached as they were received, so they take less
   space, and the size limits apply to their compressed size.
+
+Every node has its own cache, and its own size limit, and a change on one node
+doesn't remove responses cached by other nodes, which can return them until
+they're no longer fresh. Use a directory on a local disk of every node, not a
+volume shared by nodes, or by several Trino processes. Such processes can read
+and write responses at the same time, but every process only tracks responses
+it stored or found when it started, so the total size is not limited, and a
+change doesn't remove responses stored by other processes.
 
 The connector never guesses how long a response is fresh, so it never returns
 data older than the server allows. To make a query check every cached response
