@@ -362,6 +362,22 @@ def get_request_encoding(request: Request) -> RequestEncoding:
     return RequestEncoding(accept_encoding=request.headers.get("accept-encoding"))
 
 
+class OptionalValues(BaseModel):
+    id: int
+    count: int | None
+    created_at: datetime | None
+    tags: list[str] | None
+    note: str | None = None
+
+
+@router.get("/optional_values")
+def list_optional_values() -> list[OptionalValues]:
+    return [
+        OptionalValues(id=1, count=3, created_at=datetime(2025, 4, 18, 12, 30, 45, tzinfo=timezone.utc), tags=["a", "b"], note="first"),
+        OptionalValues(id=2, count=None, created_at=None, tags=None),
+    ]
+
+
 @router.get("/cached_items")
 def list_cached_items(request: Request, response: Response) -> list[Item]:
     cached_item_requests.total += 1
