@@ -57,7 +57,8 @@ final class SpecFetcher
         requireNonNull(location, "location is null");
         requireNonNull(httpClient, "httpClient is null");
         Request request = createRequest(config, location);
-        return RetryPolicy.fromConfig(config, Optional.empty()).execute(
+        RetryOptions retryOptions = new RetryOptions(config.getMaxRetries(), config.getRetryInitialDelay().toJavaTime(), config.getRetryMaxDelay().toJavaTime());
+        return new RetryPolicy(retryOptions, Optional.empty()).execute(
                 request,
                 true,
                 () -> httpClient.execute(request, new SpecResponseHandler()),
