@@ -1482,6 +1482,10 @@ public class TestOpenApiQueries
         // and the spec, which sets strideSplits only for some operations
         assertSplits(withSession("split_strategy", "stride"), "SELECT name FROM fastapi.default.items WHERE per_page = 1", 3);
         assertSplits(withSession("probe_limit", "0"), "SELECT name FROM fastapi_probe.default.items WHERE per_page = 1", 2);
+        assertSplits(withSession("stride_splits", "5"), "SELECT name FROM fastapi_stride.default.total_pages_items", 5);
+        // but not the spec, which sets strideSplits for a single operation
+        assertSplits(withSession("stride_splits", "5"), "SELECT name FROM fastapi_stride.default.items WHERE per_page = 1", 3);
+        assertQueryFails(withSession("stride_splits", "0"), "SELECT name FROM fastapi_stride.default.items", ".*stride_splits must be greater than 0: 0.*");
         assertQueryFails(withSession("probe_limit", "few"), "SELECT name FROM fastapi_probe.default.items", ".*Invalid probe limit: 'few', must be a number or none.*");
     }
 
@@ -1635,6 +1639,7 @@ public class TestOpenApiQueries
         return Session.builder(getSession())
                 .setCatalogSessionProperty("fastapi", property, value)
                 .setCatalogSessionProperty("fastapi_probe", property, value)
+                .setCatalogSessionProperty("fastapi_stride", property, value)
                 .build();
     }
 

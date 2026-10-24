@@ -90,6 +90,7 @@ class TestOpenApiConfig
                 .setMaxFilterCombinations(1000)
                 .setDynamicFilteringWaitTimeout(new Duration(20, SECONDS))
                 .setSplitStrategy(SplitStrategy.OFF)
+                .setStrideSplits(null)
                 .setProbeLimit(ProbeLimit.NONE));
     }
 
@@ -132,6 +133,7 @@ class TestOpenApiConfig
                 .put("max-filter-combinations", "100")
                 .put("dynamic-filtering.wait-timeout", "5s")
                 .put("split-strategy", "STRIDE")
+                .put("stride-splits", "8")
                 .put("probe-limit", "4")
                 .buildOrThrow();
 
@@ -171,6 +173,7 @@ class TestOpenApiConfig
                 .setMaxFilterCombinations(100)
                 .setDynamicFilteringWaitTimeout(new Duration(5, SECONDS))
                 .setSplitStrategy(SplitStrategy.STRIDE)
+                .setStrideSplits(8)
                 .setProbeLimit(new ProbeLimit(OptionalInt.of(4)));
 
         // can't be combined with api-key-name and api-key-value, so it's tested separately
@@ -411,6 +414,17 @@ class TestOpenApiConfig
                 .buildOrThrow()))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("trimmed-path-prefixes must start with a slash, like /api/v1");
+    }
+
+    @Test
+    void testStrideSplitsMustBePositive()
+    {
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("stride-splits", "0")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("Invalid configuration property stride-splits: must be greater than or equal to 1");
     }
 
     private static void assertFailsValidation(Map<String, String> properties)

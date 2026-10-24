@@ -21,6 +21,7 @@ import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplitSource;
 import io.trino.spi.connector.Constraint;
+import io.trino.spi.connector.DynamicFilterSnapshot;
 import io.trino.testing.TestingConnectorSession;
 import io.trino.testing.TestingNodeManager;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestOpenApiSplitManager
 {
@@ -71,10 +73,49 @@ class TestOpenApiSplitManager
                                 type: integer
                               text:
                                 type: string
+              /items:
+                get:
+                  operationId: listItems
+                  parameters:
+                    - name: page
+                      in: query
+                      schema:
+                        type: integer
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              results:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                              total_pages:
+                                type: integer
+                  x-trino:
+                    pageParam: page
+                    resultsPath: $response.body#/results
+                    totalPagesPath: $response.body#/total_pages
             """;
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void testStrideSplits()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig().setSplitStrategy(SplitStrategy.STRIDE);
+        assertThat(getSplitCount(config, Map.of())).isEqualTo(1);
+        assertThat(getSplitCount(config.setStrideSplits(4), Map.of())).isEqualTo(4);
+        assertThat(getSplitCount(config, Map.of("stride_splits", 2))).isEqualTo(2);
+    }
 
     @Test
     void testWaitsForDynamicFiltersOnSentColumns()
@@ -92,33 +133,57 @@ class TestOpenApiSplitManager
         assertThat(getDynamicFilterWaitMillis(newConfig(), Map.of(), "text")).isZero();
     }
 
+    private int getSplitCount(OpenApiConfig config, Map<String, Object> sessionProperties)
+    {
+        OpenApiSpec spec = createSpec(config);
+        OpenApiSplitManager splitManager = createSplitManager(config, spec);
+        try (ConnectorSplitSource splitSource = splitManager.getSplits(null, createSession(config, sessionProperties), spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items")), Set.of(), Constraint.alwaysTrue())) {
+            int splits = 0;
+            while (!splitSource.isFinished()) {
+                splits += splitSource.getNextBatch(100, DynamicFilterSnapshot.EMPTY).join().size();
+            }
+            return splits;
+        }
+        finally {
+            splitManager.shutdown();
+        }
+    }
+
     private long getDynamicFilterWaitMillis(OpenApiConfig config, Map<String, Object> sessionProperties, String dynamicFilterColumn)
     {
-        OpenApiSpec spec = new OpenApiSpec(config, new TestingHttpClient(request -> {
-            throw new AssertionError("Unexpected request to " + request.getUri());
-        }));
-        OpenApiServers servers = new OpenApiServers(config, spec);
-        TestingHttpClient httpClient = new TestingHttpClient(request -> {
-            throw new AssertionError("Unexpected request to " + request.getUri());
-        });
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
-        OpenApiSplitManager splitManager = new OpenApiSplitManager(spec, client, TestingNodeManager.create(), config);
-        ConnectorSession session = TestingConnectorSession.builder()
-                .setPropertyMetadata(new OpenApiSessionProperties(config).getSessionProperties())
-                .setPropertyValues(sessionProperties)
-                .build();
+        OpenApiSpec spec = createSpec(config);
+        OpenApiSplitManager splitManager = createSplitManager(config, spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "comments"));
         ColumnHandle column = spec.getTables().get("comments").stream()
                 .filter(openApiColumn -> openApiColumn.getName().equals(dynamicFilterColumn))
                 .map(OpenApiColumn::getHandle)
                 .findFirst()
                 .orElseThrow();
-        try (ConnectorSplitSource splitSource = splitManager.getSplits(null, session, table, Set.of(column), Constraint.alwaysTrue())) {
+        try (ConnectorSplitSource splitSource = splitManager.getSplits(null, createSession(config, sessionProperties), table, Set.of(column), Constraint.alwaysTrue())) {
             return splitSource.getRequestedDynamicFilterWaitTimeoutMillis();
         }
         finally {
             splitManager.shutdown();
         }
+    }
+
+    // the split manager doesn't send requests to create splits in these tests
+    private static OpenApiSplitManager createSplitManager(OpenApiConfig config, OpenApiSpec spec)
+    {
+        TestingHttpClient httpClient = new TestingHttpClient(request -> {
+            throw new AssertionError("Unexpected request to " + request.getUri());
+        });
+        OpenApiServers servers = new OpenApiServers(config, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new ExtraCredentialProvider(config), spec, servers);
+        return new OpenApiSplitManager(spec, client, TestingNodeManager.create(), config);
+    }
+
+    private static ConnectorSession createSession(OpenApiConfig config, Map<String, Object> sessionProperties)
+    {
+        return TestingConnectorSession.builder()
+                .setPropertyMetadata(new OpenApiSessionProperties(config).getSessionProperties())
+                .setPropertyValues(sessionProperties)
+                .build();
     }
 
     private OpenApiConfig newConfig()
