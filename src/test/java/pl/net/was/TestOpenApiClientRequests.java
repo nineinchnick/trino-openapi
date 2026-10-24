@@ -60,6 +60,7 @@ import static com.google.common.base.Throwables.getStackTraceAsString;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -691,6 +692,23 @@ class TestOpenApiClientRequests
         assertThat(requestHeaders.peek().getFirst("Content-Type")).isEqualTo("application/x-www-form-urlencoded");
         // the note isn't filtered on, so it's not sent, and arrays are sent as repeated fields
         assertThat(requestBodies).containsExactly("text=a+b%26c%3Dd&count=3&ratio=10000000&enabled=true&color=green&tags=new&tags=on+sale");
+    }
+
+    @Test
+    void testFailsToSendUnsupportedFormValues()
+            throws IOException
+    {
+        String unionSpec = FORM_SPEC.replace(
+                "note:\n                  type: string",
+                "note:\n                  oneOf: [{type: string}, {type: integer}]");
+        // union columns hold JSON text, which can be an object, even if the alternatives are plain values
+        assertThatThrownBy(() -> getRowsMatching(newConfig(unionSpec), "search", Map.of("note", Domain.singleValue(VARCHAR, utf8Slice("{\"a\":1}")))))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessage("Field note of the form request body of POST /search has a nested value, which can't be sent as a form field");
+        assertThatThrownBy(() -> getRows(newConfig(FORM_SPEC.replace("application/x-www-form-urlencoded:", "multipart/form-data:")), "search", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(NOT_SUPPORTED.toErrorCode()))
+                .hasMessage("Operation POST /search only accepts multipart/form-data request bodies, which are not supported");
+        assertThat(requestCount).hasValue(0);
     }
 
     @Test

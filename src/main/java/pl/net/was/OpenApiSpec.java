@@ -39,6 +39,7 @@ import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.Encoding;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
@@ -93,6 +94,7 @@ import static com.google.common.collect.Sets.toImmutableEnumSet;
 import static com.google.common.net.MediaType.ANY_TYPE;
 import static com.google.common.net.MediaType.FORM_DATA;
 import static com.google.common.net.MediaType.JSON_UTF_8;
+import static com.google.common.net.MediaType.PLAIN_TEXT_UTF_8;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -792,6 +794,23 @@ public class OpenApiSpec
                 .isPresent();
     }
 
+    /**
+     * Returns the multipart media type of the request body of an operation that doesn't accept JSON or form bodies.
+     */
+    public Optional<String> getMultipartRequestMediaType(HttpPath httpPath)
+    {
+        Optional<Content> content = getOperation(httpPath)
+                .map(Operation::getRequestBody)
+                .map(RequestBody::getContent);
+        if (content.flatMap(OpenApiSpec::getRequestBodyMediaType).isPresent()) {
+            return Optional.empty();
+        }
+        return content.stream()
+                .flatMap(mediaTypes -> mediaTypes.keySet().stream())
+                .filter(OpenApiSpec::isMultipartMediaType)
+                .findFirst();
+    }
+
     // only the first server is used, because the others are usually alternatives, like a sandbox, which must be chosen on purpose
     public Optional<Server> getServer(HttpPath httpPath)
     {
@@ -887,6 +906,7 @@ public class OpenApiSpec
                     .flatMap(valueSchema -> getPlainValueColumn(new HttpPath(method, path), valueSchema, result, getRequestNames(parameters, op)))
                     .ifPresent(result::add);
         }
+        checkFormRequestBody(new HttpPath(method, path), op);
         schema = getRequestSchema(op);
         if (schema != null) {
             ListMultimap<String, OpenApiColumn.PrimaryKey> keys = result.stream()
@@ -1323,6 +1343,81 @@ public class OpenApiSpec
     {
         try {
             return MediaType.parse(mediaType).withoutParameters().equals(FORM_DATA);
+        }
+        catch (IllegalArgumentException _) {
+            return false;
+        }
+    }
+
+    private static boolean isMultipartMediaType(String mediaType)
+    {
+        try {
+            return MediaType.parse(mediaType).type().equals("multipart");
+        }
+        catch (IllegalArgumentException _) {
+            return false;
+        }
+    }
+
+    private static void checkFormRequestBody(HttpPath httpPath, Operation op)
+    {
+        Optional<Content> content = Optional.ofNullable(op.getRequestBody())
+                .map(RequestBody::getContent);
+        Optional<String> mediaType = content
+                .flatMap(OpenApiSpec::getRequestBodyMediaType)
+                .filter(OpenApiSpec::isFormMediaType);
+        if (mediaType.isEmpty()) {
+            return;
+        }
+        Schema<?> schema = content.get().get(mediaType.get()).getSchema();
+        if (schema == null) {
+            return;
+        }
+        checkArgument(!isArray(schema), "Request body of %s is a form, but its schema is an array, and a form can only send the properties of an object", httpPath);
+        getSchemaProperties(schema).forEach((name, property) -> checkArgument(
+                !isNestedFormValue(property),
+                "Field %s of the form request body of %s is an object or an array of objects or arrays, which can't be sent as a form field",
+                name,
+                httpPath));
+        Map<String, Encoding> encodings = requireNonNullElse(content.get().get(mediaType.get()).getEncoding(), ImmutableMap.of());
+        encodings.forEach((name, encoding) -> checkArgument(
+                isDefaultFormEncoding(encoding),
+                "Field %s of the form request body of %s has a custom encoding, but only the form style with explode is supported, " +
+                        "without allowReserved, and with the text/plain content type",
+                name,
+                httpPath));
+    }
+
+    private static boolean isNestedFormValue(Schema<?> schema)
+    {
+        if (isArray(schema)) {
+            return schema.getItems() != null && (isArray(schema.getItems()) || isObjectValue(schema.getItems()));
+        }
+        return isObjectValue(schema);
+    }
+
+    private static boolean isObjectValue(Schema<?> schema)
+    {
+        if (JsonTrinoConverter.isUnion(schema)) {
+            return isObjectUnion(schema);
+        }
+        // objects with additional properties, which are mapped to maps, are objects too
+        return "object".equals(getTypeName(schema)) || schema.getProperties() != null;
+    }
+
+    private static boolean isDefaultFormEncoding(Encoding encoding)
+    {
+        // headers only apply to multipart bodies, so they're ignored, like the OpenAPI specification requires
+        return (encoding.getStyle() == null || encoding.getStyle() == Encoding.StyleEnum.FORM) &&
+                (encoding.getExplode() == null || encoding.getExplode()) &&
+                (encoding.getAllowReserved() == null || !encoding.getAllowReserved()) &&
+                (encoding.getContentType() == null || isPlainTextMediaType(encoding.getContentType()));
+    }
+
+    private static boolean isPlainTextMediaType(String mediaType)
+    {
+        try {
+            return MediaType.parse(mediaType).withoutParameters().equals(PLAIN_TEXT_UTF_8.withoutParameters());
         }
         catch (IllegalArgumentException _) {
             return false;
