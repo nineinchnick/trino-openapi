@@ -56,6 +56,7 @@ import static com.google.common.base.Throwables.getStackTraceAsString;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNullElse;
@@ -178,6 +179,39 @@ class TestOpenApiClientRequests
                     '404':
                       description: No items
             """.formatted(OK_RESPONSES);
+
+    private static final String DELETE_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /items/{id}:
+                parameters:
+                  - name: id
+                    in: path
+                    required: true
+                    schema:
+                      type: string
+                get:
+                  operationId: getItem
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                delete:
+                  operationId: deleteItem
+                  responses:
+                    '204':
+                      description: Deleted
+            """;
 
     private static final String PAGED_SPEC =
             """
@@ -437,6 +471,33 @@ class TestOpenApiClientRequests
 
         assertThat(getRows(newConfig(), "patched", null)).isEmpty();
         assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testRetriedDeleteOfMissingResourceSucceeds()
+            throws IOException
+    {
+        // the first attempt deleted the resource, but the gateway timed out waiting for the response
+        responses.add(respond(504, ""));
+        responses.add(respond(404, ""));
+        deleteRow(newConfig(DELETE_SPEC), "1");
+
+        requestCount.set(0);
+        responses.add(respond(502, ""));
+        responses.add(respond(410, ""));
+        deleteRow(newConfig(DELETE_SPEC), "1");
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testDeleteOfMissingResourceFails()
+            throws IOException
+    {
+        responses.add(respond(404, ""));
+
+        assertThatThrownBy(() -> deleteRow(newConfig(DELETE_SPEC), "1"))
+                .hasMessage("Request DELETE %s/items/1 for operation deleteItem failed with HTTP 404", baseUri);
+        assertThat(requestCount).hasValue(1);
     }
 
     @Test
@@ -936,6 +997,19 @@ class TestOpenApiClientRequests
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(value)))));
         }
         return ImmutableList.copyOf(client.getRows(table, 1, 1, false));
+    }
+
+    private void deleteRow(OpenApiConfig config, String id)
+    {
+        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
+        OpenApiColumn column = spec.getTables().get("items").stream()
+                .filter(candidate -> candidate.getName().equals("id"))
+                .findFirst()
+                .orElseThrow();
+        OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
+                .cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(id)))));
+        client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(id)), 0);
     }
 
     private static HttpHandler disconnect()

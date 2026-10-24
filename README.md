@@ -233,6 +233,11 @@ retried only after `429 Too Many Requests`, which means that the server didn't
 process them. After other errors, repeating them can create duplicates or apply
 a change twice.
 
+When a retried `DELETE` gets `404 Not Found` or `410 Gone`, it succeeds,
+because the previous attempt could have deleted the resource before failing,
+for example with `504 Gateway Timeout`. The first attempt still fails on these
+errors.
+
 The delay before a retry starts at `retry-initial-delay` and doubles after
 every retry, up to `retry-max-delay`. The connector waits a random time between
 half of that delay and the whole delay, so many queries or splits that failed at
