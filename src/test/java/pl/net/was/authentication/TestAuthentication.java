@@ -13,7 +13,6 @@
  */
 package pl.net.was.authentication;
 
-import io.airlift.configuration.InvalidConfigurationException;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
@@ -319,7 +318,7 @@ class TestAuthentication
     }
 
     private Authentication createAuthentication(String specContents)
-            throws IOException, InvalidConfigurationException
+            throws IOException
     {
         return createAuthentication(specContents, new OpenApiConfig()
                 .setAuthenticationType(AuthenticationType.HTTP)

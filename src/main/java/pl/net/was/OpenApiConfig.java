@@ -18,7 +18,6 @@ import com.google.common.base.Splitter;
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
-import io.airlift.configuration.InvalidConfigurationException;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.airlift.units.MinDataSize;
@@ -184,14 +183,7 @@ public class OpenApiConfig
     @ConfigDescription("Comma-separated list of API key names and values, like name1=value1,name2=value2")
     @ConfigSecuritySensitive
     public OpenApiConfig setApiKeys(String apiKeys)
-            throws InvalidConfigurationException
     {
-        if (apiKeys.isEmpty()) {
-            return this;
-        }
-        if (this.apiKeyName != null || this.apiKeyValue != null) {
-            throw new InvalidConfigurationException("Cannot use authentication.api-keys if authentication.api-key-name or authentication.api-key-name is set");
-        }
         this.apiKeys = Splitter
                 .on(',')
                 .trimResults()
@@ -209,11 +201,7 @@ public class OpenApiConfig
     @Config("authentication.api-key-name")
     @ConfigDescription("API key name")
     public OpenApiConfig setApiKeyName(String apiKeyName)
-            throws InvalidConfigurationException
     {
-        if (!this.apiKeys.isEmpty()) {
-            throw new InvalidConfigurationException("Cannot use authentication.api-key-name if authentication.api-keys is set");
-        }
         this.apiKeyName = apiKeyName;
         return this;
     }
@@ -227,13 +215,15 @@ public class OpenApiConfig
     @ConfigDescription("API key value")
     @ConfigSecuritySensitive
     public OpenApiConfig setApiKeyValue(String apiKeyValue)
-            throws InvalidConfigurationException
     {
-        if (!this.apiKeys.isEmpty()) {
-            throw new InvalidConfigurationException("Cannot use authentication.api-key-value if authentication.api-keys is set");
-        }
         this.apiKeyValue = apiKeyValue;
         return this;
+    }
+
+    @AssertTrue(message = "authentication.api-keys cannot be combined with authentication.api-key-name or authentication.api-key-value")
+    public boolean isApiKeysValid()
+    {
+        return apiKeys.isEmpty() || (apiKeyName == null && apiKeyValue == null);
     }
 
     public String getClientId()
