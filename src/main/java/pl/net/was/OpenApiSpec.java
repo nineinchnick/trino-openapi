@@ -366,7 +366,7 @@ public class OpenApiSpec
         DeserializationUtils.getOptions().setMaxYamlCodePoints(Integer.MAX_VALUE);
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
-        EmptySecurityDetectingParser parser = new EmptySecurityDetectingParser();
+        PreprocessingParser parser = new PreprocessingParser();
         SwaggerParseResult result = parser.readLocation(specLocation, null, parseOptions);
         OpenAPI openAPI = result.getOpenAPI();
 
@@ -381,7 +381,7 @@ public class OpenApiSpec
         return openAPI;
     }
 
-    private static class EmptySecurityDetectingParser
+    private static class PreprocessingParser
             extends OpenAPIV3Parser
     {
         private boolean rootParsed;
