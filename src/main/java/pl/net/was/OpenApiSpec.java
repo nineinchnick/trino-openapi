@@ -190,6 +190,8 @@ public class OpenApiSpec
     private final Map<String, Map<HttpPath, JsonPointer>> errorPointers;
     private final Map<String, Map<HttpPath, JsonPointer>> resultsPointers;
     private final Map<String, Map<HttpPath, Pagination>> paginations;
+    private final Set<SchemaTableName> schemaTableNames;
+    private final Set<String> schemaNames;
 
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
@@ -322,6 +324,12 @@ public class OpenApiSpec
         this.errorPointers = errorPointers.buildOrThrow();
         this.resultsPointers = resultsPointers.buildOrThrow();
         this.paginations = paginations.buildOrThrow();
+        this.schemaTableNames = this.handles.values().stream()
+                .map(OpenApiTableHandle::getSchemaTableName)
+                .collect(toImmutableSet());
+        // the default schema is listed even when it has no tables, so it can always be used as the current schema of a session
+        this.schemaNames = Stream.concat(Stream.of(SCHEMA_NAME), schemaTableNames.stream().map(SchemaTableName::getSchemaName))
+                .collect(toImmutableSet());
 
         this.handles.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -768,52 +776,46 @@ public class OpenApiSpec
                 table.getSchemaTableName()));
     }
 
+    public Set<String> getSchemaNames()
+    {
+        return schemaNames;
+    }
+
+    public Set<SchemaTableName> getSchemaTableNames()
+    {
+        return schemaTableNames;
+    }
+
     public OpenApiTableHandle getTableHandle(SchemaTableName name)
     {
-        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
-            throw new SchemaNotFoundException(name.getSchemaName());
-        }
-        OpenApiTableHandle handle = this.handles.get(name.getTableName());
-        if (handle == null) {
-            throw new TableNotFoundException(name);
-        }
-        return handle;
+        return handles.get(requireTableName(name));
     }
 
     public Map<HttpPath, JsonPointer> getErrorPointers(SchemaTableName name)
     {
-        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
-            throw new SchemaNotFoundException(name.getSchemaName());
-        }
-        Map<HttpPath, JsonPointer> result = this.errorPointers.get(name.getTableName());
-        if (result == null) {
-            throw new TableNotFoundException(name);
-        }
-        return result;
+        return errorPointers.get(requireTableName(name));
     }
 
     public Map<HttpPath, JsonPointer> getResultsPointers(SchemaTableName name)
     {
-        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
-            throw new SchemaNotFoundException(name.getSchemaName());
-        }
-        Map<HttpPath, JsonPointer> result = this.resultsPointers.get(name.getTableName());
-        if (result == null) {
-            throw new TableNotFoundException(name);
-        }
-        return result;
+        return resultsPointers.get(requireTableName(name));
     }
 
     public Map<HttpPath, Pagination> getPaginations(SchemaTableName name)
     {
-        if (!name.getSchemaName().equals(SCHEMA_NAME)) {
+        return paginations.get(requireTableName(name));
+    }
+
+    private String requireTableName(SchemaTableName name)
+    {
+        if (!schemaNames.contains(name.getSchemaName())) {
             throw new SchemaNotFoundException(name.getSchemaName());
         }
-        Map<HttpPath, Pagination> result = this.paginations.get(name.getTableName());
-        if (result == null) {
+        // tables are stored by their names only, so a table of another schema must not be found
+        if (!schemaTableNames.contains(name)) {
             throw new TableNotFoundException(name);
         }
-        return result;
+        return name.getTableName();
     }
 
     public Optional<String> getOperationId(HttpPath httpPath)

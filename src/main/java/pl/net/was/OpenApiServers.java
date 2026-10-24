@@ -35,11 +35,9 @@ import java.util.stream.Stream;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
-import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
-import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 public class OpenApiServers
 {
@@ -120,8 +118,8 @@ public class OpenApiServers
 
     private static Set<HttpPath> getHttpPaths(OpenApiSpec spec)
     {
-        return spec.getTables().keySet().stream()
-                .map(tableName -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName)))
+        return spec.getSchemaTableNames().stream()
+                .map(spec::getTableHandle)
                 .flatMap(table -> Stream.of(table.getSelectPaths(), table.getInsertPaths(), table.getUpdatePaths(), table.getDeletePaths()))
                 .flatMap(Collection::stream)
                 .collect(toImmutableSet());
