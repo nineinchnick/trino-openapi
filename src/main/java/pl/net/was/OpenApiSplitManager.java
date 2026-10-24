@@ -196,7 +196,7 @@ public class OpenApiSplitManager
         * job_id:34, conclusion:failure
          */
         // first build a list of lists of tuples with the column and single-valued domain, for every value of a multi valued domain
-        ImmutableList.Builder<List<Map.Entry<ColumnHandle, Domain>>> singleDomains = new ImmutableList.Builder<>();
+        ImmutableList.Builder<List<Map.Entry<ColumnHandle, Domain>>> singleDomains = ImmutableList.builder();
         for (Map.Entry<ColumnHandle, Domain> entry : originalDomains.entrySet()) {
             OpenApiColumnHandle column = (OpenApiColumnHandle) entry.getKey();
             Domain domain = entry.getValue();
@@ -214,7 +214,7 @@ public class OpenApiSplitManager
                         .map(Range::getSingleValue)
                         .collect(toList());
             }
-            ImmutableList.Builder<Map.Entry<ColumnHandle, Domain>> splitDomains = new ImmutableList.Builder<>();
+            ImmutableList.Builder<Map.Entry<ColumnHandle, Domain>> splitDomains = ImmutableList.builder();
             for (Object value : values) {
                 splitDomains.add(new AbstractMap.SimpleImmutableEntry<>(column, Domain.create(
                         ValueSet.of(domain.getType(), value),
@@ -294,7 +294,7 @@ public class OpenApiSplitManager
     {
         int strideSplits = pagination.strideSplits().orElseGet(() -> nodeManager.getRequiredWorkerNodes().size());
         if (pagination.maxPages().isPresent()) {
-            return min(strideSplits, pagination.maxPages().getAsInt());
+            return min(strideSplits, pagination.maxPages().orElseThrow());
         }
         return strideSplits;
     }

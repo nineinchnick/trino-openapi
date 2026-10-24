@@ -49,6 +49,6 @@ public record ProbeLimit(OptionalInt limit)
     @Override
     public String toString()
     {
-        return limit.isPresent() ? String.valueOf(limit.getAsInt()) : NONE_VALUE;
+        return limit.isPresent() ? String.valueOf(limit.orElseThrow()) : NONE_VALUE;
     }
 }

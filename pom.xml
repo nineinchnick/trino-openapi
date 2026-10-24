@@ -49,6 +49,7 @@
 
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.check.skip-airstyle>false</air.check.skip-airstyle>
+        <air.check.skip-modernizer>false</air.check.skip-modernizer>
         <air.build.jvmsize>4g</air.build.jvmsize>
         <!-- same as Trino tests: Trino requires the vector module, Guice uses sun.misc.Unsafe, and brotli4j loads a native library -->
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</air.test.jvm.additional-arguments>
@@ -273,6 +274,35 @@
 
     <build>
         <plugins>
+            <!-- same rules as Trino -->
+            <plugin>
+                <groupId>org.gaul</groupId>
+                <artifactId>modernizer-maven-plugin</artifactId>
+                <configuration>
+                    <violationsFiles>
+                        <violationsFile>${air.main.basedir}/.mvn/modernizer/violations.xml</violationsFile>
+                    </violationsFiles>
+                    <exclusionPatterns>
+                        <exclusionPattern>org/joda/time/.*</exclusionPattern>
+                    </exclusionPatterns>
+                    <exclusionsFile>${air.main.basedir}/.mvn/modernizer/exclusions.txt</exclusionsFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>modernizer-production-code</id>
+                        <goals>
+                            <goal>modernizer</goal>
+                        </goals>
+                        <configuration>
+                            <violationsFiles>
+                                <violationsFile>${air.main.basedir}/.mvn/modernizer/violations-production-code-only.xml</violationsFile>
+                            </violationsFiles>
+                            <includeTestClasses>false</includeTestClasses>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>

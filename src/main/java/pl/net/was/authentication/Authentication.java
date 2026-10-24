@@ -308,7 +308,7 @@ public class Authentication
             params.put("client_secret", clientSecret);
         }
 
-        return params.build().entrySet().stream()
+        return params.buildOrThrow().entrySet().stream()
                 .map(entry -> encodePair(entry.getKey(), entry.getValue()))
                 .collect(joining("&"));
     }

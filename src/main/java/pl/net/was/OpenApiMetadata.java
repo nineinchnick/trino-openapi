@@ -201,7 +201,7 @@ public class OpenApiMetadata
         // Trino pushes a limit only into a scan without a remaining filter, so every row read from the server is returned,
         // and pagination can stop once the limit is reached
         OpenApiTableHandle openApiTable = (OpenApiTableHandle) table;
-        if (openApiTable.getLimit().isPresent() && openApiTable.getLimit().getAsLong() <= limit) {
+        if (openApiTable.getLimit().isPresent() && openApiTable.getLimit().orElseThrow() <= limit) {
             return Optional.empty();
         }
         // every split reads up to the limit, and the last page can have more rows than needed, so Trino must still apply it

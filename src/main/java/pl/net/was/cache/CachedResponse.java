@@ -154,7 +154,7 @@ public record CachedResponse(
     {
         OptionalLong maxAge = cacheControl().maxAge();
         if (maxAge.isPresent()) {
-            return maxAge.getAsLong() * 1000;
+            return maxAge.orElseThrow() * 1000;
         }
         Optional<Instant> expires = header(EXPIRES).flatMap(CachedResponse::parseDate);
         if (expires.isEmpty()) {

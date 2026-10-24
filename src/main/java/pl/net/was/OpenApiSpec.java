@@ -70,7 +70,6 @@ import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
@@ -494,9 +493,9 @@ public class OpenApiSpec
 
         Map<String, String> specExtension = op.getExtensions() == null ?
                 ImmutableMap.of() :
-                getMapOfStrings(firstNonNull(
+                getMapOfStrings(requireNonNullElse(
                         op.getExtensions().get(SPEC_EXTENSION),
-                        firstNonNull(op.getExtensions().get(LEGACY_SPEC_EXTENSION), ImmutableMap.of())));
+                        requireNonNullElse(op.getExtensions().get(LEGACY_SPEC_EXTENSION), ImmutableMap.of())));
         JsonPointer resultsPointer;
         try {
             resultsPointer = parseJsonPointer(specExtension.get(PAGINATION_RESULTS_PATH));

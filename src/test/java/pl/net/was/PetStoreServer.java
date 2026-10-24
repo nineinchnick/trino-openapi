@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
 
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -69,7 +70,7 @@ public class PetStoreServer
             clientCredentialsFlow.put("tokenUrl", keycloakServer.getTokenUrl());
             clientCredentialsFlow.set("scopes", implicitFlow.get("scopes"));
 
-            specFile = File.createTempFile("spec-", ".json");
+            specFile = Files.createTempFile("spec-", ".json").toFile();
             specFile.deleteOnExit();
             OBJECT_MAPPER.writeValue(specFile, spec);
         }
