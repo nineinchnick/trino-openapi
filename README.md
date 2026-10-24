@@ -240,6 +240,14 @@ openApi.http-client.log.enabled=true
 openApi.http-client.log.path=logs
 ```
 
+When `spec-location` is a URL, the specification is fetched with another HTTP
+client, configured with the same properties prefixed with `openApiSpec`, like
+`openApiSpec.http-client.request-timeout=30s`. Its
+`max-response-content-length` defaults to `1GB`, because specifications of large
+APIs exceed the default of `16MB`. Fetching it is retried like other requests,
+see [Retries](#retries). Documents referenced with `$ref` are still loaded by
+the OpenAPI parser, so these properties don't apply to them.
+
 The request log, and request spans when Trino has
 [tracing](https://trino.io/docs/current/admin/opentelemetry.html) enabled,
 include the full URL of every request. When an API key is sent in the query

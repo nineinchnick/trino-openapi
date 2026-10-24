@@ -29,6 +29,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.net.MediaType;
 import com.google.inject.Inject;
+import io.airlift.http.client.HttpClient;
 import io.airlift.log.Logger;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -186,9 +187,9 @@ public class OpenApiSpec
     private final Optional<JsonPointer> documentErrorPointer;
 
     @Inject
-    public OpenApiSpec(OpenApiConfig config)
+    public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
     {
-        this(parse(requireNonNull(config, "config is null").getSpecLocation()));
+        this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")));
     }
 
     OpenApiSpec(OpenAPI openApi)
@@ -472,7 +473,7 @@ public class OpenApiSpec
         return key.replaceAll("/\\{[^\\}]+\\}", "");
     }
 
-    private static OpenAPI parse(String specLocation)
+    private static OpenAPI parse(OpenApiConfig config, HttpClient httpClient)
     {
         // specs of large APIs, like Datadog, exceed the default limit of 3 MB for YAML documents,
         // which protects against untrusted input, but the spec location is set by the catalog administrator.
@@ -481,7 +482,11 @@ public class OpenApiSpec
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
         PreprocessingParser parser = new PreprocessingParser();
-        SwaggerParseResult result = parser.readLocation(specLocation, null, parseOptions);
+        String specLocation = config.getSpecLocation();
+        // references to other documents are still loaded by the parser, relative to the spec location
+        SwaggerParseResult result = OpenApiServers.getSpecUri(specLocation)
+                .map(uri -> parser.readContents(SpecFetcher.fetch(uri, httpClient, RetryPolicy.fromConfig(config, Optional.empty())), null, parseOptions, specLocation))
+                .orElseGet(() -> parser.readLocation(specLocation, null, parseOptions));
         OpenAPI openAPI = result.getOpenAPI();
 
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {

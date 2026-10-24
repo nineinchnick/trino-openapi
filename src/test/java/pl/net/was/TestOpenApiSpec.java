@@ -66,6 +66,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static pl.net.was.OpenApiSpec.ROW_ID;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestOpenApiSpec
 {
@@ -5585,7 +5586,7 @@ class TestOpenApiSpec
     {
         OpenApiConfig config = new OpenApiConfig();
         config.setSpecLocation(path);
-        return new OpenApiSpec(config);
+        return createSpec(config);
     }
 
     private OpenApiSpec loadSpec(String name)
@@ -5593,7 +5594,7 @@ class TestOpenApiSpec
         OpenApiConfig config = new OpenApiConfig();
         URL specResource = requireNonNull(getClass().getClassLoader().getResource(name));
         config.setSpecLocation(specResource.getFile());
-        return new OpenApiSpec(config);
+        return createSpec(config);
     }
 
     private OpenApiSpec parseSpec(String spec)
