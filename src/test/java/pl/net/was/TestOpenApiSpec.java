@@ -2703,9 +2703,9 @@ class TestOpenApiSpec
                         new HttpPath(PathItem.HttpMethod.GET, "/items"),
                         Pagination.builder()
                                 .setLimitParam(Optional.of("size"))
-                                .setTotalResultsPointer(JsonPointer.compile("/total"))
-                                .setTotalPagesPointer(JsonPointer.compile("/pages"))
-                                .setHasMorePointer(JsonPointer.compile("/has_more"))
+                                .setTotalResultsPath(Optional.of(new ResponsePath.Body(JsonPointer.compile("/total"))))
+                                .setTotalPagesPath(Optional.of(new ResponsePath.Body(JsonPointer.compile("/pages"))))
+                                .setHasMorePath(Optional.of(new ResponsePath.Body(JsonPointer.compile("/has_more"))))
                                 .setMaxPages(OptionalInt.of(10))
                                 .setMaxResults(OptionalLong.of(1000))
                                 .setSplitStrategy(Optional.of(SplitStrategy.OFF))

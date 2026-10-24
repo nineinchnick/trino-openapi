@@ -294,8 +294,8 @@ public class OpenApiClient
         }
         // servers often return the last page for every page number past it, so only a total tells a split that it started past the last page
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
-        boolean hasTotalPages = !JsonPointer.empty().equals(pagination.totalPagesPointer());
-        if (!hasTotalPages && JsonPointer.empty().equals(pagination.totalResultsPointer())) {
+        boolean hasTotalPages = pagination.totalPagesPath().isPresent();
+        if (!hasTotalPages && pagination.totalResultsPath().isEmpty()) {
             return false;
         }
         // a split can't tell the page size from the pages it reads, because the first one can be the last page, returned again
@@ -306,7 +306,7 @@ public class OpenApiClient
     {
         HttpPath httpPath = selectPath(table, table.getSelectPaths(), column -> getFilter(column, table.getConstraint())).getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
-        if (JsonPointer.empty().equals(pagination.totalResultsPointer()) && JsonPointer.empty().equals(pagination.totalPagesPointer())) {
+        if (pagination.totalResultsPath().isEmpty() && pagination.totalPagesPath().isEmpty()) {
             return Optional.empty();
         }
         return getUnfilteredPageColumn(table, httpPath)
@@ -325,7 +325,7 @@ public class OpenApiClient
         long serverPageSize;
         // the number of pages can be calculated from the total number of results of a smaller page only if the page size is known,
         // and the total number of pages would be calculated for the smaller page
-        if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && !JsonPointer.empty().equals(pagination.totalResultsPointer())) {
+        if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && pagination.totalResultsPath().isPresent()) {
             OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().orElseThrow());
             ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), true, revalidateCachedResponses);
             serverPageSize = pageSize.orElseThrow();
@@ -1255,9 +1255,9 @@ public class OpenApiClient
             failOnReportedError(request, response.getStatusCode(), jsonNode);
             return new ResultsPage(
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
-                    getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPointer()),
-                    getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPointer()),
-                    getBoolean(jsonNode, pagination.hasMorePointer()));
+                    getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPath()),
+                    getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPath()),
+                    getBoolean(jsonNode, pagination.hasMorePath()));
         }
 
         // some servers respond with status 200 and an error instead of the results
@@ -1281,9 +1281,9 @@ public class OpenApiClient
             throw new TrinoException(OPENAPI_HTTP_ERROR, format("%s with HTTP %d: %s", describeFailedRequest(httpPath, request), statusCode, errorNode));
         }
 
-        private static OptionalLong getLong(Request request, JsonNode jsonNode, String propertyName, JsonPointer pointer)
+        private static OptionalLong getLong(Request request, JsonNode jsonNode, String propertyName, Optional<ResponsePath> path)
         {
-            if (JsonPointer.empty().equals(pointer)) {
+            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
                 return OptionalLong.empty();
             }
             JsonNode valueNode = jsonNode.at(pointer);
@@ -1302,9 +1302,9 @@ public class OpenApiClient
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of %s %s in the response to %s is not a whole number", propertyName, pointer, describe(request)));
         }
 
-        private static Optional<Boolean> getBoolean(JsonNode jsonNode, JsonPointer pointer)
+        private static Optional<Boolean> getBoolean(JsonNode jsonNode, Optional<ResponsePath> path)
         {
-            if (JsonPointer.empty().equals(pointer)) {
+            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
                 return Optional.empty();
             }
             JsonNode valueNode = jsonNode.at(pointer);

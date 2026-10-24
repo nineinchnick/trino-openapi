@@ -1670,9 +1670,9 @@ public class OpenApiSpec
                             Map<String, String> specExtension = getMapOfStrings(rawExtension);
                             return Pagination.builder()
                                     .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
-                                    .setTotalResultsPointer(pointer(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
-                                    .setTotalPagesPointer(pointer(specExtension, PAGINATION_TOTAL_PAGES_PATH))
-                                    .setHasMorePointer(pointer(specExtension, PAGINATION_HAS_MORE_PATH))
+                                    .setTotalResultsPath(responsePath(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
+                                    .setTotalPagesPath(responsePath(specExtension, PAGINATION_TOTAL_PAGES_PATH))
+                                    .setHasMorePath(responsePath(specExtension, PAGINATION_HAS_MORE_PATH))
                                     .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
@@ -1783,6 +1783,15 @@ public class OpenApiSpec
                 .collect(toImmutableMap(
                         entry -> new HttpPath(entry.getKey(), path),
                         entry -> pointer(entry.getValue(), extensionName)));
+    }
+
+    private static Optional<ResponsePath> responsePath(Map<String, String> specExtension, String extensionName)
+    {
+        JsonPointer pointer = pointer(specExtension, extensionName);
+        if (pointer.equals(JsonPointer.empty())) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResponsePath.Body(pointer));
     }
 
     private static JsonPointer pointer(Map<String, String> specExtension, String extensionName)
