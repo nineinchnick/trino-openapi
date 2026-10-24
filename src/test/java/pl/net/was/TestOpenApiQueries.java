@@ -1165,9 +1165,10 @@ public class TestOpenApiQueries
     {
         // the server returns the last page for every page number past it, which must be skipped
         assertSplits("SELECT name FROM fastapi_stride.default.total_pages_items", getQueryRunner().getNodeCount());
-        // without a total, a split can't tell if it started past the last page, so pages are read in a single split
+        // without a total, a split can't tell if it started past the last page, so pages are read in a single split, even with strideSplits
         assertSplits("SELECT name FROM fastapi_stride.default.has_more_items", 1);
         assertSplits("SELECT name FROM fastapi_stride.default.clamped_sized_items", 1);
+        assertSplits("SELECT name FROM fastapi_stride.default.short_page_has_more_items", 1);
     }
 
     @Test
