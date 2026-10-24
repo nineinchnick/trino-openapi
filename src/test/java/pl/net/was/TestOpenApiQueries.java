@@ -343,6 +343,21 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void updateAndDeleteRowsIdentifiedByLinkedField()
+    {
+        assertUpdate("INSERT INTO fastapi.default.notes (id, text) VALUES (21, 'listed first'), (22, 'listed second'), (23, 'listed third')", 3);
+        // rows read from the list of notes are identified by their own values of the column, not by the query filters
+        assertUpdate("UPDATE fastapi.default.notes SET priority = 1 WHERE text LIKE 'listed %'", 3);
+        assertQuery(
+                "SELECT id, priority FROM fastapi.default.notes WHERE text LIKE 'listed %'",
+                "VALUES (21, 1), (22, 1), (23, 1)");
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE id IN (21, 22)", 2);
+        assertQuery("SELECT id FROM fastapi.default.notes WHERE text LIKE 'listed %'", "VALUES 23");
+        assertUpdate("DELETE FROM fastapi.default.notes WHERE text LIKE 'listed %'", 1);
+        assertQueryReturnsEmptyResult("SELECT id FROM fastapi.default.notes WHERE text LIKE 'listed %'");
+    }
+
+    @Test
     public void insertAndUpdateConstantArrays()
     {
         // constants of queries reading many rows are run-length encoded

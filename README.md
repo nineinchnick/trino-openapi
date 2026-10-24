@@ -438,8 +438,11 @@ sent as an array with a single item.
 `UPDATE` and `DELETE` send a request for every row they change, with path
 parameters that identify the resource of the row, like `petId` in
 `DELETE /pet/{petId}`. Their values come from the hidden `__trino_row_id`
-column of the row, which holds the values of these parameters used to read the
-row, as a JSON object, like `{"pet_id":"100"}`. Other parameters of a `DELETE`
+column of the row, which holds them as a JSON object, like `{"pet_id":"100"}`.
+When a parameter is [linked to a response field](#resource-identifiers), or
+has the same name as one, the value comes from that field of the row, so rows
+read from a list of resources are identified too. Otherwise, it's the value of
+the parameter used to read the row. Other parameters of a `DELETE`
 get values from the query filters, and when it uses an operation with a request
 body, like a `POST` marked with `sqlOperation: delete`, the body includes the
 filters on its fields.
@@ -1036,8 +1039,6 @@ how they're made.
   [#255](https://github.com/nineinchnick/trino-openapi/issues/255)).
 * Without the `sqlOperation` extension, SQL statements are mapped from HTTP
   methods, so a `POST` search endpoint is used for `INSERT`, not for `SELECT`.
-  The row ID used by `UPDATE` and `DELETE` comes from the query filters, not
-  from the rows ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
 * Only equality and `IN` filters, ranges expanded to single values, and ranges
   of fields with [range filters](#range-filters) are sent in requests. Other
   operators, like `LIKE`, are applied by Trino

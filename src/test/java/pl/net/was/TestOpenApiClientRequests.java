@@ -224,6 +224,21 @@ class TestOpenApiClientRequests
               title: test
               version: '1'
             paths:
+              /items:
+                get:
+                  operationId: listItems
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
               /items/{id}:
                 parameters:
                   - name: id
@@ -609,6 +624,16 @@ class TestOpenApiClientRequests
         responses.add(respond(200, "{\"id\":\"1\"}"));
         assertThat(getRows(newConfig(DELETE_SPEC), "items", "id", "1"))
                 .containsExactly(List.of("{\"id\":\"1\"}", "1"));
+    }
+
+    @Test
+    void testRowIdsOfListedResources()
+            throws IOException
+    {
+        responses.add(respond(200, "[{\"id\":\"1\"},{\"id\":\"2\"}]"));
+        assertThat(getRows(newConfig(DELETE_SPEC), "items", null))
+                .containsExactly(List.of("{\"id\":\"1\"}", "1"), List.of("{\"id\":\"2\"}", "2"));
+        assertThat(requestUris).containsExactly(URI.create("/items"));
     }
 
     @Test
