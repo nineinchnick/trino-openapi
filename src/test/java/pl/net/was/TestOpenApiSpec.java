@@ -4512,6 +4512,128 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testPlainValueResponses()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /names:
+                    get:
+                      responses:
+                        "200":
+                          description: Names
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: string
+                                  description: A name
+                  /scores:
+                    get:
+                      responses:
+                        "200":
+                          description: Scores, some of them missing
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: number
+                                  format: double
+                                  nullable: true
+                  /tags:
+                    get:
+                      responses:
+                        "200":
+                          description: Tags, which can be names or numbers
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  oneOf:
+                                  - type: string
+                                  - type: integer
+                """;
+        Map<String, List<OpenApiColumn>> tables = parseSpec(specContents).getTables();
+
+        Assertions.assertThat(tables.get("names"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), column -> column.getMetadata().getComment(), OpenApiColumn::getPlainValuePaths)
+                .containsExactly(Assertions.tuple("value", VARCHAR, false, Optional.of("A name"), Set.of(new HttpPath(PathItem.HttpMethod.GET, "/names"))));
+        Assertions.assertThat(tables.get("scores"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(Assertions.tuple("value", DOUBLE, true));
+        Assertions.assertThat(tables.get("tags"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
+                .containsExactly(Assertions.tuple("value", VARCHAR));
+    }
+
+    @Test
+    public void testPlainValueResultsNextToValueField()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: Item IDs and their total value
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  value:
+                                    type: string
+                                  results:
+                                    type: array
+                                    items:
+                                      type: integer
+                  /names:
+                    get:
+                      parameters:
+                      - name: value
+                        in: query
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Names matching the value
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: string
+                """;
+        Map<String, List<OpenApiColumn>> tables = parseSpec(specContents).getTables();
+
+        Assertions.assertThat(tables.get("items"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isHidden(), OpenApiColumn::getPlainValuePaths)
+                .containsExactly(
+                        Assertions.tuple("value", VARCHAR, true, Set.of()),
+                        Assertions.tuple("value_2", BIGINT, false, Set.of(new HttpPath(PathItem.HttpMethod.GET, "/items"))));
+        // otherwise, the parameter would be merged with the column, and rows would have the filter instead of the element
+        Assertions.assertThat(tables.get("names"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::isRequestOnly, OpenApiColumn::getPlainValuePaths)
+                .containsExactly(
+                        Assertions.tuple("value_2", false, Set.of(new HttpPath(PathItem.HttpMethod.GET, "/names"))),
+                        Assertions.tuple("value", true, Set.of()));
+    }
+
+    @Test
     public void testNestedObjectUnions()
             throws JsonProcessingException
     {
