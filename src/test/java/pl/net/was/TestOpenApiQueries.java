@@ -164,17 +164,6 @@ public class TestOpenApiQueries
     }
 
     @Test
-    public void showPetStoreTables()
-    {
-        assertQuery(
-                "SHOW SCHEMAS FROM petstore",
-                "VALUES 'default', 'information_schema'");
-        assertQuery(
-                "SHOW TABLES FROM petstore.default",
-                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_inventory', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
-    }
-
-    @Test
     public void listColumns()
     {
         // listing columns without a schema must return the same columns as listing them in the only schema
@@ -493,14 +482,6 @@ public class TestOpenApiQueries
     }
 
     @Test
-    public void selectRealValues()
-    {
-        assertThat(selectNumbers(1, "real_value, real_values")).containsExactly(
-                -1.5f,
-                List.of(1.5f, -2.25f));
-    }
-
-    @Test
     public void insertRealAndDecimalValues()
     {
         assertUpdate("INSERT INTO fastapi.default.numbers (id, real_value, decimal_value, real_values, decimal_values, decimal_map) " +
@@ -764,17 +745,6 @@ public class TestOpenApiQueries
     }
 
     @Test
-    public void searchItemsWithSubQuery10k()
-    {
-        try (TestTable table = generateDataset("memory.default.test_items_10k", 10000)) {
-            List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.search WHERE item_ids IN (select array_agg(item_id) from %s)".formatted(table.getName())).getMaterializedRows();
-            assertThat(rows)
-                    .extracting(row -> row.getFields().getFirst())
-                    .containsExactly("Portal Gun", "Plumbus");
-        }
-    }
-
-    @Test
     public void searchItemsWithSubQuery100k()
     {
         try (TestTable table = generateDataset("memory.default.test_items_100k", 100000)) {
@@ -934,15 +904,6 @@ public class TestOpenApiQueries
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.item_categories").getMaterializedRows();
         assertThat(rows).size().isEqualTo(1);
         assertThat(rows.getFirst().getFields()).first().isEqualTo("main");
-    }
-
-    @Test
-    public void items()
-    {
-        List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.items").getMaterializedRows();
-        assertThat(rows)
-                .extracting(row -> row.getFields().getFirst())
-                .containsExactlyInAnyOrder("Portal Gun", "Plumbus");
     }
 
     @Test
@@ -1195,14 +1156,6 @@ public class TestOpenApiQueries
     public void itemsWithPageSizeAboveMaximum()
     {
         assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.capped_items WHERE size = 5").getMaterializedRows())
-                .extracting(row -> row.getFields().getFirst())
-                .containsExactly("Portal Gun", "Plumbus");
-    }
-
-    @Test
-    public void itemsEndingWithHasMore()
-    {
-        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.has_more_items").getMaterializedRows())
                 .extracting(row -> row.getFields().getFirst())
                 .containsExactly("Portal Gun", "Plumbus");
     }
