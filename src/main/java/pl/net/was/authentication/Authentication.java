@@ -118,18 +118,22 @@ public class Authentication
     @Override
     public Request filterRequest(Request request)
     {
+        Request.Builder builder = withoutPathHeader(request);
+        applyCredentials(builder, request, getCredentials(request));
+        return builder.build();
+    }
+
+    private List<Credential> getCredentials(Request request)
+    {
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
         String path = request.getHeader(OPENAPI_PATH_HEADER);
-        Request.Builder builder = withoutPathHeader(request);
         List<SecurityRequirement> requirements = getRequirements(path, method);
         String requestName = method + " " + path;
         // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
         if (requirements != null) {
-            applyCredentials(builder, request, selectCredentials(requestName, requirements));
-            return builder.build();
+            return selectCredentials(requestName, requirements);
         }
-        applyCredentials(builder, request, getDefaultCredentials(requestName));
-        return builder.build();
+        return getDefaultCredentials(requestName);
     }
 
     private static Request.Builder withoutPathHeader(Request request)
