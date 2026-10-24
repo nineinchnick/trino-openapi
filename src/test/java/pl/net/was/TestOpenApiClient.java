@@ -19,6 +19,7 @@ import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.swagger.v3.oas.models.PathItem;
 import io.trino.spi.block.MapBlockBuilder;
+import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
