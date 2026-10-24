@@ -193,6 +193,12 @@ which RFC 6749 requires all authorization servers to support, while sending
 them in the body is optional. A client ID without a secret is always sent in the
 body.
 
+With `client_secret_basic`, `clientCredentials` tokens are requested using
+Airlift's `ClientCredentialsTokenProvider`, which also retries token requests
+that failed with a transient error, requires the `Bearer` token type, and fails
+if the server grants fewer scopes than requested. A token without `expires_in`
+is reused until the API rejects it.
+
 When an operation lists several security requirements, the connector uses the
 first one whose credentials are all configured, and fails the query, naming the
 missing properties, if there's none.
