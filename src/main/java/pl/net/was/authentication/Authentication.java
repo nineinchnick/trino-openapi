@@ -70,14 +70,9 @@ public class Authentication
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
-    private final String defaultAuthenticationScheme;
-    private final AuthenticationType defaultAuthenticationType;
+    private final OpenApiConfig config;
     private final String username;
     private final String password;
-    private final String bearerToken;
-    private final Map<String, String> apiKeys;
-    private final String apiKeyName;
-    private final String apiKeyValue;
 
     private final HttpClient httpClient;
     private final String clientId;
@@ -100,14 +95,9 @@ public class Authentication
         this.pathSecurityRequirements = spec.getPathSecurityRequirements();
         this.securityRequirements = spec.getSecurityRequirements();
         this.securitySchemas = spec.getSecuritySchemas();
-        this.defaultAuthenticationScheme = config.getAuthenticationScheme().toString();
-        this.defaultAuthenticationType = config.getAuthenticationType();
+        this.config = config;
         this.username = config.getUsername();
         this.password = config.getPassword();
-        this.bearerToken = config.getBearerToken();
-        this.apiKeys = config.getApiKeys();
-        this.apiKeyName = config.getApiKeyName();
-        this.apiKeyValue = config.getApiKeyValue();
 
         this.httpClient = new NonRedirectingHttpClient(httpClient);
         this.clientId = config.getClientId();
@@ -161,7 +151,7 @@ public class Authentication
         if (requirements != null) {
             return selectCredentials(requestName, requirements);
         }
-        return getDefaultCredentials(requestName);
+        return getDefaultCredentials(config, requestName);
     }
 
     private static Request.Builder withoutPathHeader(Request request)
@@ -219,17 +209,19 @@ public class Authentication
                 String.join("; ", problems)));
     }
 
-    private List<Credential> getDefaultCredentials(String requestName)
+    // the default credentials don't depend on the spec, so they can be used before it's loaded
+    private static List<Credential> getDefaultCredentials(OpenApiConfig config, String requestName)
     {
-        String subject = format("the %s authentication type", defaultAuthenticationType.name().toLowerCase(Locale.ENGLISH));
-        return switch (defaultAuthenticationType) {
+        AuthenticationType authenticationType = config.getAuthenticationType();
+        String subject = format("the %s authentication type", authenticationType.name().toLowerCase(Locale.ENGLISH));
+        return switch (authenticationType) {
             case NONE -> List.of();
             case API_KEY -> {
                 SecurityScheme scheme = new SecurityScheme();
                 scheme.setIn(SecurityScheme.In.HEADER);
-                yield requireResolved(requestName, resolveApiKey(subject, scheme));
+                yield requireResolved(requestName, resolveApiKey(config, subject, scheme));
             }
-            case HTTP -> requireResolved(requestName, resolveHttp(subject, null));
+            case HTTP -> requireResolved(requestName, resolveHttp(config, subject, null));
             case OAUTH -> throw new UnsupportedOperationException("OAuth cannot be used as a default authentication method");
         };
     }
@@ -250,23 +242,24 @@ public class Authentication
             return new Unresolved(format("%s is not declared in components.securitySchemes", subject));
         }
         return switch (securitySchema.getType()) {
-            case APIKEY -> resolveApiKey(subject, securitySchema);
-            case HTTP -> resolveHttp(subject, securitySchema.getScheme());
+            case APIKEY -> resolveApiKey(config, subject, securitySchema);
+            case HTTP -> resolveHttp(config, subject, securitySchema.getScheme());
             case OAUTH2 -> resolveOAuth(subject, securitySchema.getFlows(), scopes);
             default -> new Unresolved(format("%s has the unsupported %s type", subject, securitySchema.getType()));
         };
     }
 
-    private Resolution resolveApiKey(String subject, SecurityScheme scheme)
+    private static Resolution resolveApiKey(OpenApiConfig config, String subject, SecurityScheme scheme)
     {
-        String name = requireNonNullElse(scheme.getName(), apiKeyName);
+        String name = requireNonNullElse(scheme.getName(), config.getApiKeyName());
         if (name == null) {
             return missing(subject, List.of("authentication.api-key-name"));
         }
         if (scheme.getIn() == null) {
             return new Unresolved(format("%s doesn't declare where to send the API key", subject));
         }
-        String value = apiKeys.isEmpty() ? apiKeyValue : apiKeys.get(name);
+        Map<String, String> apiKeys = config.getApiKeys();
+        String value = apiKeys.isEmpty() ? config.getApiKeyValue() : apiKeys.get(name);
         if (value == null) {
             return missing(subject, List.of(apiKeys.isEmpty() ? "authentication.api-key-value" : format("%s key in the authentication.api-keys", name)));
         }
@@ -277,26 +270,26 @@ public class Authentication
         });
     }
 
-    private Resolution resolveHttp(String subject, String scheme)
+    private static Resolution resolveHttp(OpenApiConfig config, String subject, String scheme)
     {
-        scheme = requireNonNullElse(scheme, defaultAuthenticationScheme);
+        scheme = requireNonNullElse(scheme, config.getAuthenticationScheme().toString());
         if (scheme.toUpperCase(Locale.ENGLISH).equals(BEARER.toString())) {
-            if (bearerToken == null) {
+            if (config.getBearerToken() == null) {
                 return missing(subject, List.of("authentication.bearer-token"));
             }
-            return new Resolved(new HeaderCredential(AUTHORIZATION, "Bearer " + bearerToken));
+            return new Resolved(new HeaderCredential(AUTHORIZATION, "Bearer " + config.getBearerToken()));
         }
         List<String> missingProperties = new ArrayList<>();
-        if (username == null) {
+        if (config.getUsername() == null) {
             missingProperties.add("authentication.username");
         }
-        if (password == null) {
+        if (config.getPassword() == null) {
             missingProperties.add("authentication.password");
         }
         if (!missingProperties.isEmpty()) {
             return missing(subject, missingProperties);
         }
-        return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, username, password)));
+        return new Resolved(new HeaderCredential(AUTHORIZATION, getAuthHeader(scheme, config.getUsername(), config.getPassword())));
     }
 
     private Resolution resolveOAuth(String subject, OAuthFlows flows, List<String> scopes)
