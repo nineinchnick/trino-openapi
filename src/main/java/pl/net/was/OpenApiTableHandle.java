@@ -316,7 +316,16 @@ public class OpenApiTableHandle
             if (!domain.isSingleValue() && !isSentBySomeSelectPath(column)) {
                 continue;
             }
-            if (!validateConstraint(column.getHandle(), currentConstraint, newConstraint)) {
+            Optional<Domain> pushedDomain = Optional.ofNullable(previouslyPushedDomains.get(column.getHandle()));
+            // filters are combined with AND, so a row must match both domains
+            Domain mergedDomain = pushedDomain.map(domain::intersect).orElse(domain);
+            if (pushedDomain.isPresent() && mergedDomain.equals(pushedDomain.get())) {
+                // it is important to avoid processing same constraint multiple times
+                // so that planner doesn't get stuck in a loop
+                continue;
+            }
+            // a handle without pushed down predicates has a none constraint, so Trino must apply a filter that matches no rows
+            if (mergedDomain.isNone()) {
                 continue;
             }
             // Trino no longer applies an enforced range, and this value would be sent instead of its bound
@@ -324,20 +333,9 @@ public class OpenApiTableHandle
                 throw new TrinoException(INVALID_ROW_FILTER, "Cannot push down a predicate for " + column.getName() + ", which is a bound of an already pushed down range");
             }
             // merge with other pushed down constraints
-            if (currentConstraint.getDomains().isEmpty()) {
-                currentConstraint = newConstraint;
-            }
-            else if (!currentConstraint.getDomains().get().containsKey(column.getHandle())) {
-                Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().get());
-                domains.put(column.getHandle(), domain);
-                currentConstraint = TupleDomain.withColumnDomains(domains);
-            }
-            else {
-                // filters are combined with AND, so a row must match both domains
-                Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().get());
-                domains.put(column.getHandle(), domains.get(column.getHandle()).intersect(domain));
-                currentConstraint = TupleDomain.withColumnDomains(domains);
-            }
+            Map<ColumnHandle, Domain> domains = new HashMap<>(currentConstraint.getDomains().orElse(Map.of()));
+            domains.put(column.getHandle(), mergedDomain);
+            currentConstraint = TupleDomain.withColumnDomains(domains);
             found = true;
             // if the path selected for a split doesn't send this filter, or the rows get this column from the response,
             // the connector applies it to the returned rows
@@ -407,22 +405,6 @@ public class OpenApiTableHandle
                 .map(ranges -> TupleDomain.withColumnDomains(Map.of(
                         (ColumnHandle) column, Domain.multipleValues(domain.getType(), ranges.stream().collect(toImmutableList())))))
                 .orElse(null);
-    }
-
-    private boolean validateConstraint(OpenApiColumnHandle column, TupleDomain<ColumnHandle> currentConstraint, TupleDomain<ColumnHandle> newConstraint)
-    {
-        if (currentConstraint.getDomains().isEmpty() || !currentConstraint.getDomains().get().containsKey(column)) {
-            return true;
-        }
-        Domain currentDomain = currentConstraint.getDomains().get().get(column);
-        Domain newDomain = newConstraint.getDomains().get().get(column);
-        if (currentDomain.equals(newDomain)) {
-            // it is important to avoid processing same constraint multiple times
-            // so that planner doesn't get stuck in a loop
-            return false;
-        }
-        // can push down only the first predicate against this column
-        throw new TrinoException(INVALID_ROW_FILTER, "Already pushed down a predicate for " + column.getName() + " which only supports a single value");
     }
 
     public static class Builder
