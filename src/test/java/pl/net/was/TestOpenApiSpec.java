@@ -640,6 +640,7 @@ class TestOpenApiSpec
                                 // only returned when listing workflows
                                 .setIsNullable(true)
                                 .setIsHidden(true)
+                                .setEnvelopePaths(Set.of(new HttpPath(PathItem.HttpMethod.GET, listPath)))
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("id").setSourceName("id")

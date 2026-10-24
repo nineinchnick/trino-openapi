@@ -1243,12 +1243,13 @@ public class OpenApiClient
                     continue;
                 }
                 String parameterName = column.getSourceName();
+                JsonNode sourceNode = column.getEnvelopePaths().contains(httpPath) ? jsonNode : resultNode;
                 // request parameters are usually not included in the response, so copy them from predicates
-                if (isPredicate(column, httpPath, null) && (column.isRequestOnly() || !resultNode.has(parameterName))) {
+                if (isPredicate(column, httpPath, null) && (column.isRequestOnly() || !sourceNode.has(parameterName))) {
                     recordBuilder.add(recordParams.getOrDefault(parameterName, null));
                     continue;
                 }
-                recordBuilder.add(convertToRecordValue(request, column, resultNode.get(parameterName)));
+                recordBuilder.add(convertToRecordValue(request, column, sourceNode.get(parameterName)));
             }
             resultRecordsBuilder.add(recordBuilder);
         }
