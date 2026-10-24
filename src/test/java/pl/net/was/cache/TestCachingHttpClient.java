@@ -32,6 +32,7 @@ import java.io.UncheckedIOException;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -432,6 +433,86 @@ class TestCachingHttpClient
 
         assertThat(client(server).execute(get(ITEMS), BODY)).isEqualTo("200 first");
         assertThat(serverRequests).hasSize(2);
+    }
+
+    @Test
+    void testTruncatedEntriesAreIgnored()
+            throws IOException
+    {
+        Function<Request, Response> server = _ -> response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60");
+        // shorter than the header, and a header with a metadata length past the end of the file
+        List<byte[]> truncatedEntries = List.of(
+                new byte[] {0, 0, 0},
+                ByteBuffer.allocate(Integer.BYTES * 2).putInt(1).putInt(1000).array());
+        for (byte[] truncatedEntry : truncatedEntries) {
+            Path directory = Files.createTempDirectory(cacheDirectory, "cache");
+            HttpCache cache = new HttpCache(directory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+            serverRequests.clear();
+            client(cache, server).execute(get(ITEMS), BODY);
+            try (Stream<Path> files = Files.list(directory)) {
+                for (Path file : files.toList()) {
+                    Files.write(file, truncatedEntry);
+                }
+            }
+
+            assertThat(client(cache, server).execute(get(ITEMS), BODY)).isEqualTo("200 first");
+            assertThat(serverRequests).hasSize(2);
+        }
+    }
+
+    @Test
+    void testEntriesRemovedByOtherProcessesAreMisses()
+            throws IOException
+    {
+        CachingHttpClient client = client(_ -> response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60"));
+        client.execute(get(ITEMS), BODY);
+        try (Stream<Path> files = Files.list(cacheDirectory)) {
+            for (Path file : files.toList()) {
+                Files.delete(file);
+            }
+        }
+
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        assertThat(serverRequests).hasSize(2);
+    }
+
+    @Test
+    void testFilesystemFailuresDontFailRequests()
+            throws IOException
+    {
+        assumeThat(cacheDirectory.getFileSystem().supportedFileAttributeViews()).contains("posix");
+        CachingHttpClient client = client(request -> request.getMethod().equals("POST")
+                ? response(HttpStatus.CREATED, "")
+                : response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60"));
+        client.execute(get(ITEMS), BODY);
+        // files can't be created or removed in a read-only directory
+        Files.setPosixFilePermissions(cacheDirectory, PosixFilePermissions.fromString("r-x------"));
+        try {
+            assertThat(client.execute(get(OTHER_ITEMS), BODY)).isEqualTo("200 first");
+            assertThat(client.execute(get(OTHER_ITEMS), BODY)).isEqualTo("200 first");
+            assertThat(client.execute(preparePost().setUri(ITEMS).build(), BODY)).isEqualTo("201 ");
+            // the entry that couldn't be removed is not served anymore
+            assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+            assertThat(serverRequests).hasSize(5);
+            try (Stream<Path> files = Files.list(cacheDirectory)) {
+                assertThat(files.toList()).hasSize(1);
+            }
+        }
+        finally {
+            Files.setPosixFilePermissions(cacheDirectory, PosixFilePermissions.fromString("rwx------"));
+        }
+    }
+
+    @Test
+    void testDirectoryThatIsAFileFails()
+            throws IOException
+    {
+        Path file = Files.createFile(cacheDirectory.resolve("file"));
+
+        assertThatThrownBy(() -> new HttpCache(file, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE)))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasMessage("Failed to open the HTTP cache directory " + file);
     }
 
     @Test
