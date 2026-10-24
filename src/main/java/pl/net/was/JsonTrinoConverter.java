@@ -59,7 +59,6 @@ import java.util.stream.IntStream;
 
 import static com.google.common.base.Verify.verify;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
-import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.Decimals.encodeScaledValue;
 import static io.trino.spi.type.Decimals.encodeShortScaledValue;
 import static io.trino.spi.type.Decimals.overflows;
@@ -209,9 +208,13 @@ public class JsonTrinoConverter
             // integers with an unsigned 64-bit format are decimals without fractional digits, and must not be rounded like other numbers
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a non-integer JSON number as %s", type));
         }
+        // checked before rescaling, because values like 1E999999999 would take a lot of memory
+        if (value.precision() - value.scale() > type.getPrecision() - type.getScale()) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value doesn't fit in %s", type));
+        }
         BigDecimal rescaled = value.setScale(type.getScale(), HALF_UP);
         if (overflows(rescaled, type.getPrecision())) {
-            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Value doesn't fit in %s", type));
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value doesn't fit in %s", type));
         }
         if (type.isShort()) {
             return encodeShortScaledValue(rescaled, type.getScale());

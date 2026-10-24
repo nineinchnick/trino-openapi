@@ -323,7 +323,7 @@ public class TestOpenApiQueries
         assertThat(rows.getFirst().getFields()).containsExactly(
                 "Portal Gun",
                 null,
-                BigDecimal.valueOf(4200000000L, 8),
+                BigDecimal.valueOf(420000000000L, 10),
                 null,
                 List.of("sci-fi"),
                 List.of(),
@@ -346,13 +346,13 @@ public class TestOpenApiQueries
         assertUpdate("INSERT INTO fastapi.default.numbers (id, real_value, decimal_value, real_values, decimal_values, decimal_map) " +
                 "VALUES (2, REAL '-0.5', 12.5, ARRAY[REAL '2.5', NULL], ARRAY[0.25, NULL], MAP(ARRAY['a', 'b'], ARRAY[7.75, NULL]))", 1);
         Map<String, BigDecimal> expectedMap = new HashMap<>();
-        expectedMap.put("a", new BigDecimal("7.75000000"));
+        expectedMap.put("a", new BigDecimal("7.7500000000"));
         expectedMap.put("b", null);
         assertThat(selectNumbers(2, "real_value, decimal_value, real_values, decimal_values, decimal_map")).containsExactly(
                 -0.5f,
-                new BigDecimal("12.50000000"),
+                new BigDecimal("12.5000000000"),
                 Arrays.asList(2.5f, null),
-                Arrays.asList(new BigDecimal("0.25000000"), null),
+                Arrays.asList(new BigDecimal("0.2500000000"), null),
                 expectedMap);
     }
 
@@ -415,12 +415,12 @@ public class TestOpenApiQueries
     public void selectWithRealAndDecimalsInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT real_value, real_values, decimal_values FROM fastapi.default.echo_numbers " +
-                "WHERE real_value = REAL '-0.5' AND real_values = ARRAY[REAL '2.5', REAL '-1.25'] AND decimal_values = CAST(ARRAY[0.25, -12.5] AS ARRAY(DECIMAL(18, 8)))").getMaterializedRows();
+                "WHERE real_value = REAL '-0.5' AND real_values = ARRAY[REAL '2.5', REAL '-1.25'] AND decimal_values = CAST(ARRAY[0.25, -12.5] AS ARRAY(DECIMAL(38, 10)))").getMaterializedRows();
         assertThat(rows).size().isEqualTo(1);
         assertThat(rows.getFirst().getFields()).containsExactly(
                 -0.5f,
                 List.of(2.5f, -1.25f),
-                List.of(new BigDecimal("0.25000000"), new BigDecimal("-12.50000000")));
+                List.of(new BigDecimal("0.2500000000"), new BigDecimal("-12.5000000000")));
     }
 
     @Test
@@ -520,20 +520,20 @@ public class TestOpenApiQueries
     public void selectDecimalsWithMaximumPrecision()
     {
         assertThat(selectNumbers(1, "decimal_value, decimal_values, decimal_map")).containsExactly(
-                new BigDecimal("1234567890.12345678"),
-                List.of(new BigDecimal("0.00000001"), new BigDecimal("-9999999999.99999999")),
-                Map.of("a", new BigDecimal("1234567890.12345678")));
+                new BigDecimal("1234567890.1234567800"),
+                List.of(new BigDecimal("0.0000000001"), new BigDecimal("-9999999999999999999999999999.9999999999")),
+                Map.of("a", new BigDecimal("1710950954154.0000000000")));
     }
 
     @Test
     public void selectWithMaximumPrecisionDecimalsInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT decimal_value, decimal_values FROM fastapi.default.echo_numbers " +
-                "WHERE decimal_value = DECIMAL '-9999999999.99999999' AND decimal_values = CAST(ARRAY[1234567890.12345678, 0.00000001] AS ARRAY(DECIMAL(18, 8)))").getMaterializedRows();
+                "WHERE decimal_value = DECIMAL '-9999999999999999999999999999.9999999999' AND decimal_values = CAST(ARRAY[1710950954154, 0.0000000001] AS ARRAY(DECIMAL(38, 10)))").getMaterializedRows();
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst().getFields()).containsExactly(
-                new BigDecimal("-9999999999.99999999"),
-                List.of(new BigDecimal("1234567890.12345678"), new BigDecimal("0.00000001")));
+                new BigDecimal("-9999999999999999999999999999.9999999999"),
+                List.of(new BigDecimal("1710950954154.0000000000"), new BigDecimal("0.0000000001")));
     }
 
     @Test
@@ -544,10 +544,10 @@ public class TestOpenApiQueries
             Locale.setDefault(Locale.GERMANY);
             assertQuery(
                     "SELECT decimal_value, decimal_text FROM fastapi.default.decimal_parameters WHERE decimal_value = DECIMAL '1234567890.12345678'",
-                    "VALUES (1234567890.12345678, '1234567890.12345678')");
+                    "VALUES (1234567890.12345678, '1234567890.1234567800')");
             assertQuery(
-                    "SELECT decimal_value, decimal_text FROM fastapi.default.decimal_parameters WHERE decimal_value = DECIMAL '0.00000001'",
-                    "VALUES (0.00000001, '0.00000001')");
+                    "SELECT decimal_value, decimal_text FROM fastapi.default.decimal_parameters WHERE decimal_value = DECIMAL '0.0000000001'",
+                    "VALUES (0.0000000001, '0.0000000001')");
         }
         finally {
             Locale.setDefault(defaultLocale);
@@ -859,8 +859,8 @@ public class TestOpenApiQueries
     {
         assertQuery(
                 "SELECT path, query FROM echo.default.echo_decimals " +
-                        "WHERE \"values\" = CAST(ARRAY[0.00000001, -1000] AS ARRAY(DECIMAL(18, 8))) AND value = CAST(0.00000001 AS DECIMAL(18, 8))",
-                "VALUES ('/echo/decimals/0.00000001,-1000.00000000', 'value=0.00000001')");
+                        "WHERE \"values\" = CAST(ARRAY[0.0000000001, -1000] AS ARRAY(DECIMAL(38, 10))) AND value = CAST(0.0000000001 AS DECIMAL(38, 10))",
+                "VALUES ('/echo/decimals/0.0000000001,-1000.0000000000', 'value=0.0000000001')");
     }
 
     @Test

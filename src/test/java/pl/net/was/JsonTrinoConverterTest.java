@@ -503,8 +503,41 @@ class JsonTrinoConverterTest
         var type = createDecimalType(18, 8);
 
         assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("10000000000")), type, new NumberSchema()))
-                .isInstanceOf(TrinoException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value doesn't fit in decimal(18,8)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("9999999999.999999995")), type, new NumberSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in decimal(18,8)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1E28")), createDecimalType(38, 10), new NumberSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in decimal(38,10)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DecimalNode.valueOf(new BigDecimal("1E999999999")), createDecimalType(38, 10), new NumberSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value doesn't fit in decimal(38,10)");
+    }
+
+    @Test
+    void shouldConvertNumbersWithoutFormatToWideDecimals()
+            throws JsonProcessingException
+    {
+        var type = createDecimalType(38, 10);
+        var objectMapper = JsonMapper.builder()
+                .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .build();
+
+        JsonNode node = objectMapper.readTree("[1710950954154, 12345678901234567890, 0.00000000005, 0.00000000004, -1E-10]");
+
+        assertThat(JsonTrinoConverter.convert(node.get(0), type, new NumberSchema()))
+                .isEqualTo(Int128.valueOf(new BigInteger("17109509541540000000000")));
+        assertThat(JsonTrinoConverter.convert(node.get(1), type, new NumberSchema()))
+                .isEqualTo(Int128.valueOf(new BigInteger("123456789012345678900000000000")));
+        // digits beyond the scale are rounded
+        assertThat(JsonTrinoConverter.convert(node.get(2), type, new NumberSchema()))
+                .isEqualTo(Int128.valueOf(1));
+        assertThat(JsonTrinoConverter.convert(node.get(3), type, new NumberSchema()))
+                .isEqualTo(Int128.valueOf(0));
+        assertThat(JsonTrinoConverter.convert(node.get(4), type, new NumberSchema()))
+                .isEqualTo(Int128.valueOf(-1));
     }
 
     @Test
@@ -539,7 +572,7 @@ class JsonTrinoConverterTest
                 .isInstanceOf(TrinoException.class)
                 .hasMessage("Cannot read a JSON string as decimal(18,8)");
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("10000000000"), type, new NumberSchema()))
-                .isInstanceOf(TrinoException.class)
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value doesn't fit in decimal(18,8)");
     }
 

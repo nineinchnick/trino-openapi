@@ -457,7 +457,7 @@ Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 | `integer` with `format: uint64`                        | `DECIMAL(20, 0)`                                                       |
 | `number` with `format: float`                          | `REAL`                                                                 |
 | `number` with `format: double`                         | `DOUBLE`                                                               |
-| `number` without a format                              | `DECIMAL(18, 8)`                                                       |
+| `number` without a format                              | `DECIMAL(38, 10)`                                                      |
 | `boolean`                                              | `BOOLEAN`                                                              |
 | `string`                                               | `VARCHAR`                                                              |
 | `string` with `format: date`                           | `DATE`                                                                 |
@@ -468,8 +468,10 @@ Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 | `type: [T, "null"]` (OpenAPI 3.1), or `nullable: true` | nullable `T`                                                           |
 | unions, and anything else                              | see [Union types](#union-types), otherwise `VARCHAR` with the raw JSON |
 
-Integers outside the range of the column type, or with a fractional part, fail
-the query, because the API sent a value that doesn't match its specification.
+Integers outside the range of the column type, or with a fractional part, and
+numbers with more than 28 integer digits fail the query, because the API sent a
+value that doesn't match its specification. Numbers with more than 10 fractional
+digits are rounded half up.
 
 ## Union types
 

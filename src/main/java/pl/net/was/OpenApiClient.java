@@ -106,7 +106,6 @@ import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerat
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
-import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.ceilDiv;
@@ -1153,7 +1152,7 @@ public class OpenApiClient
             return JsonTrinoConverter.convertToRecordValue(value, column.getType(), column.getSourceType());
         }
         catch (TrinoException e) {
-            if (!e.getErrorCode().equals(OPENAPI_INVALID_RESPONSE.toErrorCode()) && !e.getErrorCode().equals(NUMERIC_VALUE_OUT_OF_RANGE.toErrorCode())) {
+            if (!e.getErrorCode().equals(OPENAPI_INVALID_RESPONSE.toErrorCode())) {
                 throw e;
             }
             throw new TrinoException(
