@@ -511,6 +511,11 @@ become separate tables, and the next ones in the order of their paths get
 numeric suffixes (`_2`, `_3`, and so on), skipping names of other tables. The
 connector logs a warning with such paths.
 
+A table is not listed if none of the responses, parameters, or request bodies of
+its operations can be mapped to columns, like a response that is a single
+number, because it couldn't be queried. The `DEBUG` level of the `pl.net.was`
+logger logs such tables with their paths.
+
 SQL statements use operations with these HTTP methods:
 
 | SQL statement | HTTP method      |

@@ -26,6 +26,7 @@ import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import io.trino.spi.block.SqlRow;
+import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -1129,7 +1130,6 @@ class TestOpenApiSpec
                 "pet_find_by_tags",
                 "user_login",
                 "store_order",
-                "store_inventory",
                 "user",
                 "user_create_with_list",
                 "pet");
@@ -4571,6 +4571,44 @@ class TestOpenApiSpec
         Assertions.assertThat(tables.get("tags"))
                 .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
                 .containsExactly(Assertions.tuple("value", VARCHAR));
+    }
+
+    @Test
+    public void testTablesWithoutColumns()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /count:
+                    get:
+                      responses:
+                        "200":
+                          description: The number of items
+                          content:
+                            application/json:
+                              schema:
+                                type: integer
+                  /names:
+                    get:
+                      responses:
+                        "200":
+                          description: Names
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables()).containsOnlyKeys("names");
+        Assertions.assertThatThrownBy(() -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, "count")))
+                .isInstanceOf(TableNotFoundException.class);
     }
 
     @Test
