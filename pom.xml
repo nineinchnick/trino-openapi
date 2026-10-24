@@ -50,6 +50,7 @@
         <air.check.skip-checkstyle>false</air.check.skip-checkstyle>
         <air.check.skip-airstyle>false</air.check.skip-airstyle>
         <air.check.skip-modernizer>false</air.check.skip-modernizer>
+        <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
         <air.build.jvmsize>4g</air.build.jvmsize>
         <!-- same as Trino tests: Trino requires the vector module, Guice uses sun.misc.Unsafe, and brotli4j loads a native library -->
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</air.test.jvm.additional-arguments>
@@ -291,6 +292,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <compilerArgs combine.children="append">
+                        <!-- swagger-models returns raw Schema types, exceptions are never serialized, and dependencies use annotations that are not on the classpath -->
+                        <arg>-Xlint:all,-rawtypes,-serial,-classfile</arg>
                         <arg>-XDcompilePolicy=simple</arg>
                         <arg>--should-stop=ifError=FLOW</arg>
                         <arg>-Xplugin:ErrorProne @${air.main.basedir}/.mvn/errorprone.config -Xep:GuardedBy:ERROR -XepExcludedPaths:.*/target/generated-(|test-)sources/.*</arg>
