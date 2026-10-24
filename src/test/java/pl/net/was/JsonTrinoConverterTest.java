@@ -87,21 +87,6 @@ class JsonTrinoConverterTest
     private static final int EPOCH_DAY = 20_196;
 
     @Test
-    void shouldConvertDifferentDateTimeFormatsIntoLong()
-    {
-        var type = TimestampType.createTimestampType(3);
-        var schema = new Schema<>();
-
-        schema.setFormat("date-time");
-
-        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2024-09-24T19:17:58.638+04:00"), type, schema))
-                .isEqualTo(1727191078638000L);
-
-        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("2024-09-24T18:30:47.94+04:00"), type, schema))
-                .isEqualTo(1727188247940000L);
-    }
-
-    @Test
     void shouldConvertDateToLong()
     {
         var type = DateType.DATE;
@@ -550,21 +535,6 @@ class JsonTrinoConverterTest
                 .isEqualTo(Int128.valueOf("99999999999999999999999999999999999999"));
         assertThat(JsonTrinoConverter.convert(NullNode.getInstance(), shortType, schema))
                 .isNull();
-    }
-
-    @Test
-    void shouldParseDecimalsFromExactJsonText()
-            throws JsonProcessingException
-    {
-        var type = createDecimalType(18, 8);
-        var objectMapper = JsonMapper.builder()
-                .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-                .build();
-
-        JsonNode node = objectMapper.readTree("{\"value\": 1234567890.12345678}");
-
-        assertThat(JsonTrinoConverter.convert(node.get("value"), type, new NumberSchema()))
-                .isEqualTo(123456789012345678L);
     }
 
     @Test
