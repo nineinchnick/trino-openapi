@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableMap;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
@@ -25,6 +26,7 @@ import java.util.Map;
 import static java.util.Objects.requireNonNullElse;
 
 @EnabledIfEnvironmentVariable(named = "JIRA_SITE", matches = ".+")
+@Tag("live-api")
 public class TestJira
         extends AbstractTestQueryFramework
 {

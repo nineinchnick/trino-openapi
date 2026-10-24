@@ -19,6 +19,7 @@ import io.trino.sql.planner.plan.TableScanNode;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.QueryRunner.MaterializedResultWithPlan;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
@@ -34,6 +35,7 @@ import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @EnabledIfEnvironmentVariable(named = "GITHUB_TOKEN", matches = ".+")
+@Tag("live-api")
 public class TestGithub
         extends AbstractTestQueryFramework
 {
