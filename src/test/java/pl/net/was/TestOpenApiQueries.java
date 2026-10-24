@@ -126,6 +126,10 @@ public class TestOpenApiQueries
                         .putAll(fastApiProperties.buildOrThrow())
                         .put("max-scan-requests-per-second", "2")
                         .buildOrThrow(),
+                "fastapi_few_combinations", ImmutableMap.<String, String>builder()
+                        .putAll(fastApiProperties.buildOrThrow())
+                        .put("max-filter-combinations", "4")
+                        .buildOrThrow(),
                 "echo", Map.of(
                         "spec-location", "src/test/resources/echo.yml",
                         "base-uri", fastApiServer.getApiUrl())));
@@ -807,6 +811,24 @@ public class TestOpenApiQueries
             assertQuery(
                     "SELECT name FROM fastapi.default.items WHERE item_id IN (SELECT id FROM %s)".formatted(table.getName()),
                     "VALUES 'Portal Gun', 'Plumbus'");
+        }
+    }
+
+    @Test
+    public void filterCombinations()
+    {
+        assertQuery(
+                "SELECT text FROM fastapi_few_combinations.default.comments WHERE comment_id IN (1, 2, 3, 4)",
+                "VALUES 'First', 'Second', 'Third'");
+        assertQueryFails(
+                "SELECT text FROM fastapi_few_combinations.default.comments WHERE comment_id IN (1, 2, 3, 4, 5)",
+                "Filters on comment_id \\(5 values\\) would read 5 combinations of their values in separate splits, more than max-filter-combinations \\(4\\). " +
+                        "Filter on fewer values, or increase max-filter-combinations");
+        // values of dynamic filters are combined too
+        try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 2, 3, 4, 5")) {
+            assertQueryFails(
+                    "SELECT c.text FROM fastapi_few_combinations.default.comments c JOIN %s t ON c.comment_id = t.id".formatted(table.getName()),
+                    "Filters on comment_id \\(5 values\\) would read 5 combinations.*");
         }
     }
 

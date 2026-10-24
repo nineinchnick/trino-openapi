@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import com.google.common.math.LongMath;
 import com.google.inject.Inject;
 import io.airlift.units.Duration;
 import io.trino.spi.NodeManager;
@@ -58,6 +59,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.function.UnaryOperator.identity;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static pl.net.was.OpenApiSessionProperties.getProbeLimit;
@@ -75,6 +77,7 @@ public class OpenApiSplitManager
     private final Optional<Double> maxSplitsPerSecond;
     private final Optional<Double> maxScanRequestsPerSecond;
     private final int domainExpansionLimit;
+    private final int maxFilterCombinations;
     private final SplitStrategy splitStrategy;
     private final ProbeLimit probeLimit;
 
@@ -89,6 +92,7 @@ public class OpenApiSplitManager
         this.maxSplitsPerSecond = config.getMaxSplitsPerSecond();
         this.maxScanRequestsPerSecond = config.getMaxScanRequestsPerSecond();
         this.domainExpansionLimit = config.getDomainExpansionLimit();
+        this.maxFilterCombinations = config.getMaxFilterCombinations();
         this.splitStrategy = config.getSplitStrategy();
         this.probeLimit = config.getProbeLimit();
     }
@@ -235,9 +239,11 @@ public class OpenApiSplitManager
             }
             singleDomains.add(splitDomains.build());
         }
+        List<List<Map.Entry<ColumnHandle, Domain>>> valuesToCombine = singleDomains.build();
+        checkFilterCombinations(valuesToCombine);
         // then create constraints with every multivalued domain replaced with single-value sets
         Map<TupleDomain<ColumnHandle>, SplitTable> splitTables = new LinkedHashMap<>();
-        for (List<Map.Entry<ColumnHandle, Domain>> splitDomains : Lists.cartesianProduct(singleDomains.build())) {
+        for (List<Map.Entry<ColumnHandle, Domain>> splitDomains : Lists.cartesianProduct(valuesToCombine)) {
             Map<ColumnHandle, Domain> newDomains = new HashMap<>();
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
                 newDomains.put(entry.getKey(), entry.getValue());
@@ -324,6 +330,26 @@ public class OpenApiSplitManager
     }
 
     private record SplitTable(OpenApiTableHandle table, HttpPath httpPath) {}
+
+    // domain-expansion-limit applies to every filter separately, but every combination of their values is read in a separate split, with at least one request
+    private void checkFilterCombinations(List<List<Map.Entry<ColumnHandle, Domain>>> valuesToCombine)
+    {
+        long combinations = 1;
+        for (List<Map.Entry<ColumnHandle, Domain>> values : valuesToCombine) {
+            combinations = LongMath.saturatedMultiply(combinations, values.size());
+        }
+        if (combinations <= maxFilterCombinations) {
+            return;
+        }
+        String filters = valuesToCombine.stream()
+                .filter(values -> values.size() > 1)
+                .map(values -> "%s (%d values)".formatted(((OpenApiColumnHandle) values.getFirst().getKey()).getName(), values.size()))
+                .collect(joining(", "));
+        throw new TrinoException(INVALID_ROW_FILTER, "Filters on %s would read %d combinations of their values in separate splits, more than max-filter-combinations (%d). Filter on fewer values, or increase max-filter-combinations".formatted(
+                filters,
+                combinations,
+                maxFilterCombinations));
+    }
 
     private int getStrideSplits(Pagination pagination)
     {
