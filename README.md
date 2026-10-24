@@ -78,7 +78,6 @@ docker run \
   -d \
   --name trino-openapi \
   -e OPENAPI_SPEC_LOCATION=https://api.example.com/openapi.yaml \
-  -e OPENAPI_BASE_URI=https://api.example.com/v1 \
   -p 8080:8080 \
   nineinchnick/trino-openapi:$VERSION
 ```
@@ -108,7 +107,6 @@ Then create a catalog file, like `etc/catalog/openapi.properties`:
 ```properties
 connector.name=openapi
 spec-location=https://api.example.com/openapi.yaml
-base-uri=https://api.example.com/v1
 authentication.type=http
 authentication.username=${ENV:OPENAPI_USERNAME}
 authentication.password=${ENV:OPENAPI_PASSWORD}
@@ -126,7 +124,7 @@ Trino version it's built for.
 | Property                             | Container environment variable      | Default   | Description                                                                                                     |
 | ------------------------------------ | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
 | `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |           | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
-| `base-uri`                           | `OPENAPI_BASE_URI`                  |           | Base URL of the API, often including the API version                                                            |
+| `base-uri`                           | `OPENAPI_BASE_URI`                  |           | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
 | `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`              |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                                 |
 | `authentication.username`            | `OPENAPI_USERNAME`                  |           | Username for `http` basic authentication and the OAuth `password` flow                                          |
@@ -150,6 +148,18 @@ Trino version it's built for.
 | `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`    | Maximum size of a single cached response; larger responses are not cached                                       |
 | `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`     | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
 | `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`    | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
+
+## Servers
+
+Requests are sent to the servers declared in the specification. Every
+operation uses the first server of the operation, of its path, or of the whole
+specification, in that order, like the OpenAPI specification defines. Other
+servers of the same level are ignored, because they're usually alternatives,
+like a sandbox, so to use one of them, set `base-uri`.
+
+Set `base-uri` if the specification doesn't declare any servers, or to send
+requests of all operations to another server, like a proxy. It's used instead
+of every declared server.
 
 ## Authentication
 
@@ -184,8 +194,9 @@ get them, whether an API key goes in a header or the query string, and where
 OAuth credentials are sent to get a token. Only use specifications from a source
 you trust as much as the API itself. To limit what a specification can change:
 
-* requests are only sent to `base-uri`, and redirects are not followed, because
-  the HTTP client would send custom headers, like API keys, to the new location;
+* requests are only sent to `base-uri`, or the servers declared in the
+  specification, and redirects are not followed, because the HTTP client would
+  send custom headers, like API keys, to the new location;
 * a `tokenUrl` from the specification must use HTTPS, or the host of
   `base-uri`; set `authentication.token-url` to use another one;
 * credentials are only sent over HTTPS, unless
@@ -1046,9 +1057,7 @@ how they're made.
   node must be able to reach `spec-location`, and get the same specification
   ([#294](https://github.com/nineinchnick/trino-openapi/issues/294)). To use a
   changed specification, restart Trino.
-* `base-uri` is required, even if the specification lists servers
-  ([#51](https://github.com/nineinchnick/trino-openapi/issues/51)), and the
-  specification is loaded without authentication
+* The specification is loaded without authentication
   ([#155](https://github.com/nineinchnick/trino-openapi/issues/155)).
 * All tables are in a single `default` schema
   ([#16](https://github.com/nineinchnick/trino-openapi/issues/16)), with names
@@ -1131,8 +1140,9 @@ Build the plugin and run all tests, which need Docker:
 The ZIP package is created in the `target` directory.
 
 To try the connector locally, run `OpenApiQueryRunner` from the tests. Without
-`OPENAPI_SPEC_LOCATION` and `OPENAPI_BASE_URI`, it starts a Petstore server in
-Docker and creates an `openapi` catalog for it:
+`OPENAPI_SPEC_LOCATION`, it starts a Petstore server in Docker and creates an
+`openapi` catalog for it, otherwise it uses `OPENAPI_SPEC_LOCATION`, and
+`OPENAPI_BASE_URI` if it's set:
 
 ```bash
 ./mvnw test-compile exec:java -Dexec.mainClass="pl.net.was.OpenApiQueryRunner" -Dexec.classpathScope=test

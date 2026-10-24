@@ -55,8 +55,8 @@ public class OpenApiQueryRunner
         logger.setLevel("io.airlift", Level.INFO);
 
         catalogProperties.values().forEach(properties -> verify(
-                properties.containsKey("spec-location") && properties.containsKey("base-uri"),
-                "catalogProperties must include spec-location and base-uri"));
+                properties.containsKey("spec-location"),
+                "catalogProperties must include spec-location"));
         Session defaultSession = testSessionBuilder()
                 .setCatalog(catalogProperties.keySet().stream().findFirst().orElseThrow())
                 .setSchema("default")
@@ -92,7 +92,7 @@ public class OpenApiQueryRunner
             throws Exception
     {
         ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
-        if (System.getenv("OPENAPI_SPEC_LOCATION") == null || System.getenv("OPENAPI_BASE_URI") == null) {
+        if (System.getenv("OPENAPI_SPEC_LOCATION") == null) {
             PetStoreServer server = new PetStoreServer(new KeycloakServer());
             properties.put("spec-location", server.getSpecUrl());
             properties.put("base-uri", server.getApiUrl());
@@ -102,7 +102,9 @@ public class OpenApiQueryRunner
         }
         else {
             properties.put("spec-location", System.getenv("OPENAPI_SPEC_LOCATION"));
-            properties.put("base-uri", System.getenv("OPENAPI_BASE_URI"));
+            if (System.getenv("OPENAPI_BASE_URI") != null) {
+                properties.put("base-uri", System.getenv("OPENAPI_BASE_URI"));
+            }
         }
         properties.putAll(Map.of(
                 "openApi.http-client.log.enabled", "true",

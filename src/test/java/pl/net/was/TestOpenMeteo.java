@@ -30,9 +30,8 @@ public class TestOpenMeteo
             throws Exception
     {
         return OpenApiQueryRunner.createQueryRunner(Map.of(
-                "openmeteo", Map.of(
-                        "spec-location", "src/test/resources/openmeteo.yml",
-                        "base-uri", "https://api.open-meteo.com")));
+                // the spec declares the server of the path, so base-uri is not needed
+                "openmeteo", Map.of("spec-location", "src/test/resources/openmeteo.yml")));
     }
 
     @Test

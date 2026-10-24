@@ -96,14 +96,13 @@ public class OpenApiConfig
         return this;
     }
 
-    @NotNull
     public URI getBaseUri()
     {
         return baseUri;
     }
 
     @Config("base-uri")
-    @ConfigDescription("Base URI of the API")
+    @ConfigDescription("Base URI of the API, used instead of the servers declared in the spec")
     public OpenApiConfig setBaseUri(URI baseUri)
     {
         this.baseUri = baseUri;
