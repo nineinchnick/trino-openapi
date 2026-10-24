@@ -318,6 +318,63 @@ class TestOpenApiServers
                 .hasMessage("Server URL https://{region}.example.com of GET /forecast uses the variable region, which doesn't have a default value, so set base-uri");
     }
 
+    @Test
+    void testMissingServers()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /forecast:
+                    get:
+                %s
+                """.formatted(OK_RESPONSES));
+
+        assertThatThrownBy(() -> newServers(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("The spec doesn't declare any servers, so set base-uri");
+        assertThat(newServers(config.setBaseUri(forecastUri)).getUris()).containsExactly(forecastUri);
+    }
+
+    @Test
+    void testMissingServersOfSomePaths()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /forecast:
+                    servers:
+                      - url: %s
+                    get:
+                %s
+                  /archive:
+                    get:
+                %2$s
+                    post:
+                      x-trino:
+                        sqlOperation: insert
+                %2$s
+                """.formatted(forecastUri, OK_RESPONSES));
+
+        assertThatThrownBy(() -> newServers(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("The spec doesn't declare servers for POST /archive, GET /archive, so set base-uri");
+    }
+
+    private OpenApiServers newServers(OpenApiConfig config)
+    {
+        return new OpenApiServers(config, new OpenApiSpec(config));
+    }
+
     private OpenApiConfig newConfig(String spec)
             throws IOException
     {

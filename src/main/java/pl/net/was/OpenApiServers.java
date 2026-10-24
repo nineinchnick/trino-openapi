@@ -21,7 +21,9 @@ import io.swagger.v3.oas.models.servers.ServerVariable;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +38,7 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 public class OpenApiServers
@@ -80,10 +83,22 @@ public class OpenApiServers
 
     private static Map<HttpPath, URI> getServerUris(OpenApiSpec spec, Optional<URI> specUri)
     {
+        Set<HttpPath> httpPaths = getHttpPaths(spec);
         ImmutableMap.Builder<HttpPath, URI> serverUris = ImmutableMap.builder();
-        for (HttpPath httpPath : getHttpPaths(spec)) {
-            spec.getServer(httpPath).ifPresent(server -> serverUris.put(httpPath, getServerUri(httpPath, server, specUri)));
+        List<HttpPath> pathsWithoutServers = new ArrayList<>();
+        for (HttpPath httpPath : httpPaths) {
+            Optional<Server> server = spec.getServer(httpPath);
+            if (server.isEmpty()) {
+                pathsWithoutServers.add(httpPath);
+                continue;
+            }
+            serverUris.put(httpPath, getServerUri(httpPath, server.get(), specUri));
         }
+        checkArgument(pathsWithoutServers.size() < httpPaths.size(), "The spec doesn't declare any servers, so set base-uri");
+        checkArgument(pathsWithoutServers.isEmpty(), "The spec doesn't declare servers for %s, so set base-uri", pathsWithoutServers.stream()
+                .sorted()
+                .map(HttpPath::toString)
+                .collect(joining(", ")));
         return serverUris.buildOrThrow();
     }
 
