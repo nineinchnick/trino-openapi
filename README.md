@@ -244,6 +244,15 @@ uses them for every operation, with credentials from the catalog properties:
   more, which doesn't count as a retry. The `authorizationCode` and `implicit`
   flows are not supported.
 
+Every Trino node requests its own OAuth tokens and keeps them in memory, so a
+cluster with N nodes requests N tokens for the same scopes, and requests them
+again after every restart. Some authorization servers revoke the previous token
+of a client when they issue a new one. Then nodes revoke each other's tokens:
+a node whose token was revoked gets a new one, which revokes the token of
+another node, so queries can fail with `401 Unauthorized` when several nodes
+get new tokens at about the same time. Configure the client in the
+authorization server to allow several active tokens, if it can.
+
 The client ID and secret are sent in the body of the token request, as
 `client_id` and `client_secret`. Set `authentication.client-auth-method` to
 `client_secret_basic` to send them with HTTP Basic authentication instead,
