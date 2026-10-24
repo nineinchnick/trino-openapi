@@ -1844,7 +1844,7 @@ class TestOpenApiClientRequests
                     .collect(toImmutableMap(OpenApiColumn::getHandle, column -> columnDomains.get(column.getName())));
             table = table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
         }
-        return ImmutableList.copyOf(client.getRows(SESSION, table, 1, 1, false));
+        return ImmutableList.copyOf(client.getRows(SESSION, new OpenApiSplit(table), false));
     }
 
     private void deleteRow(OpenApiConfig config, String id)
