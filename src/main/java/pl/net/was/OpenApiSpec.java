@@ -133,6 +133,7 @@ public class OpenApiSpec
     private static final String PAGINATION_CURSOR_PARAM = "cursorParam";
     private static final String PAGINATION_NEXT_CURSOR_PATH = "nextCursorPath";
     private static final String PAGINATION_NEXT_PAGE_LINK_HEADER = "nextPageLinkHeader";
+    private static final String PAGINATION_OFFSET_PARAM = "offsetParam";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
@@ -909,7 +910,22 @@ public class OpenApiSpec
         Object rawExtension = op.getExtensions() == null ? null : op.getExtensions().get(SPEC_EXTENSION);
         List<OpenApiColumn> columns = setParameterDefaults(result, getParameterDefaults(rawExtension), httpPath, specExtension.get(PAGINATION_PAGE_PARAM));
         // the legacy extension is Datadog's, which names nested fields of the request body, like body.page.cursor, in cursorParam
-        validateCursorParam(columns, getMapOfStrings(rawExtension), httpPath);
+        // the legacy extension is Datadog's, which names nested fields of the request body, like body.page.cursor, in cursorParam
+        Map<String, String> paginationExtension = getMapOfStrings(rawExtension);
+        getPaginationParamType(columns, paginationExtension, PAGINATION_CURSOR_PARAM, httpPath).ifPresent(type -> checkArgument(
+                type instanceof VarcharType || type.equals(BIGINT) || type.equals(INTEGER),
+                "Invalid value of %s of %s: %s, the parameter must be a string or an integer, not %s",
+                PAGINATION_CURSOR_PARAM,
+                httpPath,
+                paginationExtension.get(PAGINATION_CURSOR_PARAM),
+                type));
+        getPaginationParamType(columns, paginationExtension, PAGINATION_OFFSET_PARAM, httpPath).ifPresent(type -> checkArgument(
+                type.equals(BIGINT) || type.equals(INTEGER),
+                "Invalid value of %s of %s: %s, the parameter must be an integer, not %s",
+                PAGINATION_OFFSET_PARAM,
+                httpPath,
+                paginationExtension.get(PAGINATION_OFFSET_PARAM),
+                type));
         Map<String, RangeFilter> rangeFilters = getRangeFilters(rawExtension);
         if (rangeFilters.isEmpty()) {
             return columns.stream();
@@ -921,25 +937,18 @@ public class OpenApiSpec
                         : column);
     }
 
-    private static void validateCursorParam(List<OpenApiColumn> columns, Map<String, String> specExtension, HttpPath httpPath)
+    private static Optional<Type> getPaginationParamType(List<OpenApiColumn> columns, Map<String, String> specExtension, String extensionName, HttpPath httpPath)
     {
-        String cursorParam = specExtension.get(PAGINATION_CURSOR_PARAM);
-        if (cursorParam == null) {
-            return;
+        String parameterName = specExtension.get(extensionName);
+        if (parameterName == null) {
+            return Optional.empty();
         }
-        Optional<OpenApiColumn> cursorColumn = columns.stream()
-                .filter(column -> cursorParam.equals(column.getSourceName()))
+        Optional<OpenApiColumn> parameterColumn = columns.stream()
+                .filter(column -> parameterName.equals(column.getSourceName()))
                 .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
                 .findFirst();
-        checkArgument(cursorColumn.isPresent(), "Invalid value of %s of %s: %s, the operation has no such parameter", PAGINATION_CURSOR_PARAM, httpPath, cursorParam);
-        Type type = cursorColumn.get().getType();
-        checkArgument(
-                type instanceof VarcharType || type.equals(BIGINT) || type.equals(INTEGER),
-                "Invalid value of %s of %s: %s, the parameter must be a string or an integer, not %s",
-                PAGINATION_CURSOR_PARAM,
-                httpPath,
-                cursorParam,
-                type);
+        checkArgument(parameterColumn.isPresent(), "Invalid value of %s of %s: %s, the operation has no such parameter", extensionName, httpPath, parameterName);
+        return Optional.of(parameterColumn.get().getType());
     }
 
     private static Optional<String> getParameterField(Parameter parameter, HttpPath httpPath)
@@ -1708,6 +1717,7 @@ public class OpenApiSpec
                                     .setCursorParam(Optional.ofNullable(specExtension.get(PAGINATION_CURSOR_PARAM)))
                                     .setNextCursorPath(responsePath(specExtension, PAGINATION_NEXT_CURSOR_PATH))
                                     .setNextPageLinkHeader(nextPageLinkHeader)
+                                    .setOffsetParam(Optional.ofNullable(specExtension.get(PAGINATION_OFFSET_PARAM)))
                                     .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
@@ -1723,8 +1733,9 @@ public class OpenApiSpec
         if (!specExtension.containsKey(PAGINATION_PAGE_PARAM)) {
             return;
         }
-        // a page is requested either by its number or by the cursor or the link from the previous page
+        // a page is requested either by its number, the number of results before it, or the cursor or the link from the previous page
         checkArgument(!specExtension.containsKey(PAGINATION_CURSOR_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_CURSOR_PARAM, PAGINATION_PAGE_PARAM);
+        checkArgument(!specExtension.containsKey(PAGINATION_OFFSET_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_OFFSET_PARAM, PAGINATION_PAGE_PARAM);
         checkArgument(!nextPageLinkHeader, "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_NEXT_PAGE_LINK_HEADER, PAGINATION_PAGE_PARAM);
     }
 

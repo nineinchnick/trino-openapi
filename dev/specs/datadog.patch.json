@@ -26,7 +26,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -47,7 +47,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -57,7 +57,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -67,7 +67,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -141,7 +141,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -173,7 +173,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -224,7 +224,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[size]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -234,7 +234,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[size]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data.attributes.incidents"
         }
       }
@@ -287,7 +287,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -353,7 +353,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -395,7 +395,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[size]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -405,7 +405,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[size]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -487,7 +487,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }
@@ -497,7 +497,7 @@
         "x-pagination": null,
         "x-trino": {
           "limitParam": "page[limit]",
-          "pageOffsetParam": "page[offset]",
+          "offsetParam": "page[offset]",
           "resultsPath": "data"
         }
       }

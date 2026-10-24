@@ -186,11 +186,12 @@ public class OpenApiClient
         HttpPath httpPath = pathWithParams.getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
-        Optional<OpenApiColumn> cursorColumn = getUnfilteredCursorColumn(table, httpPath);
+        Optional<OpenApiColumn> cursorColumn = getUnfilteredColumn(table, httpPath, pagination.cursorParam());
+        Optional<OpenApiColumn> offsetColumn = getUnfilteredColumn(table, httpPath, pagination.offsetParam());
         // without a cursor parameter, the link is the whole URI of the next page
         boolean followsLinks = pagination.nextPageLinkHeader() && pagination.cursorParam().isEmpty();
         Predicate<List<?>> rowFilter = getRowFilter(table);
-        if (pageColumn.isEmpty() && cursorColumn.isEmpty() && !followsLinks) {
+        if (pageColumn.isEmpty() && cursorColumn.isEmpty() && offsetColumn.isEmpty() && !followsLinks) {
             return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
@@ -207,8 +208,13 @@ public class OpenApiClient
                     pagination.maxPages(),
                     rowFilter);
         }
+        // without a page number, a page starts after the results the server returned on the previous pages,
+        // so they're read one after another, in a single split, because servers can return fewer results than requested
+        PageGetter pageGetter = offsetColumn.isPresent()
+                ? (page, readResults) -> getPage(withPage(pagedTable, offsetColumn.get(), readResults), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses)
+                : (page, _) -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses);
         return pageIterator(
-                (page, _) -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses),
+                pageGetter,
                 firstPage - 1,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
@@ -409,14 +415,13 @@ public class OpenApiClient
         return table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
     }
 
-    private Optional<OpenApiColumn> getUnfilteredCursorColumn(OpenApiTableHandle table, HttpPath httpPath)
+    private Optional<OpenApiColumn> getUnfilteredColumn(OpenApiTableHandle table, HttpPath httpPath, Optional<String> parameterName)
     {
-        Optional<String> cursorParam = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).cursorParam();
-        if (cursorParam.isEmpty()) {
+        if (parameterName.isEmpty()) {
             return Optional.empty();
         }
         return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
-                .filter(column -> cursorParam.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
+                .filter(column -> parameterName.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
                 .findFirst()
                 .filter(column -> getFilter(column, table.getConstraint()) == null);
     }

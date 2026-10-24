@@ -147307,7 +147307,7 @@ paths:
           - bits_investigations_read
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: |-
@@ -151161,7 +151161,7 @@ paths:
         - Software Catalog
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Create or update entities in Software Catalog.
@@ -151339,7 +151339,7 @@ paths:
         - Software Catalog
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Create or update kinds in Software Catalog.
@@ -151477,7 +151477,7 @@ paths:
         - Software Catalog
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
   /api/v2/change-management/change-request:
     post:
@@ -161596,7 +161596,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
   /api/v2/dashboards/{dashboard_id}/usage:
     get:
@@ -165472,7 +165472,7 @@ paths:
           - monitors_downtime
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Schedule a downtime.
@@ -176877,7 +176877,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         limitParam: page[size]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Create an incident.
@@ -180207,7 +180207,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         limitParam: page[size]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data.attributes.incidents
   /api/v2/incidents/{incident_id}:
     delete:
@@ -201818,7 +201818,7 @@ paths:
           - monitors_downtime
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
   /api/v2/ndm/devices:
     get:
@@ -208729,7 +208729,7 @@ paths:
           - dashboards_read
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Create a powerpack.
@@ -219486,7 +219486,7 @@ paths:
         - Scorecards
       x-trino:
         limitParam: page[size]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Updates multiple scorecard rule outcomes in a single batched request.
@@ -219711,7 +219711,7 @@ paths:
         - Scorecards
       x-trino:
         limitParam: page[size]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Creates a new rule.
@@ -236217,7 +236217,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     post:
       description: Create a new revision for an AI custom rule.
@@ -237007,7 +237007,7 @@ paths:
       x-unstable: "This endpoint is in Preview and may introduce breaking changes.\nIf you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/)."
       x-trino:
         limitParam: page[limit]
-        pageOffsetParam: page[offset]
+        offsetParam: page[offset]
         resultsPath: data
     put:
       description: Create a new revision for a custom rule

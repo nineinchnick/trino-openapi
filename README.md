@@ -713,6 +713,7 @@ paths:
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pageParam`          | Parameter with the page number; enables pagination                                                                                                  |
 | `limitParam`         | Parameter with the page size                                                                                                                        |
+| `offsetParam`        | Parameter with the number of results to skip; enables [offset pagination](#offset-pagination)                                                       |
 | `resultsPath`        | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
 | `totalResultsPath`   | JSON pointer to the total number of results, a number or a string with a number                                                                     |
 | `totalPagesPath`     | JSON pointer to the total number of pages, a number or a string with a number                                                                       |
@@ -846,6 +847,28 @@ x-trino:
 The cursor parameter must be a string or an integer, and it can be sent in the
 query, a header, a cookie, or the request body. A page is requested either by
 its number or by a cursor, so `cursorParam` can't be set with `pageParam`.
+
+### Offset pagination
+
+Some APIs accept the number of results to skip, instead of a page number. When
+`offsetParam` is set, and the query doesn't filter on it, the connector sends
+`0` in the first request, and the number of results it read so far in every
+next one. Pagination ends like with page numbers, for example on an empty page,
+or a page with fewer results than the page size, when `limitParam` is set and
+its value is known.
+
+```yaml
+x-trino:
+  offsetParam: "offset"
+  limitParam: "limit"
+  resultsPath: "$response.body#/items"
+```
+
+The offset of a page is the number of results the server returned on the
+previous pages, which can be fewer than the requested page size, so pages are
+read one after another, and `offsetParam` can't be set with `pageParam`,
+`cursorParam`, or `nextPageLinkHeader`. The offset parameter must be an
+integer.
 
 ### Pagination headers
 
@@ -1197,10 +1220,9 @@ how they're made.
   a single number, boolean, `DATE`, or `TIMESTAMP` column declared in
   `sortValues` that every response includes, or another column with
   `binaryOrder` set.
-* Only page number and cursor pagination are supported, not offset pagination
-  ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
-  requested one after another, unless a
-  [split strategy](#reading-pages-concurrently) is set.
+* Pages are requested one after another, unless a
+  [split strategy](#reading-pages-concurrently) is set, which reads only pages
+  with page numbers concurrently.
 * `POST` and `PATCH` requests, other than `POST` operations used only for
   `SELECT`, are [retried](#retries) only after `429 Too Many Requests`, because
   repeating them can create duplicates or apply a change twice, so another
