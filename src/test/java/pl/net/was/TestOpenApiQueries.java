@@ -38,6 +38,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.regex.Pattern;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.MoreCollectors.onlyElement;
@@ -224,7 +225,18 @@ public class TestOpenApiQueries
     {
         assertExplain(
                 "EXPLAIN SELECT id FROM petstore.default.store_order WHERE order_id = 1",
-                "TableScan\\[table = petstore:store_order\\]");
+                Pattern.quote("TableScan[table = petstore:store_order paths=[GET /store/order/{orderId}] constraint={order_id=[ SortedRangeSet[type=bigint, ranges=1, {[1]}] ]}]"));
+    }
+
+    @Test
+    public void explainTopN()
+    {
+        assertExplain(
+                "EXPLAIN SELECT name FROM fastapi.default.counted_items ORDER BY price DESC LIMIT 1",
+                Pattern.quote("TableScan[table = fastapi:counted_items paths=[GET /counted_items, GET /counted_items/{item_id}] sortOrder=price DESC NULLS LAST limit=1]"));
+        assertExplain(
+                "EXPLAIN SELECT name FROM fastapi.default.counted_items LIMIT 5",
+                Pattern.quote("TableScan[table = fastapi:counted_items paths=[GET /counted_items, GET /counted_items/{item_id}] limit=5]"));
     }
 
     @Test
