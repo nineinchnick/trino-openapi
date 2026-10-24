@@ -14,11 +14,7 @@
 package pl.net.was.authentication;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.inject.Inject;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
@@ -40,7 +36,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.google.common.io.BaseEncoding.base64Url;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
@@ -86,8 +83,7 @@ public class Authentication
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
-    private final LoadingCache<TokenRequest, TokenWithExpiry> tokens = CacheBuilder.newBuilder()
-            .build(CacheLoader.from(this::fetchTokenWithExpiry));
+    private final ConcurrentMap<TokenRequest, TokenWithExpiry> tokens = new ConcurrentHashMap<>();
 
     @Inject
     public Authentication(
@@ -258,23 +254,9 @@ public class Authentication
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
         // TODO use options as scopes
-        TokenWithExpiry tokenWithExpiry = getToken(tokenRequest);
-        if (tokenWithExpiry.isExpiringSoon()) {
-            tokens.invalidate(tokenRequest);
-            tokenWithExpiry = getToken(tokenRequest);
-        }
+        TokenWithExpiry tokenWithExpiry = tokens.compute(tokenRequest, (request, cached) ->
+                cached == null || cached.isExpiringSoon() ? fetchTokenWithExpiry(request) : cached);
         return builder.addHeader(AUTHORIZATION, "Bearer " + tokenWithExpiry.token());
-    }
-
-    private TokenWithExpiry getToken(TokenRequest tokenRequest)
-    {
-        try {
-            return tokens.get(tokenRequest);
-        }
-        catch (ExecutionException e) {
-            // the loader doesn't throw checked exceptions, so this only keeps the same behavior as getUnchecked()
-            throw new UncheckedExecutionException(e.getCause());
-        }
     }
 
     private static String getAuthHeader(String scheme, String username, String password)
