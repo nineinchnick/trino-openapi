@@ -20,6 +20,7 @@ import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.trino.spi.TrinoException;
 import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.io.IOException;
@@ -75,7 +76,7 @@ final class SpecFetcher
             return builder.build();
         }
         // the HTTP client would send the credentials to any host the server redirects to
-        return Authentication.addDefaultCredentials(config, builder.setFollowRedirects(false).build(), "GET " + withoutQuery(location));
+        return Authentication.addDefaultCredentials(new CatalogCredentials(config), builder.setFollowRedirects(false).build(), "GET " + withoutQuery(location));
     }
 
     private static TrinoException toTrinoException(URI location, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)

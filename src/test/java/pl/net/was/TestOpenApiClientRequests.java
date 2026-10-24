@@ -1829,7 +1829,7 @@ class TestOpenApiClientRequests
     {
         OpenApiSpec spec = createSpec(config);
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(new CatalogCredentials(config), spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (!columnDomains.isEmpty()) {
             Map<ColumnHandle, Domain> domains = spec.getTables().get(tableName).stream()
@@ -1849,7 +1849,7 @@ class TestOpenApiClientRequests
     {
         OpenApiSpec spec = createSpec(config);
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(new CatalogCredentials(config), spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
                 .cloneWithConstraint(constraint);
         client.deleteRows(SESSION, new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);

@@ -175,7 +175,7 @@ class TestOpenApiSplitManager
             throw new AssertionError("Unexpected request to " + request.getUri());
         });
         OpenApiServers servers = new OpenApiServers(config, spec);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(new CatalogCredentials(config), spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
         return new OpenApiSplitManager(spec, client, TestingNodeManager.create(), config);
     }
 
