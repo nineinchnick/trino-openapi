@@ -22,6 +22,7 @@ import io.trino.spi.connector.ConnectorFactory;
 
 import java.util.Map;
 
+import static io.trino.plugin.base.Versions.checkStrictSpiVersionMatch;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiConnectorFactory
@@ -39,9 +40,11 @@ public class OpenApiConnectorFactory
     public Connector create(String catalogName, Map<String, String> requiredConfig, ConnectorContext context)
     {
         requireNonNull(requiredConfig, "requiredConfig is null");
+        checkStrictSpiVersionMatch(context, this);
 
         // A plugin is not required to use Guice; it is just very convenient
         Bootstrap app = new Bootstrap(
+                "io.trino.bootstrap.catalog." + catalogName,
                 new OpenApiModule(
                         new CatalogName(catalogName),
                         context.getNodeManager(),
@@ -49,6 +52,7 @@ public class OpenApiConnectorFactory
 
         Injector injector = app
                 .doNotInitializeLogging()
+                .disableSystemProperties()
                 .setRequiredConfigurationProperties(requiredConfig)
                 .initialize();
 
