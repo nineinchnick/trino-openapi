@@ -1012,7 +1012,8 @@ public class OpenApiClient
                 continue;
             }
             if (value instanceof Block block) {
-                value = JsonTrinoConverter.convert(block, 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
+                // predicates hold the elements of an array, not a block with the array in its first position
+                value = JsonTrinoConverter.convert(writeNativeValue(column.getType(), block), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
             else if (value instanceof String stringValue && JsonTrinoConverter.isUnion(column.getSourceType())) {
                 value = new RawValue(stringValue);

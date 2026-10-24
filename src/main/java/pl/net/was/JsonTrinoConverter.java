@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableList;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
-import io.trino.spi.block.ArrayBlock;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
@@ -434,11 +433,7 @@ public class JsonTrinoConverter
             return DateTimeConverter.formatTimestamp(readNativeValue(type, block, position), timestampType, schemaType);
         }
         if (type instanceof ArrayType arrayType) {
-            if (block instanceof ArrayBlock arrayBlock) {
-                Schema<?> finalSchemaType = schemaType;
-                return arrayBlock.apply((valuesBlock, start, length) -> convertArray(valuesBlock, start, length, arrayType, finalSchemaType, objectMapper), position);
-            }
-            return convertArray(block, 0, block.getPositionCount(), arrayType, schemaType, objectMapper);
+            return convertArray(arrayType.getObject(block, position), arrayType, schemaType, objectMapper);
         }
         if (type instanceof MapType mapType) {
             SqlMap mapBlock = mapType.getObject(block, position);
@@ -469,11 +464,11 @@ public class JsonTrinoConverter
         return new BigDecimal(unscaled, type.getScale());
     }
 
-    private static ArrayNode convertArray(Block arrayBlock, int start, int length, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
+    private static ArrayNode convertArray(Block elements, ArrayType arrayType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
         ArrayNode arrayNode = objectMapper.createArrayNode();
-        for (int i = 0; i < length; i++) {
-            Object itemValue = convert(arrayBlock, i + start, arrayType.getElementType(), schemaType.getItems(), objectMapper);
+        for (int i = 0; i < elements.getPositionCount(); i++) {
+            Object itemValue = convert(elements, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
             if (itemValue == null) {
                 arrayNode.addNull();
             }

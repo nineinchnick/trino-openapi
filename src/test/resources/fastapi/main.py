@@ -109,6 +109,17 @@ class NotePatch(BaseModel):
     priority: int | None = None
 
 
+class Label(BaseModel):
+    id: int
+    name: str
+    tags: list[str] = []
+
+
+class LabelBody(BaseModel):
+    name: str
+    tags: list[str] = []
+
+
 class Bookmark(BaseModel):
     url: str
 
@@ -270,6 +281,8 @@ items = {
 
 
 notes: dict[int, Note] = {}
+
+labels: dict[int, Label] = {}
 
 bookmarks = [Bookmark(url="https://trino.io"), Bookmark(url="https://example.com")]
 
@@ -668,6 +681,34 @@ def delete_note(note_id: int):
     if note_id not in notes:
         raise HTTPException(status_code=404, detail="Note not found")
     del notes[note_id]
+
+
+@router.get("/labels")
+def list_labels() -> list[Label]:
+    return list(labels.values())
+
+
+@router.get("/labels/{label_id}")
+def get_label(label_id: int) -> Label:
+    if label_id not in labels:
+        raise HTTPException(status_code=404, detail="Label not found")
+    return labels[label_id]
+
+
+@router.post("/labels/{label_id}", status_code=201)
+def create_label(label_id: int, body: LabelBody) -> Label:
+    if label_id in labels:
+        raise HTTPException(status_code=409, detail="Label already exists")
+    labels[label_id] = Label(id=label_id, **body.model_dump())
+    return labels[label_id]
+
+
+@router.put("/labels/{label_id}")
+def update_label(label_id: int, body: LabelBody) -> Label:
+    if label_id not in labels:
+        raise HTTPException(status_code=404, detail="Label not found")
+    labels[label_id] = Label(id=label_id, **body.model_dump())
+    return labels[label_id]
 
 
 @router.get("/bookmarks")
