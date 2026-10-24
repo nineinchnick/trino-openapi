@@ -468,12 +468,7 @@ public class OpenApiClient
         if (!hasRequestBody(httpPath.method())) {
             return null;
         }
-        try {
-            return createStaticBodyGenerator(toBytes(toRequestBody(httpPath, serializeMap(table, httpPath))));
-        }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return toBodyGenerator(httpPath, serializeMap(table, httpPath));
     }
 
     private static boolean hasRequestBody(PathItem.HttpMethod method)
@@ -606,15 +601,20 @@ public class OpenApiClient
         ObjectNode body = updatedColumns.isPresent() && httpPath.method() == PathItem.HttpMethod.PATCH
                 ? serializeUpdatedColumns(table, httpPath, page, position, updatedColumns.get())
                 : serializePage(table, httpPath, page, position);
+        makeRequest(
+                table.getTableHandle(),
+                httpPath,
+                pathWithParams.getValue(),
+                parameterValues,
+                false,
+                toBodyGenerator(httpPath, body),
+                new AnyResponseHandler());
+    }
+
+    private BodyGenerator toBodyGenerator(HttpPath httpPath, ObjectNode fields)
+    {
         try {
-            makeRequest(
-                    table.getTableHandle(),
-                    httpPath,
-                    pathWithParams.getValue(),
-                    parameterValues,
-                    false,
-                    createStaticBodyGenerator(toBytes(toRequestBody(httpPath, body))),
-                    new AnyResponseHandler());
+            return createStaticBodyGenerator(toBytes(toRequestBody(httpPath, fields)));
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -1493,11 +1493,16 @@ public class OpenApiClient
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         OBJECT_MAPPER.createGenerator(baos).writeTree(rootNode);
         byte[] output = baos.toByteArray();
-        log.debug("Request body of %d bytes", output.length);
-        if (bodyLog.isDebugEnabled()) {
-            bodyLog.debug("Request body: %s", new String(output, UTF_8));
-        }
+        logRequestBody(output);
         return output;
+    }
+
+    private static void logRequestBody(byte[] body)
+    {
+        log.debug("Request body of %d bytes", body.length);
+        if (bodyLog.isDebugEnabled()) {
+            bodyLog.debug("Request body: %s", new String(body, UTF_8));
+        }
     }
 
     private static class AnyResponseHandler
