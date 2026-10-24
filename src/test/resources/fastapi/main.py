@@ -527,6 +527,56 @@ def list_max_pages_items(page: int = 1) -> Results:
         total_results=len(items))
 
 
+class CursorResults(BaseModel):
+    results: list[Item]
+    next_cursor: str | None = None
+
+
+# cursors are opaque to clients, so they don't look like page numbers
+def get_cursor_page(cursor: str | None) -> tuple[list[Item], str | None]:
+    position = 0 if cursor is None else int(cursor.removeprefix("after-"))
+    next_position = position + 1
+    return list(items.values())[position:next_position], f"after-{next_position}" if next_position < len(items) else None
+
+
+@router.get("/cursor_items")
+def list_cursor_items(cursor: str = None) -> CursorResults:
+    results, next_cursor = get_cursor_page(cursor)
+    return CursorResults(results=results, next_cursor=next_cursor)
+
+
+@router.get("/header_cursor_items")
+def list_header_cursor_items(response: Response, cursor: str = None) -> list[Item]:
+    results, next_cursor = get_cursor_page(cursor)
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = next_cursor
+    response.headers["X-Total-Count"] = str(len(items))
+    return results
+
+
+# like servers that return the same cursor with the last page, which would make pagination never end
+@router.get("/repeated_cursor_items")
+def list_repeated_cursor_items(cursor: str = None) -> CursorResults:
+    results, _ = get_cursor_page(cursor)
+    return CursorResults(results=results, next_cursor="after-1")
+
+
+@router.get("/linked_items")
+def list_linked_items(request: Request, response: Response, page: int = 1) -> list[Item]:
+    if page < len(items):
+        response.headers["Link"] = f'<{request.url.include_query_params(page=page + 1)}>; rel="next", <{request.url.include_query_params(page=1)}>; rel="first"'
+    return list(items.values())[page - 1:page]
+
+
+# like servers that cap the page size, this returns one item per page, even when asked for more,
+# so skipping the requested number of items would skip items that were never returned
+@router.get("/offset_items")
+def list_offset_items(offset: int = 0, limit: int = 2) -> Results:
+    return Results(
+        results=list(items.values())[offset:offset + 1],
+        total_results=len(items))
+
+
 counted_items_requests = RequestCount(requests=0)
 
 
@@ -1117,6 +1167,30 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "maxPages": len(items),
+    }
+    openapi_schema["paths"]["/cursor_items"]["get"]["x-trino"] = {
+        "cursorParam": "cursor",
+        "nextCursorPath": "$response.body#/next_cursor",
+        "resultsPath": "$response.body#/results",
+    }
+    openapi_schema["paths"]["/header_cursor_items"]["get"]["x-trino"] = {
+        "cursorParam": "cursor",
+        "nextCursorPath": "$response.header#X-Next-Cursor",
+        "totalResultsPath": "$response.header#X-Total-Count",
+    }
+    openapi_schema["paths"]["/repeated_cursor_items"]["get"]["x-trino"] = {
+        "cursorParam": "cursor",
+        "nextCursorPath": "$response.body#/next_cursor",
+        "resultsPath": "$response.body#/results",
+    }
+    openapi_schema["paths"]["/linked_items"]["get"]["x-trino"] = {
+        "nextPageLinkHeader": True,
+    }
+    openapi_schema["paths"]["/offset_items"]["get"]["x-trino"] = {
+        "offsetParam": "offset",
+        "limitParam": "limit",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
     }
     openapi_schema["paths"]["/counted_items"]["get"]["x-trino"] = {
         "pageParam": "page",

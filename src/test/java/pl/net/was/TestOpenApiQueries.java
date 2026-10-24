@@ -1204,6 +1204,59 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void itemsWithCursorInBody()
+    {
+        // every row has the cursor of its page, like the page number
+        assertQuery(
+                "SELECT name, cursor FROM fastapi.default.cursor_items",
+                "VALUES ('Portal Gun', NULL), ('Plumbus', 'after-1')");
+        // a filter on the cursor requests only its page
+        assertQuery(
+                "SELECT name FROM fastapi.default.cursor_items WHERE cursor = 'after-1'",
+                "VALUES 'Plumbus'");
+        assertQuery(
+                "SELECT name FROM fastapi.default.cursor_items LIMIT 1",
+                "VALUES 'Portal Gun'");
+    }
+
+    @Test
+    public void itemsWithCursorInHeader()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.header_cursor_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsEndingWithRepeatedCursor()
+    {
+        // the server returns the cursor of the last page again with it, so requesting it would never end pagination
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.repeated_cursor_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsWithLinkHeader()
+    {
+        assertThat(getQueryRunner().execute(withMaxRunTime(), "SELECT name FROM fastapi.default.linked_items").getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly("Portal Gun", "Plumbus");
+    }
+
+    @Test
+    public void itemsWithOffset()
+    {
+        // the server returns fewer items than requested, so the offset is the number of items it already returned
+        assertQuery(
+                "SELECT name, \"offset\" FROM fastapi.default.offset_items",
+                "VALUES ('Portal Gun', 0), ('Plumbus', 1)");
+        assertQuery(
+                "SELECT name FROM fastapi.default.offset_items WHERE \"limit\" = 5",
+                "VALUES 'Portal Gun', 'Plumbus'");
+    }
+
+    @Test
     public void itemsWithClampedPages()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.clamped_items").getMaterializedRows();
