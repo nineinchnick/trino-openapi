@@ -574,6 +574,18 @@ with a row for every element. If a field next to the results at `resultsPath`,
 or a request parameter or body field, is also named `value`, it keeps its name,
 and the column of the results gets a numeric suffix, like `value_2`.
 
+Results that are objects with dynamic keys, declared with `additionalProperties`
+and without `properties`, like a map of file paths to file details, have a row
+for every entry. The `key` column holds the name of the entry, and the other
+columns are the fields of the value schema. Values that are not objects with
+properties, like numbers, arrays, or other maps, are held in a single `value`
+column. If a field of the entries, a field next to the results, or a request
+parameter or body field, is also named `key`, it keeps its name, and the key
+column gets a numeric suffix, like `key_2`. An object that also declares `properties` is a single row, like any
+other object, because many specs, like Datadog's, allow other properties next to
+the declared ones in objects that are not maps, and these other properties are
+not mapped to columns.
+
 Columns are nullable, unless the schema they come from lists them as required.
 Columns built from responses are nullable, unless they're required and not
 nullable in responses of all operations used for `SELECT`, because a query uses
@@ -1122,10 +1134,11 @@ how they're made.
   query.
 * Only JSON request and response bodies are supported, not form-encoded or
   multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
-* Responses that are objects with dynamic keys
-  ([#172](https://github.com/nineinchnick/trino-openapi/issues/172)) are not
-  mapped to rows. Some unions, like `anyOf` with a `null` alternative,
-  are mapped to `VARCHAR` holding JSON, with quoted strings
+* `resultsPath` selects a single node of the response, so results nested in
+  every entry of an object with dynamic keys can't be read as rows of their own
+  ([#339](https://github.com/nineinchnick/trino-openapi/issues/339)).
+* Some unions, like `anyOf` with a `null` alternative, are mapped to `VARCHAR`
+  holding JSON, with quoted strings
   ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
 * Timestamps are always `TIMESTAMP(3)`.
 * The OAuth flow can't be chosen explicitly.

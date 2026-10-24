@@ -1366,9 +1366,16 @@ public class OpenApiClient
             resultNodes = getResultNodes(request, resultsPointer, jsonNode.at(resultsPointer));
         }
 
+        boolean resultsAreMaps = columns.stream().anyMatch(column -> column.getEntryKeyPaths().contains(httpPath));
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
         for (JsonNode resultNode : resultNodes) {
-            resultRecordsBuilder.add(convertToRecord(request, httpPath, columns, rowIdColumns, recordParams, jsonNode, resultNode));
+            if (!resultsAreMaps) {
+                resultRecordsBuilder.add(convertToRecord(request, httpPath, columns, rowIdColumns, recordParams, jsonNode, resultNode, Optional.empty()));
+                continue;
+            }
+            for (Map.Entry<String, JsonNode> entry : getEntries(request, resultNode)) {
+                resultRecordsBuilder.add(convertToRecord(request, httpPath, columns, rowIdColumns, recordParams, jsonNode, entry.getValue(), Optional.of(entry.getKey())));
+            }
         }
 
         return resultRecordsBuilder.build();
@@ -1381,7 +1388,8 @@ public class OpenApiClient
             Set<OpenApiColumn> rowIdColumns,
             Map<String, Object> recordParams,
             JsonNode jsonNode,
-            JsonNode resultNode)
+            JsonNode resultNode,
+            Optional<String> entryKey)
     {
         List<Object> recordBuilder = new ArrayList<>();
         // values are kept the way they're sent in requests, and names of columns are unique, unlike names of parameters of different operations
@@ -1392,6 +1400,10 @@ public class OpenApiClient
                 // the row ID holds values of other columns, which are read later
                 rowIdField = recordBuilder.size();
                 recordBuilder.add(null);
+                continue;
+            }
+            if (column.getEntryKeyPaths().contains(httpPath)) {
+                recordBuilder.add(entryKey.orElseThrow());
                 continue;
             }
             if (column.getPlainValuePaths().contains(httpPath)) {
@@ -1420,6 +1432,18 @@ public class OpenApiClient
             recordBuilder.set(rowIdField, rowId.toString());
         }
         return recordBuilder;
+    }
+
+    private static Set<Map.Entry<String, JsonNode>> getEntries(Request request, JsonNode resultNode)
+    {
+        // like a null element of an array of objects with dynamic keys
+        if (resultNode.isNull()) {
+            return Set.of();
+        }
+        if (!resultNode.isObject()) {
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s contains a JSON %s where an object was expected", describe(request), resultNode.getNodeType()));
+        }
+        return resultNode.properties();
     }
 
     private static Object convertToRecordValue(Request request, OpenApiColumn column, JsonNode value)

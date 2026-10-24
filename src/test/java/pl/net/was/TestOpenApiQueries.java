@@ -171,7 +171,7 @@ public class TestOpenApiQueries
                 "VALUES 'default', 'information_schema'");
         assertQuery(
                 "SHOW TABLES FROM petstore.default",
-                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
+                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_inventory', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
     }
 
     @Test
@@ -184,7 +184,7 @@ public class TestOpenApiQueries
                 .containsExactly("default");
         assertQuery(
                 "SELECT count(DISTINCT table_name) FROM petstore.information_schema.columns WHERE table_schema = 'default'",
-                "VALUES 8");
+                "VALUES 9");
         assertQueryReturnsEmptyResult("SELECT column_name FROM petstore.information_schema.columns WHERE table_schema = 'other'");
     }
 
@@ -196,7 +196,7 @@ public class TestOpenApiQueries
                 "VALUES 'default', 'information_schema'");
         assertQuery(
                 "SELECT table_name, table_type FROM petstore.information_schema.tables WHERE table_schema = 'default'",
-                "VALUES ('pet_find_by_status', 'BASE TABLE'), ('pet_find_by_tags', 'BASE TABLE'), ('store_order', 'BASE TABLE'), ('pet', 'BASE TABLE'), " +
+                "VALUES ('pet_find_by_status', 'BASE TABLE'), ('pet_find_by_tags', 'BASE TABLE'), ('store_inventory', 'BASE TABLE'), ('store_order', 'BASE TABLE'), ('pet', 'BASE TABLE'), " +
                         "('user', 'BASE TABLE'), ('user_create_with_list', 'BASE TABLE'), ('user_login', 'BASE TABLE'), ('pet_upload_image', 'BASE TABLE')");
     }
 
@@ -450,6 +450,14 @@ public class TestOpenApiQueries
         String query = "SELECT value FROM fastapi.default.item_names";
         assertThat(computeActual(query).getTypes()).containsExactly(VARCHAR);
         assertQuery(query, "VALUES 'Portal Gun', 'Plumbus', NULL");
+    }
+
+    @Test
+    public void selectDynamicKeys()
+    {
+        assertQuery(
+                "SELECT key, component.path, cardinality(sources) FROM fastapi.default.issue_snippets",
+                "VALUES ('project:src/Main.java', 'src/Main.java', 2), ('project:src/Util.java', 'src/Util.java', 1)");
     }
 
     @Test

@@ -76,6 +76,7 @@ public class TestGithub
                 "applications_token_scoped",
                 "apps",
                 "codes_of_conduct",
+                "emojis",
                 "enterprises_actions_cache_retention_limit",
                 "enterprises_actions_cache_storage_limit",
                 "enterprises_actions_oidc_customization_properties_repo",
