@@ -1275,7 +1275,7 @@ public class OpenApiSpec
         return switch (type) {
             case "array" -> convertArray(property);
             case "object" -> convertObject(property);
-            case "integer" -> Optional.of(new TypeTuple("int32".equals(format) ? INTEGER : BIGINT, property));
+            case "integer" -> Optional.of(new TypeTuple(convertInteger(format), property));
             case "number" -> Optional.of(new TypeTuple(convertNumber(format), property));
             case "string" -> Optional.of(new TypeTuple(convertString(format), property));
             case "boolean" -> Optional.of(new TypeTuple(BOOLEAN, property));
@@ -1411,6 +1411,16 @@ public class OpenApiSpec
         return mapType.map(type -> new TypeTuple(
                 new MapType(VARCHAR, type.type(), new TypeOperators()),
                 map.additionalProperties(type.schema())));
+    }
+
+    private static Type convertInteger(String format)
+    {
+        return switch (format) {
+            case "int32" -> INTEGER;
+            // unsigned 64-bit values don't fit in a BIGINT
+            case "uint64" -> createDecimalType(20, 0);
+            case null, default -> BIGINT;
+        };
     }
 
     private static Type convertNumber(String format)
