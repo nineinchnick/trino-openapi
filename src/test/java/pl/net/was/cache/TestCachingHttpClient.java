@@ -46,12 +46,14 @@ import java.util.stream.Stream;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
 import static io.airlift.http.client.HeaderNames.AGE;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
+import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.HeaderNames.DATE;
 import static io.airlift.http.client.HeaderNames.ETAG;
 import static io.airlift.http.client.HeaderNames.EXPIRES;
 import static io.airlift.http.client.HeaderNames.IF_MODIFIED_SINCE;
 import static io.airlift.http.client.HeaderNames.IF_NONE_MATCH;
 import static io.airlift.http.client.HeaderNames.LAST_MODIFIED;
+import static io.airlift.http.client.HeaderNames.PRAGMA;
 import static io.airlift.http.client.HeaderNames.VARY;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.Request.Builder.preparePost;
@@ -59,12 +61,14 @@ import static io.airlift.units.DataSize.Unit.KILOBYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TestCachingHttpClient
 {
     private static final URI ITEMS = URI.create("http://example.com/items");
     private static final URI OTHER_ITEMS = URI.create("http://example.com/other-items");
+    private static final HeaderName ITEM_IDS = HeaderName.of("X-Item-Ids");
 
     @TempDir
     Path cacheDirectory;
@@ -225,6 +229,45 @@ class TestCachingHttpClient
     }
 
     @Test
+    void testHeaderParametersSelectStoredResponse()
+    {
+        // servers rarely list header parameters in the Vary header, even when they filter the response
+        CachingHttpClient client = client(request -> response(HttpStatus.OK, "for " + requireNonNullElse(request.getHeader(ITEM_IDS), "all"), CACHE_CONTROL, "max-age=60"));
+
+        assertThat(client.execute(get(ITEMS, ITEM_IDS, "1"), BODY)).isEqualTo("200 for 1");
+        assertThat(client.execute(get(ITEMS, ITEM_IDS, "2"), BODY)).isEqualTo("200 for 2");
+        assertThat(client.execute(get(ITEMS), BODY)).isEqualTo("200 for all");
+        assertThat(client.execute(get(ITEMS, ITEM_IDS, "1"), BODY)).isEqualTo("200 for 1");
+        assertThat(client.execute(get(ITEMS, ITEM_IDS, "2"), BODY)).isEqualTo("200 for 2");
+        assertThat(serverRequests).hasSize(3);
+    }
+
+    @Test
+    void testCookieParametersSelectStoredResponse()
+    {
+        CachingHttpClient client = client(request -> response(HttpStatus.OK, "for " + requireNonNullElse(request.getHeader(COOKIE), "all"), CACHE_CONTROL, "max-age=60"));
+
+        assertThat(client.execute(get(ITEMS, COOKIE, "ids=1"), BODY)).isEqualTo("200 for ids=1");
+        assertThat(client.execute(get(ITEMS, COOKIE, "ids=2"), BODY)).isEqualTo("200 for ids=2");
+        assertThat(client.execute(get(ITEMS, COOKIE, "ids=1"), BODY)).isEqualTo("200 for ids=1");
+        assertThat(serverRequests).hasSize(2);
+    }
+
+    @Test
+    void testCacheDirectivesDontSelectStoredResponse()
+    {
+        CachingHttpClient client = client(request -> request.getHeaders().containsKey(IF_NONE_MATCH)
+                ? response(HttpStatus.NOT_MODIFIED, "")
+                : response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60", ETAG, "\"v1\""));
+
+        client.execute(get(ITEMS), BODY);
+        assertThat(client.execute(get(ITEMS, CACHE_CONTROL, "no-cache"), BODY)).isEqualTo("200 first");
+        assertThat(client.execute(get(ITEMS, PRAGMA, "no-cache"), BODY)).isEqualTo("200 first");
+        assertThat(serverRequests).hasSize(2);
+        assertThat(serverRequests.getLast().getHeaders().get(IF_NONE_MATCH)).containsExactly("\"v1\"");
+    }
+
+    @Test
     void testSuccessfulChangeInvalidatesStoredResponses()
     {
         CachingHttpClient client = client(request -> request.getMethod().equals("POST")
@@ -232,9 +275,15 @@ class TestCachingHttpClient
                 : response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60"));
 
         client.execute(get(ITEMS), BODY);
+        client.execute(get(ITEMS, ITEM_IDS, "1"), BODY);
+        client.execute(get(OTHER_ITEMS), BODY);
         client.execute(preparePost().setUri(ITEMS).build(), BODY);
+        // responses requested with other headers are outdated too
         client.execute(get(ITEMS), BODY);
-        assertThat(serverRequests).extracting(Request::getMethod).containsExactly("GET", "POST", "GET");
+        client.execute(get(ITEMS, ITEM_IDS, "1"), BODY);
+        client.execute(get(OTHER_ITEMS), BODY);
+        assertThat(serverRequests).extracting(request -> request.getMethod() + " " + request.getUri().getPath())
+                .containsExactly("GET /items", "GET /items", "GET /other-items", "POST /items", "GET /items", "GET /items");
     }
 
     @Test
@@ -330,7 +379,12 @@ class TestCachingHttpClient
 
     private static Request get(URI uri, String accept)
     {
-        return prepareGet().setUri(uri).setHeader(ACCEPT, accept).build();
+        return get(uri, ACCEPT, accept);
+    }
+
+    private static Request get(URI uri, HeaderName header, String value)
+    {
+        return prepareGet().setUri(uri).setHeader(header, value).build();
     }
 
     private static Response response(HttpStatus status, String body, Object... headers)

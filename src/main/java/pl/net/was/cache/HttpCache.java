@@ -15,7 +15,10 @@
 package pl.net.was.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
+import io.airlift.http.client.HeaderName;
+import io.airlift.http.client.Request;
 import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 
@@ -31,11 +34,15 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
+import static io.airlift.http.client.HeaderNames.PRAGMA;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -47,13 +54,18 @@ import static java.util.Objects.requireNonNull;
 
 // stores responses in files, so they survive restarts, and evicts the least recently used ones over the size limit;
 // a file has a header with the format version and the length of the metadata, the metadata as JSON, and the raw body,
-// so the body is written and read without being encoded or copied
+// so the body is written and read without being encoded or copied;
+// a key is a hash of the method and URI, so all stored responses of a resource can be found, and a hash of the request headers,
+// because header and cookie parameters filter the response, and servers rarely list them in the Vary header
 public final class HttpCache
 {
     private static final Logger log = Logger.get(HttpCache.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String ENTRY_SUFFIX = ".entry";
     private static final String TEMPORARY_SUFFIX = ".tmp";
+    private static final String KEY_SEPARATOR = "-";
+    // they only say how the request should be served, not which response it gets
+    private static final Set<HeaderName> CACHE_DIRECTIVE_HEADERS = Set.of(CACHE_CONTROL, PRAGMA);
     private static final int FORMAT_VERSION = 1;
     private static final int HEADER_SIZE = 2 * Integer.BYTES;
     // evicting below the limit avoids sorting all entries again on every following write
@@ -89,9 +101,9 @@ public final class HttpCache
         }
     }
 
-    public Optional<CachedResponse> get(String method, URI uri)
+    public Optional<CachedResponse> get(Request request)
     {
-        String key = key(method, uri);
+        String key = key(request);
         if (!entries.containsKey(key)) {
             return Optional.empty();
         }
@@ -108,14 +120,14 @@ public final class HttpCache
         catch (IOException e) {
             // a corrupted or incompatible entry is just a cache miss
             log.warn(e, "Removing unreadable HTTP cache entry %s", file);
-            remove(method, uri);
+            remove(request);
             return Optional.empty();
         }
     }
 
-    public synchronized void put(String method, URI uri, CachedResponse response)
+    public synchronized void put(Request request, CachedResponse response)
     {
-        String key = key(method, uri);
+        String key = key(request);
         Path file = entryFile(key);
         Path temporaryFile = directory.resolve(key + TEMPORARY_SUFFIX);
         try {
@@ -127,7 +139,7 @@ public final class HttpCache
                     response.responseTimeMillis()));
             long size = (long) HEADER_SIZE + metadata.length + response.body().length;
             if (size > maxEntrySizeInBytes) {
-                remove(method, uri);
+                remove(request);
                 return;
             }
             write(temporaryFile, metadata, response.body());
@@ -136,18 +148,27 @@ public final class HttpCache
             entries.put(key, new Entry(size, now, now));
         }
         catch (IOException e) {
-            log.warn(e, "Failed to store an HTTP cache entry for %s %s", method, uri);
+            log.warn(e, "Failed to store an HTTP cache entry for %s %s", request.getMethod(), request.getUri());
             deleteQuietly(temporaryFile);
             return;
         }
         evict();
     }
 
-    public synchronized void remove(String method, URI uri)
+    public synchronized void remove(Request request)
     {
-        String key = key(method, uri);
+        String key = key(request);
         entries.remove(key);
         deleteQuietly(entryFile(key));
+    }
+
+    public synchronized void removeAll(String method, URI uri)
+    {
+        String keyPrefix = resourceKey(method, uri) + KEY_SEPARATOR;
+        for (String key : entries.keySet().stream().filter(key -> key.startsWith(keyPrefix)).toList()) {
+            entries.remove(key);
+            deleteQuietly(entryFile(key));
+        }
     }
 
     long sizeInBytes()
@@ -275,7 +296,22 @@ public final class HttpCache
         return directory.resolve(key + ENTRY_SUFFIX);
     }
 
-    private static String key(String method, URI uri)
+    private static String key(Request request)
+    {
+        Hasher headersHasher = Hashing.sha256().newHasher();
+        request.getHeaders().asMap().entrySet().stream()
+                .filter(entry -> !CACHE_DIRECTIVE_HEADERS.contains(entry.getKey()))
+                .sorted(Comparator.comparing(entry -> entry.getKey().toString().toLowerCase(Locale.ENGLISH)))
+                .forEach(entry -> {
+                    headersHasher.putString(entry.getKey().toString().toLowerCase(Locale.ENGLISH), UTF_8).putByte((byte) 0);
+                    // header values can't contain NUL, so it separates them unambiguously
+                    entry.getValue().forEach(value -> headersHasher.putString(value, UTF_8).putByte((byte) 0));
+                    headersHasher.putByte((byte) '\n');
+                });
+        return resourceKey(request.getMethod(), request.getUri()) + KEY_SEPARATOR + headersHasher.hash();
+    }
+
+    private static String resourceKey(String method, URI uri)
     {
         return Hashing.sha256().hashString(method + " " + uri, UTF_8).toString();
     }

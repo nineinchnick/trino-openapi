@@ -291,13 +291,17 @@ credentials, and cached responses survive restarts.
   long they're fresh, with `Cache-Control: max-age` or `Expires`, or how to check
   if they changed, with `ETag` or `Last-Modified`. Responses with
   `Cache-Control: no-store` are never cached.
+* Responses are cached separately for every value of header and cookie
+  parameters, because they filter the response, and servers rarely list them in
+  the `Vary` header. Credentials are not part of the key, because every catalog
+  uses its own subdirectory.
 * A fresh response is reused without sending a request.
 * A response that is no longer fresh, or has no freshness information, is
   revalidated: the request includes `If-None-Match` or `If-Modified-Since`, and
   if the server responds with `304 Not Modified`, the cached response is used.
   Some APIs, like GitHub, don't count such requests against rate limits.
 * A successful `INSERT`, `UPDATE`, or `DELETE` removes cached responses of the
-  same URL.
+  same URL, for all values of header and cookie parameters.
 * A response that can't be stored removes the cached one, if it's successful,
   or says that the resource doesn't exist, with `404 Not Found` or `410 Gone`.
   Other errors, like exceeded rate limits or server failures, say nothing about
