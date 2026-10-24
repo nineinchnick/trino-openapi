@@ -16,6 +16,7 @@ package pl.net.was;
 
 import com.google.inject.Injector;
 import io.airlift.bootstrap.Bootstrap;
+import io.trino.plugin.base.ConnectorContextModule;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.ConnectorFactory;
@@ -45,10 +46,8 @@ public class OpenApiConnectorFactory
         // A plugin is not required to use Guice; it is just very convenient
         Bootstrap app = new Bootstrap(
                 "io.trino.bootstrap.catalog." + catalogName,
-                new OpenApiModule(
-                        new CatalogName(catalogName),
-                        context.getNodeManager(),
-                        context.getTypeManager()));
+                new ConnectorContextModule(catalogName, context),
+                new OpenApiModule());
 
         Injector injector = app
                 .doNotInitializeLogging()

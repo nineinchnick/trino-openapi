@@ -49,6 +49,7 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
+import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordCursor;
@@ -151,7 +152,7 @@ public class OpenApiClient
                 .<HttpClient>map(directory -> new CachingHttpClient(
                         httpClient,
                         // every catalog has its own credentials, so it can't reuse responses of other catalogs
-                        new HttpCache(Path.of(directory, catalogName.name()), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
+                        new HttpCache(Path.of(directory, catalogName.toString()), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
                         Clock.systemUTC()))
                 .orElse(httpClient));
         this.openApiSpec = openApiSpec;
