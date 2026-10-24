@@ -30,7 +30,9 @@ import pl.net.was.authentication.AuthenticationType;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
@@ -57,6 +59,7 @@ public class OpenApiConfig
     private String clientId;
     private String clientSecret;
     private URI tokenUrl;
+    private boolean allowInsecureHttp;
 
     private double maxRequestsPerSecond = Double.MAX_VALUE;
     private double maxSplitsPerSecond = Double.MAX_VALUE;
@@ -265,6 +268,38 @@ public class OpenApiConfig
     {
         this.tokenUrl = tokenUrl;
         return this;
+    }
+
+    public boolean isAllowInsecureHttp()
+    {
+        return allowInsecureHttp;
+    }
+
+    @Config("authentication.allow-insecure-http")
+    @ConfigDescription("Allow sending credentials over HTTP, without TLS")
+    public OpenApiConfig setAllowInsecureHttp(boolean allowInsecureHttp)
+    {
+        this.allowInsecureHttp = allowInsecureHttp;
+        return this;
+    }
+
+    @AssertTrue(message = "base-uri and authentication.token-url must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set")
+    public boolean isCredentialTransportSecure()
+    {
+        if (allowInsecureHttp || !hasCredentials()) {
+            return true;
+        }
+        return !isInsecure(baseUri) && !isInsecure(tokenUrl);
+    }
+
+    private boolean hasCredentials()
+    {
+        return Stream.of(username, password, bearerToken, apiKeyValue, clientId, clientSecret).anyMatch(Objects::nonNull) || !apiKeys.isEmpty();
+    }
+
+    private static boolean isInsecure(URI uri)
+    {
+        return uri != null && "http".equalsIgnoreCase(uri.getScheme());
     }
 
     public double getMaxRequestsPerSecond()
