@@ -31,6 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
+import pl.net.was.authentication.AuthenticationScheme;
+import pl.net.was.authentication.AuthenticationType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -47,6 +49,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Throwables.getStackTraceAsString;
@@ -591,6 +594,44 @@ class TestOpenApiClientRequests
                 .message()
                 .doesNotContain("s3cr3t");
         assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testHttpCacheIsSeparatedByServerAndCredentials()
+            throws IOException
+    {
+        String cacheDirectory = Files.createTempDirectory(tempDir, "cache").toString();
+        OpenApiConfig config = newConfig()
+                .setAuthenticationType(AuthenticationType.HTTP)
+                .setUsername("user")
+                .setPassword("first-password")
+                .setHttpCacheDirectory(cacheDirectory);
+        responses.add(respond(200, "[{\"id\": 1}]", "Cache-Control", "max-age=60"));
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(getRows(config, "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(1);
+
+        // the username identifies the account, so a rotated password keeps the cached responses
+        assertThat(getRows(config.setPassword("second-password"), "items", null)).hasSize(1);
+        assertThat(requestCount).hasValue(1);
+
+        // like a catalog created again with the same name, but for another account, or server
+        assertThat(getRows(config.setUsername("other-user"), "items", null)).isEmpty();
+        assertThat(getRows(config.setBaseUri(URI.create(baseUri + "/")), "items", null)).isEmpty();
+        // tokens are the only identity of their accounts
+        config.setAuthenticationType(AuthenticationType.HTTP).setAuthenticationScheme(AuthenticationScheme.BEARER);
+        assertThat(getRows(config.setBearerToken("first-token"), "items", null)).isEmpty();
+        assertThat(getRows(config.setBearerToken("first-token"), "items", null)).isEmpty();
+        assertThat(getRows(config.setBearerToken("second-token"), "items", null)).isEmpty();
+        config.setAuthenticationType(AuthenticationType.API_KEY).setApiKeyName("api_key");
+        assertThat(getRows(config.setApiKeyValue("first-key"), "items", null)).isEmpty();
+        assertThat(getRows(config.setApiKeyValue("second-key"), "items", null)).isEmpty();
+        assertThat(requestCount).hasValue(8);
+        try (Stream<Path> directories = Files.list(Path.of(cacheDirectory))) {
+            assertThat(directories.map(directory -> directory.getFileName().toString()).toList())
+                    .hasSize(7)
+                    .allSatisfy(name -> assertThat(name).startsWith("test-").doesNotContain("password", "user", "token", "key"));
+        }
     }
 
     @Test

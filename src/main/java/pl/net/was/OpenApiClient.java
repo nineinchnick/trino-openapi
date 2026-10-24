@@ -27,10 +27,13 @@ import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.base.CharMatcher;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Streams;
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
 import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -68,6 +71,9 @@ import io.trino.spi.type.VarcharType;
 import pl.net.was.cache.CachingHttpClient;
 import pl.net.was.cache.HttpCache;
 
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -76,6 +82,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -87,6 +94,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
@@ -138,6 +146,8 @@ public class OpenApiClient
             .build();
     public static final HeaderName OPENAPI_PATH_HEADER = HeaderName.of("X-Trino-OpenAPI-Path");
     public static final String USER_AGENT_VALUE = "trino-openapi/" + OpenApiClient.class.getPackage().getImplementationVersion();
+    // OWASP's recommendation for PBKDF2-HMAC-SHA256
+    private static final int TOKEN_HASH_ITERATIONS = 210_000;
 
     private final URI baseUri;
 
@@ -154,8 +164,7 @@ public class OpenApiClient
         this.httpClient = new DecompressingHttpClient(config.getHttpCacheDirectory()
                 .<HttpClient>map(directory -> new CachingHttpClient(
                         httpClient,
-                        // every catalog has its own credentials, so it can't reuse responses of other catalogs
-                        new HttpCache(Path.of(directory, catalogName.toString()), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
+                        new HttpCache(getHttpCacheDirectory(config, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
                         Clock.systemUTC()))
                 .orElse(httpClient));
         this.openApiSpec = openApiSpec;
@@ -1347,5 +1356,48 @@ public class OpenApiClient
         }
         long firstResult = (page - 1) * pageSize.orElseThrow();
         return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().orElseThrow());
+    }
+
+    // responses depend on the server and the account, so a catalog created again with the same name, but another base URI or another account,
+    // can't reuse responses of the previous one; passwords and client secrets are left out, because the username or client ID already identify the account
+    private static Path getHttpCacheDirectory(OpenApiConfig config, CatalogName catalogName, String directory)
+    {
+        Hasher hasher = Hashing.sha256().newHasher();
+        Stream.concat(
+                        Stream.of(
+                                config.getBaseUri().toString(),
+                                config.getAuthenticationType().name(),
+                                config.getAuthenticationScheme().name(),
+                                config.getUsername(),
+                                config.getClientId(),
+                                config.getApiKeyName()),
+                        new TreeMap<>(config.getApiKeys()).keySet().stream())
+                .forEach(value -> hasher.putString(nullToEmpty(value), UTF_8).putByte((byte) 0));
+        hasher.putBytes(hashTokens(config));
+        return Path.of(directory, catalogName + "-" + hasher.hash());
+    }
+
+    // bearer tokens and API key values are the only identity of their accounts, and the directory name is visible to other users,
+    // so they're hashed with a slow function, which makes guessing them from the name impractical
+    private static byte[] hashTokens(OpenApiConfig config)
+    {
+        String tokens = Stream.concat(
+                        Stream.of(config.getBearerToken(), config.getApiKeyValue()),
+                        new TreeMap<>(config.getApiKeys()).values().stream())
+                .map(Strings::nullToEmpty)
+                .collect(joining("\0"));
+        if (CharMatcher.is('\0').matchesAllOf(tokens)) {
+            return new byte[0];
+        }
+        PBEKeySpec keySpec = new PBEKeySpec(tokens.toCharArray(), config.getBaseUri().toString().getBytes(UTF_8), TOKEN_HASH_ITERATIONS, 256);
+        try {
+            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(keySpec).getEncoded();
+        }
+        catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to hash the credentials for the HTTP cache directory name", e);
+        }
+        finally {
+            keySpec.clearPassword();
+        }
     }
 }

@@ -30,8 +30,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -66,6 +70,8 @@ public final class HttpCache
     private static final String KEY_SEPARATOR = "-";
     // they only say how the request should be served, not which response it gets
     private static final Set<HeaderName> CACHE_DIRECTIVE_HEADERS = Set.of(CACHE_CONTROL, PRAGMA);
+    private static final Set<PosixFilePermission> OWNER_ONLY_DIRECTORY = PosixFilePermissions.fromString("rwx------");
+    private static final Set<PosixFilePermission> OWNER_ONLY_FILE = PosixFilePermissions.fromString("rw-------");
     private static final int FORMAT_VERSION = 1;
     private static final int HEADER_SIZE = 2 * Integer.BYTES;
     // evicting below the limit avoids sorting all entries again on every following write
@@ -93,7 +99,7 @@ public final class HttpCache
         this.maxSizeInBytes = maxSize.toBytes();
         this.maxEntrySizeInBytes = maxEntrySize.toBytes();
         try {
-            Files.createDirectories(directory);
+            createDirectory();
             loadEntries();
         }
         catch (IOException e) {
@@ -195,6 +201,19 @@ public final class HttpCache
         }
     }
 
+    // stored responses are as sensitive as the API they came from, so only the owner of the Trino process can read them
+    private void createDirectory()
+            throws IOException
+    {
+        if (!isPosix()) {
+            Files.createDirectories(directory);
+            return;
+        }
+        Files.createDirectories(directory, PosixFilePermissions.asFileAttribute(OWNER_ONLY_DIRECTORY));
+        // the directory might have been created before with the default permissions
+        Files.setPosixFilePermissions(directory, OWNER_ONLY_DIRECTORY);
+    }
+
     private void loadEntries()
             throws IOException
     {
@@ -236,7 +255,7 @@ public final class HttpCache
         }
     }
 
-    private static void write(Path file, byte[] metadata, byte[] body)
+    private void write(Path file, byte[] metadata, byte[] body)
             throws IOException
     {
         ByteBuffer header = ByteBuffer.allocate(HEADER_SIZE)
@@ -244,7 +263,9 @@ public final class HttpCache
                 .putInt(metadata.length)
                 .flip();
         ByteBuffer[] buffers = {header, ByteBuffer.wrap(metadata), ByteBuffer.wrap(body)};
-        try (FileChannel channel = FileChannel.open(file, CREATE, WRITE, TRUNCATE_EXISTING)) {
+        Set<OpenOption> options = Set.of(CREATE, WRITE, TRUNCATE_EXISTING);
+        FileAttribute<?>[] attributes = isPosix() ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(OWNER_ONLY_FILE)} : new FileAttribute<?>[0];
+        try (FileChannel channel = FileChannel.open(file, options, attributes)) {
             while (buffers[2].hasRemaining()) {
                 channel.write(buffers);
             }
@@ -289,6 +310,11 @@ public final class HttpCache
             }
         }
         return buffer.flip();
+    }
+
+    private boolean isPosix()
+    {
+        return directory.getFileSystem().supportedFileAttributeViews().contains("posix");
     }
 
     private Path entryFile(String key)

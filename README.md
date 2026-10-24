@@ -283,9 +283,18 @@ can revalidate it.
 
 To avoid sending the same requests again, set `http-cache.directory`, and the
 connector caches responses on disk, following
-[RFC 9111](https://www.rfc-editor.org/rfc/rfc9111). Every catalog uses its own
-subdirectory, named after the catalog, because every catalog has its own
-credentials, and cached responses survive restarts.
+[RFC 9111](https://www.rfc-editor.org/rfc/rfc9111). Cached responses survive
+restarts. Every catalog uses its own subdirectory, named after the catalog and
+a hash of `base-uri` and the account, so a catalog created again with the same
+name, but for another server or account, doesn't use responses cached for the
+previous one. The account is identified by the username, client ID, and API key
+names, so changing a password or a client secret keeps the cached responses.
+Bearer tokens and API key values are the only identity of their accounts, so
+they're included with a slow hash, PBKDF2, which makes guessing them from the
+directory name impractical. Subdirectories of removed or changed catalogs are not
+deleted. The connector creates the subdirectories and files so that only the
+user running Trino can read them, and it doesn't store the `Set-Cookie` and
+`Authentication-Info` response headers.
 
 * Responses to `GET` and `HEAD` requests are cached when the server says how
   long they're fresh, with `Cache-Control: max-age` or `Expires`, or how to check
