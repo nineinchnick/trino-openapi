@@ -1330,9 +1330,9 @@ SELECT number, title, state FROM github.default.repos_pulls WHERE owner = 'trino
 
 * The parameters must be optional query, header, or cookie parameters of the
   same operation, but not `pageParam`. Their schemas must be strings, integers,
-  or booleans, and the values must match their type, `enum`, `minimum`,
-  `maximum`, `exclusiveMinimum`, and `exclusiveMaximum`. Loading the spec fails
-  otherwise.
+  or booleans, and the values must match their type, `enum`, `const`,
+  `minimum`, `maximum`, `exclusiveMinimum`, and `exclusiveMaximum`. Loading the
+  spec fails otherwise.
 * A filter on the parameter is sent instead of the default, including every
   value of an `IN` list and values of dynamic filters, and so is a bound of a
   [range filter](#range-filters). `ORDER BY` with `LIMIT` sends the sort

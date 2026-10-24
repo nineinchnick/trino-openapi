@@ -1252,14 +1252,16 @@ public class OpenApiSpec
                 || (type.equals(BOOLEAN) && value instanceof Boolean);
         checkSpec(matchesType, "Invalid value of %s: %s for parameter %s of %s doesn't have type %s", PARAMETER_DEFAULTS, value, parameter, operation, type);
         Schema<?> schema = column.getSourceType();
+        // OpenAPI 3.1 declares a single allowed value with const
+        List<Object> allowedValues = getAllowedValues(schema);
         checkSpec(
-                schema.getEnum() == null || schema.getEnum().stream().anyMatch(allowed -> String.valueOf(allowed).equals(value.toString())),
+                allowedValues.isEmpty() || allowedValues.stream().anyMatch(allowed -> String.valueOf(allowed).equals(value.toString())),
                 "Invalid value of %s: %s for parameter %s of %s is not one of %s",
                 PARAMETER_DEFAULTS,
                 value,
                 parameter,
                 operation,
-                schema.getEnum());
+                allowedValues);
         if (value instanceof Number number) {
             BigDecimal decimal = BigDecimal.valueOf(number.longValue());
             checkSpec(schema.getMinimum() == null || decimal.compareTo(schema.getMinimum()) >= 0, "Invalid value of %s: %s for parameter %s of %s is less than its minimum %s", PARAMETER_DEFAULTS, value, parameter, operation, schema.getMinimum());
