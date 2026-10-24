@@ -144,6 +144,7 @@ Trino version it's built for.
 | `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`                  | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
 | `retry-initial-delay`                | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
 | `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`                 | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
+| `max-response-size`                  | `OPENAPI_MAX_RESPONSE_SIZE`         | `16MB`               | Maximum size of a response body, after it's decompressed; see [HTTP client](#http-client)                       |
 | `domain-expansion-limit`             | `OPENAPI_DOMAIN_EXPANSION_LIMIT`    | `256`                | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
 | `http-cache.directory`               | `OPENAPI_HTTP_CACHE_DIRECTORY`      |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
 | `http-cache.max-size`                | `OPENAPI_HTTP_CACHE_MAX_SIZE`       | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
@@ -301,6 +302,16 @@ credentials.
 The connector asks servers for gzip-compressed responses, with
 `Accept-Encoding: gzip`, and decompresses them, because JSON usually compresses
 about ten times.
+
+A response body is read into memory before its rows are returned, so its size
+is limited by `max-response-size`, after it's decompressed, because a small
+compressed response of repetitive JSON can expand to more than the heap of a
+node. It also applies to responses that are not compressed, and to responses
+read to be stored in the [HTTP cache](#http-cache). A query reading a larger
+response fails with an error that says how to increase the limit. The
+`max-response-content-length` of the client limits only the compressed size,
+and defaults to `1GB`, so it doesn't fail responses below `max-response-size`
+earlier.
 
 ## Retries
 

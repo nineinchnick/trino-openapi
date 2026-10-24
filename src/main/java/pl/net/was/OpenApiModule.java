@@ -50,7 +50,10 @@ public class OpenApiModule
                 .withConfigDefaults(config -> config.setMaxResponseContentLength(DataSize.of(1, GIGABYTE)));
         binder.bind(OpenApiServers.class).in(SINGLETON);
         binder.bind(Authentication.class).in(SINGLETON);
-        httpClientBinder(binder).bindHttpClient("openApi", ForUnauthenticatedOpenApi.class);
+        // the max-response-size catalog property limits responses after they're decompressed, also the ones that are not compressed,
+        // so the limit of the client, which applies to compressed bytes, would only make responses that are not compressed fail earlier
+        httpClientBinder(binder).bindHttpClient("openApi", ForUnauthenticatedOpenApi.class)
+                .withConfigDefaults(config -> config.setMaxResponseContentLength(DataSize.of(1, GIGABYTE)));
 
         httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
     }

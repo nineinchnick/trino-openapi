@@ -24,6 +24,7 @@ import io.airlift.http.client.RequestStats;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.airlift.http.client.StreamingResponse;
+import io.airlift.units.DataSize;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,16 +39,20 @@ import static java.util.Objects.requireNonNull;
 
 // asks for gzip-compressed responses, which the Airlift HTTP client doesn't, and decompresses them for response handlers;
 // it wraps the cache, so cached responses stay compressed
+// the Airlift HTTP client limits only the compressed size, and a small response of repetitive JSON can expand to more than the heap,
+// so the size of decompressed bodies is limited too
 public class DecompressingHttpClient
         implements HttpClient
 {
     private static final int BUFFER_SIZE = 64 * 1024;
 
     private final HttpClient delegate;
+    private final DataSize maxResponseSize;
 
-    public DecompressingHttpClient(HttpClient delegate)
+    public DecompressingHttpClient(HttpClient delegate, DataSize maxResponseSize)
     {
         this.delegate = requireNonNull(delegate, "delegate is null");
+        this.maxResponseSize = requireNonNull(maxResponseSize, "maxResponseSize is null");
     }
 
     @Override
@@ -73,7 +78,7 @@ public class DecompressingHttpClient
                 if (!isGzip(response)) {
                     return responseHandler.handle(request, response);
                 }
-                return responseHandler.handle(request, new DecompressedResponse(response));
+                return responseHandler.handle(request, new DecompressedResponse(response, maxResponseSize));
             }
         });
     }
@@ -120,11 +125,13 @@ public class DecompressingHttpClient
             implements Response
     {
         private final Response response;
+        private final DataSize maxSize;
         private final ListMultimap<HeaderName, String> headers;
 
-        private DecompressedResponse(Response response)
+        private DecompressedResponse(Response response, DataSize maxSize)
         {
             this.response = response;
+            this.maxSize = maxSize;
             // the headers describe the compressed body
             ImmutableListMultimap.Builder<HeaderName, String> headers = ImmutableListMultimap.builder();
             response.getHeaders().entries().stream()
@@ -166,7 +173,7 @@ public class DecompressingHttpClient
         public InputStream getInputStream()
                 throws IOException
         {
-            return new GZIPInputStream(response.getInputStream(), BUFFER_SIZE);
+            return new MaxSizeInputStream(new GZIPInputStream(response.getInputStream(), BUFFER_SIZE), maxSize);
         }
 
         @Override

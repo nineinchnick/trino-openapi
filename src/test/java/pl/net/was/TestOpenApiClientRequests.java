@@ -20,6 +20,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.jetty.JettyHttpClient;
+import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.BlockBuilder;
@@ -59,6 +60,7 @@ import java.util.zip.GZIPOutputStream;
 import static com.google.common.base.Throwables.getStackTraceAsString;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
+import static io.airlift.units.DataSize.Unit.KILOBYTE;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
@@ -1285,6 +1287,43 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Response to GET %s/items is not valid JSON", baseUri)
                 .hasNoCause();
+    }
+
+    @Test
+    void testDecompressedResponseOverMaxSizeFails()
+            throws IOException
+    {
+        // like a gzip bomb, it's small before it's decompressed
+        responses.add(respondGzip(200, "[" + "{\"id\":1},".repeat(10_000) + "{\"id\":1}]"));
+
+        assertThatThrownBy(() -> getRows(newConfig().setMaxRetries(0).setMaxResponseSize(DataSize.of(64, KILOBYTE)), "items", "s3cr3t"))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Request GET %s/items for operation listItems failed: the response is larger than 64kB, increase the max-response-size catalog property to read it", baseUri);
+    }
+
+    @Test
+    void testResponseOverMaxSizeFailsWithHttpCache()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig()
+                .setMaxRetries(0)
+                .setMaxResponseSize(DataSize.of(64, KILOBYTE))
+                .setHttpCacheDirectory(Files.createTempDirectory(tempDir, "cache").toString());
+        responses.add(respond(200, "[" + "{\"id\":1},".repeat(10_000) + "{\"id\":1}]", "Cache-Control", "max-age=60"));
+
+        assertThatThrownBy(() -> getRows(config, "items", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Request GET %s/items for operation listItems failed: the response is larger than 64kB, increase the max-response-size catalog property to read it", baseUri);
+    }
+
+    @Test
+    void testResponseBelowMaxSizeIsRead()
+            throws IOException
+    {
+        String body = "[" + "{\"id\":1},".repeat(999) + "{\"id\":1}]";
+        responses.add(respondGzip(200, body));
+
+        assertThat(getRows(newConfig().setMaxResponseSize(DataSize.ofBytes(body.length())), "items", null)).hasSize(1000);
     }
 
     @Test

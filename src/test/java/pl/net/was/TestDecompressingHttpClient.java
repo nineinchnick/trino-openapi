@@ -46,14 +46,19 @@ import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.CONTENT_ENCODING;
 import static io.airlift.http.client.HeaderNames.CONTENT_LENGTH;
 import static io.airlift.http.client.Request.Builder.prepareGet;
+import static io.airlift.units.DataSize.Unit.KILOBYTE;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
+import static java.lang.Math.toIntExact;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestDecompressingHttpClient
 {
     private static final URI ITEMS = URI.create("http://example.com/items");
     private static final String BODY = "[" + "{\"name\":\"item\"},".repeat(1000) + "{}]";
+    private static final DataSize MAX_RESPONSE_SIZE = DataSize.of(1, MEGABYTE);
+    private static final DataSize SMALL_RESPONSE_SIZE = DataSize.of(1, KILOBYTE);
 
     @TempDir
     Path cacheDirectory;
@@ -63,7 +68,7 @@ class TestDecompressingHttpClient
     @Test
     void testCompressedResponsesAreDecompressed()
     {
-        DecompressingHttpClient client = new DecompressingHttpClient(server(true));
+        DecompressingHttpClient client = new DecompressingHttpClient(server(true), MAX_RESPONSE_SIZE);
 
         assertThat(client.execute(get(), RESPONSE)).isEqualTo("200 headers=[] " + BODY);
         assertThat(serverRequests.getFirst().getHeaders().get(ACCEPT_ENCODING)).containsExactly("gzip");
@@ -72,7 +77,7 @@ class TestDecompressingHttpClient
     @Test
     void testUncompressedResponsesArePassedThrough()
     {
-        DecompressingHttpClient client = new DecompressingHttpClient(server(false));
+        DecompressingHttpClient client = new DecompressingHttpClient(server(false), MAX_RESPONSE_SIZE);
 
         assertThat(client.execute(get(), RESPONSE)).isEqualTo("200 headers=[" + BODY.length() + "] " + BODY);
     }
@@ -80,7 +85,7 @@ class TestDecompressingHttpClient
     @Test
     void testRequestedEncodingIsKept()
     {
-        DecompressingHttpClient client = new DecompressingHttpClient(server(false));
+        DecompressingHttpClient client = new DecompressingHttpClient(server(false), MAX_RESPONSE_SIZE);
 
         client.execute(Request.Builder.fromRequest(get()).setHeader(ACCEPT_ENCODING, "identity").build(), RESPONSE);
         assertThat(serverRequests.getFirst().getHeaders().get(ACCEPT_ENCODING)).containsExactly("identity");
@@ -91,7 +96,7 @@ class TestDecompressingHttpClient
             throws IOException
     {
         HttpCache cache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
-        DecompressingHttpClient client = new DecompressingHttpClient(new CachingHttpClient(server(true), cache, Clock.systemUTC()));
+        DecompressingHttpClient client = new DecompressingHttpClient(new CachingHttpClient(new SizeLimitingHttpClient(server(true), MAX_RESPONSE_SIZE), cache, Clock.systemUTC()), MAX_RESPONSE_SIZE);
 
         assertThat(client.execute(get(), RESPONSE)).isEqualTo("200 headers=[] " + BODY);
         assertThat(client.execute(get(), RESPONSE)).isEqualTo("200 headers=[] " + BODY);
@@ -103,11 +108,60 @@ class TestDecompressingHttpClient
         assertThat(storedSize).isLessThan(BODY.length() / 10);
     }
 
+    @Test
+    void testDecompressedSizeIsLimited()
+    {
+        // like a gzip bomb, it's much smaller than the limit before it's decompressed
+        String body = "[" + "{\"name\":\"item\"},".repeat(1_000_000) + "{}]";
+        assertThat(gzip(body).length).isLessThan(toIntExact(MAX_RESPONSE_SIZE.toBytes()));
+        DecompressingHttpClient client = new DecompressingHttpClient(server(true, body), MAX_RESPONSE_SIZE);
+
+        assertThatThrownBy(() -> client.execute(get(), RESPONSE))
+                .hasRootCauseInstanceOf(ResponseTooLargeException.class)
+                .hasRootCauseMessage("Response body is larger than 1MB");
+    }
+
+    @Test
+    void testUncompressedSizeIsLimited()
+    {
+        DecompressingHttpClient client = new DecompressingHttpClient(new SizeLimitingHttpClient(server(false), SMALL_RESPONSE_SIZE), MAX_RESPONSE_SIZE);
+
+        assertThatThrownBy(() -> client.execute(get(), RESPONSE))
+                .hasRootCauseInstanceOf(ResponseTooLargeException.class)
+                .hasRootCauseMessage("Response body is larger than 1kB");
+    }
+
+    @Test
+    void testResponsesBelowLimitAreNotAffected()
+    {
+        DataSize exactSize = DataSize.ofBytes(BODY.length());
+
+        assertThat(new DecompressingHttpClient(server(true), exactSize).execute(get(), RESPONSE)).isEqualTo("200 headers=[] " + BODY);
+        assertThat(new DecompressingHttpClient(new SizeLimitingHttpClient(server(false), exactSize), exactSize).execute(get(), RESPONSE)).isEqualTo("200 headers=[" + BODY.length() + "] " + BODY);
+    }
+
+    @Test
+    void testCacheLimitsResponsesItReads()
+    {
+        HttpCache cache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        DecompressingHttpClient client = new DecompressingHttpClient(new CachingHttpClient(new SizeLimitingHttpClient(server(false), SMALL_RESPONSE_SIZE), cache, Clock.systemUTC()), MAX_RESPONSE_SIZE);
+
+        // the failure is passed to the handler, which fails the test with it
+        assertThatThrownBy(() -> client.execute(get(), RESPONSE))
+                .isInstanceOf(AssertionError.class)
+                .hasRootCauseInstanceOf(ResponseTooLargeException.class);
+    }
+
     private TestingHttpClient server(boolean compress)
+    {
+        return server(compress, BODY);
+    }
+
+    private TestingHttpClient server(boolean compress, String responseBody)
     {
         return new TestingHttpClient(request -> {
             serverRequests.add(request);
-            byte[] body = compress ? gzip(BODY) : BODY.getBytes(UTF_8);
+            byte[] body = compress ? gzip(responseBody) : responseBody.getBytes(UTF_8);
             ImmutableListMultimap.Builder<HeaderName, String> headers = ImmutableListMultimap.builder();
             headers.put(CACHE_CONTROL, "max-age=60");
             headers.put(CONTENT_LENGTH, String.valueOf(body.length));
