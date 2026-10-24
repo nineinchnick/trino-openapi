@@ -116,6 +116,11 @@ authentication.password=${ENV:OPENAPI_PASSWORD}
 
 Restart Trino. Every catalog can point to a different API.
 
+Use a release built for the version of your Trino server, because the plugin
+might not work with other Trino versions. The notes of every
+[release](https://github.com/nineinchnick/trino-openapi/releases) list the
+Trino version it's built for.
+
 # Configuration
 
 | Property                       | Container environment variable      | Default   | Description                                                                                                     |
