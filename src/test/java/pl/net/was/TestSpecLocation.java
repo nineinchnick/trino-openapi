@@ -210,6 +210,18 @@ class TestSpecLocation
     }
 
     @Test
+    void testUnauthorizedWithoutChallenge()
+    {
+        // Jetty fails 401 responses without a WWW-Authenticate header, which many servers send, as protocol violations
+        failures.add(401);
+
+        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml"), httpClient))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Failed to fetch the OpenAPI spec from %s/openapi.yaml with HTTP 401", serverUri);
+        assertThat(requests).hasSize(1);
+    }
+
+    @Test
     void testUnreachableSpec()
             throws IOException
     {

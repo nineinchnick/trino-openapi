@@ -13,11 +13,15 @@
  */
 package pl.net.was.authentication;
 
+import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
+import io.airlift.http.client.OAuth2TokenException;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.StaticBodyGenerator;
+import io.airlift.http.client.UnexpectedResponseException;
+import io.airlift.http.client.jetty.JettyHttpClient;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.trino.spi.TrinoException;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,9 @@ import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -517,6 +524,44 @@ class TestAuthentication
         assertThat(tokenRequests)
                 .extracting(Request::isFollowRedirects)
                 .containsExactly(false, false);
+    }
+
+    @Test
+    void testOAuthTokenRequestRejectedWithoutChallenge()
+            throws IOException
+    {
+        // Jetty fails 401 responses without a WWW-Authenticate header, which token endpoints can send, as protocol violations
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/token", exchange -> {
+            byte[] body = "{\"error\":\"invalid_client\"}".getBytes(UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(401, body.length);
+            try (OutputStream output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        server.start();
+        try (HttpClient tokenClient = new JettyHttpClient()) {
+            OpenApiConfig config = new OpenApiConfig()
+                    .setClientId("client")
+                    .setClientSecret("secret")
+                    .setTokenUrl(URI.create("http://127.0.0.1:%d/token".formatted(server.getAddress().getPort())));
+
+            assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config, tokenClient).filterRequest(request("/secured"), UserCredentials.NONE))
+                    .isInstanceOfSatisfying(UnexpectedResponseException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(401);
+                        assertThat(e.getResponseBody()).contains("invalid_client");
+                    });
+            assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config.setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC), tokenClient)
+                    .filterRequest(request("/secured"), UserCredentials.NONE))
+                    .isInstanceOfSatisfying(OAuth2TokenException.class, e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(401);
+                        assertThat(e.getError()).contains("invalid_client");
+                    });
+        }
+        finally {
+            server.stop(0);
+        }
     }
 
     @Test

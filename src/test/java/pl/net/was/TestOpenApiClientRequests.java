@@ -1260,6 +1260,20 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testUnauthorizedWithoutChallengeIncludesErrorPathMessage()
+            throws IOException
+    {
+        // Jetty fails 401 responses without a WWW-Authenticate header, which many APIs send, as protocol violations
+        responses.add(respond(401, "{\"message\":\"Bad credentials\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 401: \"Bad credentials\"", baseUri)
+                .hasNoCause();
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
     void testErrorWithoutOperationIdOrErrorPath()
             throws IOException
     {
