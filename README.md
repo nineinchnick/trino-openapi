@@ -153,7 +153,8 @@ Trino version it's built for.
 | `retry-initial-delay`                          | `OPENAPI_RETRY_INITIAL_DELAY`           | `1s`                 | Delay before the first retry, doubled for every next retry                                                      |
 | `retry-max-delay`                              | `OPENAPI_RETRY_MAX_DELAY`               | `1m`                 | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
 | `max-response-size`                            | `OPENAPI_MAX_RESPONSE_SIZE`             | `16MB`               | Maximum size of a response body, after it's decompressed; see [HTTP client](#http-client)                       |
-| `domain-expansion-limit`                       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`        | `256`                | Maximum number of values a range predicate is expanded to, which limits the number of requests it can cause     |
+| `domain-expansion-limit`                       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`        | `256`                | Maximum number of values a range predicate is expanded to; see [Queries](#queries)                              |
+| `max-filter-combinations`                      | `OPENAPI_MAX_FILTER_COMBINATIONS`       | `1000`               | Maximum number of combinations of values of filters on several columns; see [Queries](#queries)                 |
 | `http-cache.directory`                         | `OPENAPI_HTTP_CACHE_DIRECTORY`          |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
 | `http-cache.max-size`                          | `OPENAPI_HTTP_CACHE_MAX_SIZE`           | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
 | `http-cache.max-entry-size`                    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE`     | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
@@ -589,6 +590,11 @@ Without the filter, the query fails with `Missing required constraint`.
 * An `IN` list makes one request per value, so it should stay short.
 * A range, like `BETWEEN 1 AND 10`, is expanded into separate values when the
   column type allows it, up to `domain-expansion-limit`.
+* Filters on multiple values of several columns make a request for every
+  combination of their values, in a separate split, so `owner IN (...)` with
+  200 values and `repo IN (...)` with 200 values make 40000 requests. Values of
+  dynamic filters from joins are combined too. The query fails if there are more
+  combinations than `max-filter-combinations`.
 * A range on a response column, like `updated_at >= TIMESTAMP '2024-01-01'`, is
   sent as lower and upper bound parameters, when the operation maps them to
   the column with [range filters](#range-filters).

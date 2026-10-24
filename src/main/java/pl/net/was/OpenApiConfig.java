@@ -96,6 +96,7 @@ public class OpenApiConfig
     // (or sequence of range predicates).
     // Too large IN lists cause too many requests being made, so a hard limit is required.
     private int domainExpansionLimit = 256;
+    private int maxFilterCombinations = 1000;
     private SplitStrategy splitStrategy = SplitStrategy.OFF;
     private ProbeLimit probeLimit = ProbeLimit.NONE;
 
@@ -640,6 +641,20 @@ public class OpenApiConfig
     public OpenApiConfig setDomainExpansionLimit(int domainExpansionLimit)
     {
         this.domainExpansionLimit = domainExpansionLimit;
+        return this;
+    }
+
+    @Min(1)
+    public int getMaxFilterCombinations()
+    {
+        return maxFilterCombinations;
+    }
+
+    @Config("max-filter-combinations")
+    @ConfigDescription("Maximum number of combinations of values of filters, like IN lists on several columns, each read in a separate split")
+    public OpenApiConfig setMaxFilterCombinations(int maxFilterCombinations)
+    {
+        this.maxFilterCombinations = maxFilterCombinations;
         return this;
     }
 
