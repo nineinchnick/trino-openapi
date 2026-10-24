@@ -38,6 +38,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 
 public class OpenApiTableHandle
         implements ConnectorTableHandle
@@ -186,7 +187,25 @@ public class OpenApiTableHandle
     @Override
     public String toString()
     {
-        return schemaTableName.getTableName();
+        StringBuilder builder = new StringBuilder(schemaTableName.getTableName());
+        builder.append(" paths=").append(selectPaths);
+        // the constraint of a table without pushed down predicates is none, not all
+        if (!constraint.isNone() && !constraint.isAll()) {
+            builder.append(" constraint=").append(describe(constraint));
+        }
+        sortItem.ifPresent(item -> builder.append(" sortOrder=").append(item.getName()).append(' ').append(item.getSortOrder()));
+        limit.ifPresent(value -> builder.append(" limit=").append(value));
+        return builder.toString();
+    }
+
+    private static String describe(TupleDomain<ColumnHandle> constraint)
+    {
+        // Domain.toString() shows only the first few values of large domains
+        return constraint.getDomains().orElseThrow().entrySet().stream()
+                .map(entry -> Map.entry(((OpenApiColumnHandle) entry.getKey()).getName(), entry.getValue()))
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(joining(", ", "{", "}"));
     }
 
     public long getRetainedSizeInBytes()

@@ -484,6 +484,13 @@ request: it skips paths whose required parameters are missing from the query,
 and prefers the path using the most path parameters, then the most other
 filters, then the shortest path.
 
+`EXPLAIN` shows the paths of the table, and the predicates, `LIMIT`, and
+`ORDER BY` pushed down into requests, in the `TableScan` node:
+
+```text
+TableScan[table = petstore:store_order paths=[GET /store/order/{orderId}] constraint={order_id=[ SortedRangeSet[type=bigint, ranges=1, {[1]}] ]}]
+```
+
 ## Columns
 
 Column names follow the same rules as table names. Columns are disambiguated:
