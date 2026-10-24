@@ -283,7 +283,8 @@ public class OpenApiSplitManager
                 }
                 continue;
             }
-            Optional<OpenApiTableHandle> firstPage = canProbe && splitStrategy == SplitStrategy.PROBE
+            // without the page size, stride splits can't skip pages past the last one, but the probe strategy can read the totals from the first page
+            Optional<OpenApiTableHandle> firstPage = canProbe && splitStrategy != SplitStrategy.OFF
                     ? client.getFirstPageWithTotals(splitTable.table())
                     : Optional.empty();
             if (firstPage.isEmpty()) {

@@ -635,13 +635,15 @@ separate splits:
   splits, the first split reads pages 1, N+1, 2N+1, and so on, the second
   split reads pages 2, N+2, 2N+2, and so on. Every split stops at the last page
   like a single split would, and skips pages past the last one, using
-  `totalResultsPath` or `totalPagesPath`. The strategy is used only when one of
-  `totalResultsPath`, `totalPagesPath`, `hasMorePath`, or the page size is known,
-  otherwise pages are read in a single split. Results with fewer pages than
-  splits make extra requests for pages past the last one. If the server returns
-  the last page for every page number past it, also set `totalPagesPath`, or
-  `totalResultsPath` with a known page size, otherwise such pages are returned
-  more than once.
+  `totalResultsPath` or `totalPagesPath`. Servers often return the last page
+  for every page number past it, so the strategy is used only when
+  `totalPagesPath` is set, or `totalResultsPath` is set and the page size is
+  known, from a filter, from `parameterDefaults`, or from the parameter's
+  default. With `maxResults`, the page size must also be known. When
+  `totalResultsPath` or `totalPagesPath` is set, but the page size is not
+  known, the `probe` strategy is used instead, which gets the page size from
+  the first page. Otherwise, pages are read in a single split. Results with
+  fewer pages than splits make extra requests for pages past the last one.
 * `off` - read all pages in a single split.
 
 Pages are read one after another when the query has a `LIMIT`, so pagination

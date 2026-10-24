@@ -284,12 +284,14 @@ public class OpenApiClient
         if (getUnfilteredPageColumn(table, httpPath).isEmpty()) {
             return false;
         }
-        // without a signal of the last page, splits reading pages past it would never end, or return the last page again
+        // servers often return the last page for every page number past it, so only a total tells a split that it started past the last page
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
-        return !JsonPointer.empty().equals(pagination.totalResultsPointer())
-                || !JsonPointer.empty().equals(pagination.totalPagesPointer())
-                || !JsonPointer.empty().equals(pagination.hasMorePointer())
-                || getPageSize(table, httpPath).isPresent();
+        boolean hasTotalPages = !JsonPointer.empty().equals(pagination.totalPagesPointer());
+        if (!hasTotalPages && JsonPointer.empty().equals(pagination.totalResultsPointer())) {
+            return false;
+        }
+        // a split can't tell the page size from the pages it reads, because the first one can be the last page, returned again
+        return (hasTotalPages && pagination.maxResults().isEmpty()) || getPageSize(table, httpPath).isPresent();
     }
 
     public Optional<OpenApiTableHandle> getFirstPageWithTotals(OpenApiTableHandle table)
@@ -1237,7 +1239,6 @@ public class OpenApiClient
             long rowCount;
             int page = offset + 1;
             boolean isLastPage;
-            OptionalLong lastPageSize = OptionalLong.empty();
             Iterator<List<?>> rows;
 
             @Override
@@ -1266,18 +1267,14 @@ public class OpenApiClient
                 int fetchedPage = page;
                 page += pageIncrement;
                 int pageResults = Iterables.size(resultsPage.rows());
-                if (lastPageSize.isEmpty()) {
-                    // the first page read by a split is full, unless it's the last one
-                    lastPageSize = pageSize.isPresent() ? pageSize : OptionalLong.of(pageResults);
-                }
                 // splits reading every few pages can start past the last page,
                 // and servers might return the last page for every page number past it
-                if (isPastLastPage(resultsPage, fetchedPage, lastPageSize.orElseThrow(), maxResults)) {
+                if (isPastLastPage(resultsPage, fetchedPage, pageSize, maxResults)) {
                     isLastPage = true;
                     rows = emptyIterator();
                     return;
                 }
-                if (isPastLastPage(resultsPage, page, lastPageSize.orElseThrow(), maxResults)) {
+                if (isPastLastPage(resultsPage, page, pageSize, maxResults)) {
                     isLastPage = true;
                 }
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
@@ -1300,15 +1297,15 @@ public class OpenApiClient
         };
     }
 
-    private static boolean isPastLastPage(ResultsPage resultsPage, int page, long pageSize, long maxResults)
+    private static boolean isPastLastPage(ResultsPage resultsPage, int page, OptionalLong pageSize, long maxResults)
     {
         if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().orElseThrow()) {
             return true;
         }
-        if (pageSize <= 0) {
+        if (pageSize.isEmpty() || pageSize.orElseThrow() <= 0) {
             return false;
         }
-        long firstResult = (page - 1) * pageSize;
+        long firstResult = (page - 1) * pageSize.orElseThrow();
         return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().orElseThrow());
     }
 }
