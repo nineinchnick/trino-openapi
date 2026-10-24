@@ -379,7 +379,9 @@ A table has columns for:
 Request parameters are filters. Their values are copied from the query into
 every returned row, because most APIs don't repeat them in responses. If the
 query doesn't filter on a parameter that has a value in
-[`parameterDefaults`](#parameter-defaults), rows have that value.
+[`parameterDefaults`](#parameter-defaults), rows have that value. A path
+parameter [linked to a response field](#resource-identifiers) is the column of
+that field instead, and rows have the value from the response.
 
 ## Queries
 
@@ -586,7 +588,8 @@ ignored. Request and response bodies must be JSON.
 # OpenAPI extensions
 
 Some behavior can't be described with standard OpenAPI. The connector reads an
-`x-trino` extension in an operation, and one of the whole document, which
+`x-trino` extension in an operation, one in a path parameter, which links it to
+a [response field](#resource-identifiers), and one of the whole document, which
 describes [rate limits](#retries) and [error messages](#error-messages):
 
 ```yaml
@@ -895,6 +898,49 @@ SELECT number, title, state FROM github.default.repos_pulls WHERE owner = 'trino
   parameter is not sent.
 * `INSERT`, `UPDATE`, and `DELETE` statements send the defaults too, when the
   statement doesn't set the parameter.
+
+## Resource identifiers
+
+Paths like `/pet/{petId}` identify a resource with a path parameter, and the
+response usually has the same value in a field with another name, like `id`.
+The connector can't tell that they hold the same value, so the table has two
+columns, `pet_id` and `id`, and the value of `pet_id` is copied from the query
+filter into every row, or is `NULL` when the query doesn't filter on it.
+
+Set `field` in the `x-trino` extension of the path parameter to the name of the
+response field it matches:
+
+```yaml
+paths:
+  /pet/{petId}:
+    get:
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          x-trino:
+            field: id
+      # ...
+```
+
+Then the parameter and the field are a single column, named after the field. A
+filter on it, like `WHERE id = 1`, uses the path with the parameter, and rows
+have the value of the field from the response, also when the query reads a
+list of resources without the filter:
+
+```sql
+SELECT id, name FROM openapi.default.pet WHERE id = 1;
+```
+
+* Only path parameters can be linked to a field.
+* The field must be a field of the responses of the table, with the same type as
+  the parameter. Loading the spec fails otherwise.
+* Set `field` in every operation of the path that has the parameter, or once in
+  the parameters of the path. Loading the spec fails if only some operations
+  link the parameter.
 
 ## Error messages
 

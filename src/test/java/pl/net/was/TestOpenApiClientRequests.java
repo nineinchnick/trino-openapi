@@ -58,6 +58,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
@@ -248,6 +249,54 @@ class TestOpenApiClientRequests
                       description: Deleted
             """;
 
+    private static final String LINKED_PATH_PARAMETER_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /pets:
+                get:
+                  operationId: listPets
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Pet'
+              /pets/{petId}:
+                get:
+                  operationId: getPet
+                  parameters:
+                    - name: petId
+                      in: path
+                      required: true
+                      schema:
+                        type: integer
+                      x-trino:
+                        field: id
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Pet'
+            components:
+              schemas:
+                Pet:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+            """;
+
     private static final String PAGED_SPEC =
             """
             openapi: 3.0.0
@@ -378,6 +427,22 @@ class TestOpenApiClientRequests
     {
         assertThat(getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", "a")).isEmpty();
         assertThat(requestUris).containsExactly(URI.create("/a/items"));
+    }
+
+    @Test
+    void testPathParameterLinkedToField()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"id\":1,\"name\":\"Cat\"}"));
+        assertThat(getRowsMatching(newConfig(LINKED_PATH_PARAMETER_SPEC), "pets", Map.of("id", Domain.singleValue(BIGINT, 1L))))
+                .map(List::toString)
+                .containsExactly("[1, Cat]");
+        // rows of a list get the value of the field from every item
+        responses.add(respond(200, "[{\"id\":1,\"name\":\"Cat\"},{\"id\":2,\"name\":\"Dog\"}]"));
+        assertThat(getRowsMatching(newConfig(LINKED_PATH_PARAMETER_SPEC), "pets", Map.of()))
+                .map(List::toString)
+                .containsExactly("[1, Cat]", "[2, Dog]");
+        assertThat(requestUris).containsExactly(URI.create("/pets/1"), URI.create("/pets"));
     }
 
     @Test

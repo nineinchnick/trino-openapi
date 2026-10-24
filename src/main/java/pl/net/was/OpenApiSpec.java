@@ -141,6 +141,7 @@ public class OpenApiSpec
     private static final String RATE_LIMIT_RESET_HEADER = "rateLimitResetHeader";
     private static final String RATE_LIMIT_RESET_FORMAT = "rateLimitResetFormat";
     private static final String RATE_LIMIT_REMAINING_HEADER = "rateLimitRemainingHeader";
+    private static final String PARAMETER_FIELD = "field";
     private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(ERROR_PATH, RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
 
@@ -258,7 +259,9 @@ public class OpenApiSpec
                     });
         }
         this.handles = handles.buildOrThrow();
-        this.tables = tables.buildOrThrow().entrySet().stream()
+        Map<String, List<OpenApiColumn>> mergedTables = tables.buildOrThrow();
+        mergedTables.forEach(OpenApiSpec::validateParameterFields);
+        this.tables = mergedTables.entrySet().stream()
                 .collect(toImmutableMap(Map.Entry::getKey, entry -> addRowIdColumn(
                         allowInsertsWithoutResponseColumns(
                                 allowNullsMissingFromSelectResponses(entry.getValue(), this.handles.get(entry.getKey())),
@@ -610,6 +613,7 @@ public class OpenApiSpec
                         ParameterLocation parameterLocation = parameter.getIn() == null ? ParameterLocation.NONE : ParameterLocation.valueOf(parameter.getIn().toUpperCase(Locale.ENGLISH));
                         boolean isRequired = TRUE.equals(parameter.getRequired());
                         ParameterStyle parameterStyle = ParameterStyle.of(parameter.getStyle(), parameter.getExplode(), parameter.getAllowReserved(), parameterLocation);
+                        Optional<String> field = getParameterField(parameter, new HttpPath(method, path));
                         return getPredicateColumn(
                                 parameter.getName(),
                                 parameter.getSchema(),
@@ -624,7 +628,8 @@ public class OpenApiSpec
                                 // keep pagination parameters as hidden columns, so it's possible to
                                 // see the page number (how many requests were made) and change the default per-page limit
                                 specExtension.containsValue(parameter.getName()),
-                                parameter.getName().equals(specExtension.get(PAGINATION_PAGE_PARAM)));
+                                parameter.getName().equals(specExtension.get(PAGINATION_PAGE_PARAM)))
+                                .map(column -> field.isEmpty() ? column : linkToField(column, field.get(), parameter.getName(), new HttpPath(method, path)));
                     })
                     .filter(Optional::isPresent)
                     .map(Optional::get)
@@ -654,6 +659,80 @@ public class OpenApiSpec
                 .map(column -> rangeFilters.containsKey(column.getSourceName()) && !isParameter(column)
                         ? OpenApiColumn.builderFrom(column).setRangeFilters(Map.of(httpPath, rangeFilters.get(column.getSourceName()))).build()
                         : column);
+    }
+
+    private static Optional<String> getParameterField(Parameter parameter, HttpPath httpPath)
+    {
+        Object extension = parameter.getExtensions() == null ? null : parameter.getExtensions().get(SPEC_EXTENSION);
+        if (extension == null) {
+            return Optional.empty();
+        }
+        String parameterName = parameter.getName();
+        checkArgument(extension instanceof Map<?, ?>, "Invalid value of the %s extension of parameter %s of %s: expected an object", SPEC_EXTENSION, parameterName, httpPath);
+        ((Map<?, ?>) extension).keySet().forEach(key -> checkArgument(
+                PARAMETER_FIELD.equals(key),
+                "Invalid property of the %s extension of parameter %s of %s: %s, must be: %s",
+                SPEC_EXTENSION,
+                parameterName,
+                httpPath,
+                key,
+                PARAMETER_FIELD));
+        Object field = ((Map<?, ?>) extension).get(PARAMETER_FIELD);
+        checkArgument(field instanceof String name && !name.isBlank(), "Invalid value of %s in the %s extension of parameter %s of %s: expected the name of a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
+        // only path parameters identify a resource, and other parameters are usually filters, matching many values of a field
+        checkArgument("path".equals(parameter.getIn()), "Invalid value of %s in the %s extension of parameter %s of %s: only path parameters can be linked to a response field", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath);
+        return Optional.of((String) field);
+    }
+
+    private static OpenApiColumn linkToField(OpenApiColumn column, String field, String parameterName, HttpPath httpPath)
+    {
+        // a column named after the field is merged with the column of the field, so rows get its value from the response
+        return OpenApiColumn.builderFrom(column)
+                .setName(getIdentifier(field))
+                .setSourceName(field)
+                .setParameterNames(Map.of(httpPath, parameterName))
+                .build();
+    }
+
+    private static void validateParameterFields(String tableName, List<OpenApiColumn> columns)
+    {
+        for (OpenApiColumn column : columns) {
+            column.getParameterNames().forEach((httpPath, parameterName) -> {
+                String field = column.getSourceName();
+                if (column.isRequestOnly()) {
+                    Optional<OpenApiColumn> fieldColumn = columns.stream()
+                            .filter(candidate -> candidate.getSourceName().equals(field) && !candidate.isRequestOnly())
+                            .findFirst();
+                    checkArgument(fieldColumn.isPresent(), "Invalid value of %s in the %s extension of parameter %s of %s: %s is not a response field of table %s", PARAMETER_FIELD, SPEC_EXTENSION, parameterName, httpPath, field, tableName);
+                    throw new IllegalArgumentException("Invalid value of %s in the %s extension of parameter %s of %s: the parameter has type %s, but field %s has type %s".formatted(
+                            PARAMETER_FIELD,
+                            SPEC_EXTENSION,
+                            parameterName,
+                            httpPath,
+                            column.getType(),
+                            field,
+                            fieldColumn.get().getType()));
+                }
+                // otherwise, the same parameter would be a separate column in other operations, without values in rows
+                columns.stream()
+                        .filter(other -> other != column)
+                        .flatMap(other -> Stream.concat(other.getRequiresPredicate().entrySet().stream(), other.getOptionalPredicate().entrySet().stream())
+                                .filter(entry -> entry.getValue() == ParameterLocation.PATH
+                                        && entry.getKey().path().equals(httpPath.path())
+                                        && other.getParameterName(entry.getKey()).equals(parameterName))
+                                .map(Map.Entry::getKey))
+                        .findFirst()
+                        .ifPresent(otherPath -> {
+                            throw new IllegalArgumentException("Parameter %s of %s is linked to field %s in the %s extension, but not in %s, so set the same %s in all operations of the path, or in the parameters of the path".formatted(
+                                    parameterName,
+                                    httpPath,
+                                    field,
+                                    SPEC_EXTENSION,
+                                    otherPath,
+                                    PARAMETER_FIELD));
+                        });
+            });
+        }
     }
 
     private static Map<String, Object> getParameterDefaults(Object specExtension)
