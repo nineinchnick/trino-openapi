@@ -309,10 +309,10 @@ is limited by `max-response-size`, after it's decompressed, because a small
 compressed response of repetitive JSON can expand to more than the heap of a
 node. It also applies to responses that are not compressed, and to responses
 read to be stored in the [HTTP cache](#http-cache). A query reading a larger
-response fails with an error that says how to increase the limit. The
-`max-response-content-length` of the client limits only the compressed size,
-and defaults to `1GB`, so it doesn't fail responses below `max-response-size`
-earlier.
+response fails without retrying it, with an error that says how to increase
+the limit. The `max-response-content-length` of the client limits only the
+compressed size, and defaults to `1GB`, so it doesn't fail responses below
+`max-response-size` earlier.
 
 ## Retries
 
@@ -325,6 +325,9 @@ connection, or a response with one of these HTTP status codes:
 * `403 Forbidden` with a `Retry-After` header, or with headers saying that the
   rate limit is exhausted, as declared in the spec, which some APIs, like
   GitHub, use for exceeded rate limits.
+
+A response larger than `max-response-size`, or the `max-response-content-length`
+of the HTTP client, is not retried, because it would be just as large again.
 
 Requests that have the same effect when they're repeated are retried after any
 transient error: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, and `POST`
