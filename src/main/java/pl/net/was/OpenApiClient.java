@@ -30,6 +30,7 @@ import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -51,6 +52,7 @@ import io.airlift.http.client.ResponseHandler;
 import io.airlift.http.client.StaticBodyGenerator;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
+import io.airlift.units.DataSize;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.trino.spi.Page;
@@ -170,12 +172,16 @@ public class OpenApiClient
     {
         this.servers = servers;
         // the cache is wrapped by decompression, so it stores compressed responses
-        this.httpClient = new DecompressingHttpClient(config.getHttpCacheDirectory()
-                .<HttpClient>map(directory -> new CachingHttpClient(
-                        httpClient,
-                        new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
-                        Clock.systemUTC()))
-                .orElse(httpClient));
+        DataSize maxResponseSize = config.getMaxResponseSize();
+        HttpClient sizeLimitingClient = new SizeLimitingHttpClient(httpClient, maxResponseSize);
+        this.httpClient = new DecompressingHttpClient(
+                config.getHttpCacheDirectory()
+                        .<HttpClient>map(directory -> new CachingHttpClient(
+                                sizeLimitingClient,
+                                new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
+                                Clock.systemUTC()))
+                        .orElse(sizeLimitingClient),
+                maxResponseSize);
         this.openApiSpec = openApiSpec;
         this.rateLimiter = config.getMaxRequestsPerSecond().map(RateLimiter::create).orElse(null);
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
@@ -868,10 +874,19 @@ public class OpenApiClient
         String context = describeFailedRequest(httpPath, request);
         String attemptsSuffix = attempts > 1 ? format(" after %d attempts", attempts) : "";
         return switch (failure) {
-            case HttpRequestFailure.TransportError error -> new TrinoException(
-                    OPENAPI_CONNECTION_ERROR,
-                    format("%s%s: %s", context, attemptsSuffix, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
-                    error.getCause());
+            case HttpRequestFailure.TransportError error -> {
+                Optional<ResponseTooLargeException> tooLarge = getResponseTooLarge(error);
+                if (tooLarge.isPresent()) {
+                    yield new TrinoException(
+                            OPENAPI_INVALID_RESPONSE,
+                            format("%s%s: the response is larger than %s, increase the max-response-size catalog property to read it", context, attemptsSuffix, tooLarge.get().getMaxSize()),
+                            error.getCause());
+                }
+                yield new TrinoException(
+                        OPENAPI_CONNECTION_ERROR,
+                        format("%s%s: %s", context, attemptsSuffix, requireNonNullElse(error.getCause().getMessage(), error.getCause().getClass().getName())),
+                        error.getCause());
+            }
             case HttpRequestFailure.ErrorResponse error -> {
                 bodyLog.debug("%s with HTTP %d%s, response body%s: %s", context, error.getStatusCode(), attemptsSuffix, error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
                 String message = format("%s with HTTP %d%s%s", context, error.getStatusCode(), attemptsSuffix, describeRedirect(request.getUri(), error));
@@ -885,6 +900,14 @@ public class OpenApiClient
                         .orElse(messageWithError));
             }
         };
+    }
+
+    private static Optional<ResponseTooLargeException> getResponseTooLarge(HttpRequestFailure.TransportError error)
+    {
+        return Throwables.getCausalChain(error).stream()
+                .filter(ResponseTooLargeException.class::isInstance)
+                .map(ResponseTooLargeException.class::cast)
+                .findFirst();
     }
 
     private String describeFailedRequest(HttpPath httpPath, Request request)

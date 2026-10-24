@@ -78,6 +78,8 @@ public class OpenApiConfig
     private Duration retryInitialDelay = new Duration(1, SECONDS);
     // long enough to wait for rate limits, which servers usually reset every minute
     private Duration retryMaxDelay = new Duration(1, MINUTES);
+    // the default limit of the Airlift HTTP client, so responses that are not compressed are limited like before
+    private DataSize maxResponseSize = DataSize.of(16, MEGABYTE);
 
     private String httpCacheDirectory;
     private DataSize httpCacheMaxSize = DataSize.of(1, GIGABYTE);
@@ -465,6 +467,21 @@ public class OpenApiConfig
     public boolean isRetryMaxDelayValid()
     {
         return retryInitialDelay == null || retryMaxDelay == null || retryMaxDelay.compareTo(retryInitialDelay) >= 0;
+    }
+
+    @NotNull
+    @MinDataSize("1kB")
+    public DataSize getMaxResponseSize()
+    {
+        return maxResponseSize;
+    }
+
+    @Config("max-response-size")
+    @ConfigDescription("Maximum size of a response body, after it's decompressed; larger responses fail the query")
+    public OpenApiConfig setMaxResponseSize(DataSize maxResponseSize)
+    {
+        this.maxResponseSize = maxResponseSize;
+        return this;
     }
 
     public Optional<String> getHttpCacheDirectory()
