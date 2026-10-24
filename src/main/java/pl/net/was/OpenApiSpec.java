@@ -16,6 +16,8 @@ package pl.net.was;
 
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Enums;
 import com.google.common.base.Splitter;
@@ -395,6 +397,8 @@ public class OpenApiSpec
                 rootParsed = true;
                 JsonNode security = node.get("security");
                 emptyRootSecurity = security != null && security.isArray() && security.isEmpty();
+                // the parser merges allOf alternatives into a single schema, but drops items, so arrays must be merged before
+                mergeArrayAlternatives(node, node);
             }
             return super.parseJsonNode(path, node, options);
         }
@@ -402,6 +406,64 @@ public class OpenApiSpec
         boolean hasEmptyRootSecurity()
         {
             return emptyRootSecurity;
+        }
+
+        private static void mergeArrayAlternatives(JsonNode root, JsonNode node)
+        {
+            if (node instanceof ObjectNode schema) {
+                getArrayAlternatives(root, schema).ifPresent(alternatives -> inlineArrayAlternatives(schema, alternatives));
+            }
+            // this also visits the merged items, which can have allOf alternatives of their own
+            node.forEach(child -> mergeArrayAlternatives(root, child));
+        }
+
+        private static Optional<List<JsonNode>> getArrayAlternatives(JsonNode root, ObjectNode schema)
+        {
+            if (!(schema.get("allOf") instanceof ArrayNode allOf) || allOf.isEmpty()) {
+                return Optional.empty();
+            }
+            List<JsonNode> alternatives = new ArrayList<>();
+            for (JsonNode alternative : allOf) {
+                JsonNode resolved = resolveLocalReference(root, alternative);
+                if (!resolved.has("items")) {
+                    return Optional.empty();
+                }
+                alternatives.add(resolved);
+            }
+            return Optional.of(alternatives);
+        }
+
+        private static JsonNode resolveLocalReference(JsonNode root, JsonNode schema)
+        {
+            JsonNode reference = schema.get("$ref");
+            // references to other documents are resolved by the parser later, so their schemas are not known yet
+            if (reference == null || !reference.isTextual() || !reference.asText().startsWith("#/")) {
+                return schema;
+            }
+            return root.at(reference.asText().substring(1));
+        }
+
+        private static void inlineArrayAlternatives(ObjectNode schema, List<JsonNode> alternatives)
+        {
+            schema.remove("allOf");
+            List<JsonNode> items = new ArrayList<>();
+            Optional.ofNullable(schema.remove("items")).ifPresent(items::add);
+            for (JsonNode alternative : alternatives) {
+                items.add(alternative.get("items"));
+                // keywords of the schema itself take precedence, like in a merge done by the parser
+                alternative.properties().stream()
+                        .filter(property -> !property.getKey().equals("items"))
+                        .forEach(property -> schema.putIfAbsent(property.getKey(), property.getValue().deepCopy()));
+            }
+            if (items.size() == 1) {
+                schema.set("items", items.getFirst().deepCopy());
+                return;
+            }
+            // the parser merges items that are not arrays, and items that are arrays are merged when visiting them
+            ObjectNode mergedItems = schema.objectNode();
+            ArrayNode itemsAlternatives = mergedItems.putArray("allOf");
+            items.forEach(item -> itemsAlternatives.add(item.deepCopy()));
+            schema.set("items", mergedItems);
         }
     }
 
