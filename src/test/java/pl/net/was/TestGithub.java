@@ -676,12 +676,12 @@ public class TestGithub
     public void selectTopNSortedByApi()
     {
         // the path to get a single pull request can't filter by state, but the connector would filter its rows, so the filter doesn't prevent the pushdown
-        String pulls = "SELECT number FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'all'";
-        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(getSession(), pulls + " ORDER BY updated_at DESC LIMIT 1");
-        assertThat(result.result().getRowCount()).isEqualTo(1);
+        String pulls = "SELECT updated_at FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND state = 'all'";
         // sorting by two columns is not pushed down
-        assertThat(result.result().getOnlyColumnAsSet())
-                .isEqualTo(computeActual(pulls + " ORDER BY updated_at DESC, number LIMIT 1").getOnlyColumnAsSet());
+        LocalDateTime sortedByTrino = (LocalDateTime) computeScalar(pulls + " ORDER BY updated_at DESC, number LIMIT 1");
+        MaterializedResultWithPlan result = getDistributedQueryRunner().executeWithPlan(getSession(), pulls + " ORDER BY updated_at DESC LIMIT 1");
+        // pull requests opened or updated between the queries are more recent, so they can only move the result forward
+        assertThat((LocalDateTime) result.result().getOnlyValue()).isAfterOrEqualTo(sortedByTrino);
         // the table has an INSERT operation, so updated_at allows nulls, but every response includes it, so the API sorts the rows
         TableScanNode scan = (TableScanNode) searchFrom(result.queryPlan().orElseThrow().getRoot())
                 .whereIsInstanceOfAny(TableScanNode.class)
