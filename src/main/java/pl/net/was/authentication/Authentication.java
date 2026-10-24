@@ -358,6 +358,8 @@ public class Authentication
         TokenResponse response = httpClient.execute(
                 preparePost()
                         .setUri(URI.create(tokenRequest.tokenUrl()))
+                        // following a redirect would send the client secret and the password to another location
+                        .setFollowRedirects(false)
                         .setHeader(CONTENT_TYPE, "application/x-www-form-urlencoded")
                         .setBodyGenerator(createStaticBodyGenerator(getBody(tokenRequest.grantType()), UTF_8))
                         .build(),

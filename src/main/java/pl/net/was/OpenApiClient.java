@@ -589,6 +589,8 @@ public class OpenApiClient
                 .setMethod(httpPath.method().name())
                 .setBodyGenerator(bodyGenerator)
                 .setUri(uri)
+                // the HTTP client would send custom headers, like API keys, to any host a server redirects to
+                .setFollowRedirects(false)
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
@@ -637,7 +639,7 @@ public class OpenApiClient
                     error.getCause());
             case HttpRequestFailure.ErrorResponse error -> {
                 bodyLog.debug("%s with HTTP %d%s, response body%s: %s", context, error.getStatusCode(), attemptsSuffix, error.isResponseBodyTruncated() ? " (truncated)" : "", error.getResponseBody());
-                String message = format("%s with HTTP %d%s", context, error.getStatusCode(), attemptsSuffix);
+                String message = format("%s with HTTP %d%s%s", context, error.getStatusCode(), attemptsSuffix, describeRedirect(request.getUri(), error));
                 JsonPointer errorPointer = openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath);
                 // the response body is not included, because it might not be readable, and it might contain sensitive information
                 String messageWithError = getErrorMessage(error, errorPointer)
@@ -648,6 +650,25 @@ public class OpenApiClient
                         .orElse(messageWithError));
             }
         };
+    }
+
+    private static String describeRedirect(URI requestUri, HttpRequestFailure.ErrorResponse error)
+    {
+        if (HttpStatus.familyForStatusCode(error.getStatusCode()) != HttpStatus.Family.REDIRECTION) {
+            return "";
+        }
+        Optional<String> location = error.getHeader("Location");
+        if (location.isEmpty()) {
+            return "";
+        }
+        URI target;
+        try {
+            target = requestUri.resolve(location.get());
+        }
+        catch (IllegalArgumentException _) {
+            return "";
+        }
+        return format(", redirecting to %s, but redirects are not followed, so credentials are not sent to other hosts", withoutQuery(target));
     }
 
     private static Optional<String> getErrorMessage(HttpRequestFailure.ErrorResponse error, JsonPointer errorPointer)
