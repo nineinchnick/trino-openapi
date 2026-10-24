@@ -925,10 +925,12 @@ def custom_openapi():
         "totalResultsPath": "$response.body#/total_results",
         "strideSplits": 3,
     }
+    # more stride splits than pages, to check that they're not used without a total
     openapi_schema["paths"]["/clamped_sized_items"]["get"]["x-trino"] = {
         "pageParam": "page",
         "limitParam": "size",
         "resultsPath": "$response.body#/results",
+        "strideSplits": 3,
     }
     openapi_schema["paths"]["/capped_items"]["get"]["x-trino"] = {
         "pageParam": "page",
@@ -941,6 +943,7 @@ def custom_openapi():
         "pageParam": "page",
         "resultsPath": "$response.body#/results",
         "hasMorePath": "$response.body#/has_more",
+        "strideSplits": 3,
     }
     openapi_schema["paths"]["/total_pages_items"]["get"]["x-trino"] = {
         "pageParam": "page",
@@ -958,6 +961,7 @@ def custom_openapi():
         "limitParam": "size",
         "resultsPath": "$response.body#/results",
         "hasMorePath": "$response.body#/has_more",
+        "strideSplits": 3,
     }
     openapi_schema["paths"]["/max_pages_items"]["get"]["x-trino"] = {
         "pageParam": "page",
