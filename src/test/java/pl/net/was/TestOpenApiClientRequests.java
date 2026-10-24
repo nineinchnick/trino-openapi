@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
+import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.AuthenticationScheme;
 import pl.net.was.authentication.AuthenticationType;
 
@@ -1818,7 +1819,8 @@ class TestOpenApiClientRequests
     private List<List<?>> getRowsMatching(OpenApiConfig config, String tableName, Map<String, Domain> columnDomains)
     {
         OpenApiSpec spec = createSpec(config);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config, spec));
+        OpenApiServers servers = new OpenApiServers(config, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (!columnDomains.isEmpty()) {
             Map<ColumnHandle, Domain> domains = spec.getTables().get(tableName).stream()
@@ -1837,7 +1839,8 @@ class TestOpenApiClientRequests
     private void deleteRow(OpenApiConfig config, TupleDomain<ColumnHandle> constraint, String rowId)
     {
         OpenApiSpec spec = createSpec(config);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config, spec));
+        OpenApiServers servers = new OpenApiServers(config, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
                 .cloneWithConstraint(constraint);
         client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);

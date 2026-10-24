@@ -15,6 +15,7 @@ package pl.net.was;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
+import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.swagger.v3.oas.models.PathItem;
@@ -30,6 +31,7 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import org.junit.jupiter.api.Test;
+import pl.net.was.authentication.Authentication;
 
 import java.net.URI;
 import java.net.URL;
@@ -153,18 +155,24 @@ class TestOpenApiClient
         // 25 results, with 10 on every page, so the probe must be followed by 2 more pages
         String firstPage = "{\"total\": 25, \"results\": [%s]}".formatted(String.join(", ", nCopies(10, "{\"name\": \"a\"}")));
         OpenApiSpec spec = loadSpec("paged.yml");
-        return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(request -> {
+        return newClient(config, spec, new TestingHttpClient(request -> {
             requests.add(request.getUri());
             return mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage);
-        }), spec, new OpenApiServers(config, spec));
+        }));
     }
 
     private static OpenApiClient createClient(OpenApiSpec spec)
     {
         OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
-        return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(_ -> {
+        return newClient(config, spec, new TestingHttpClient(_ -> {
             throw new UnsupportedOperationException();
-        }), spec, new OpenApiServers(config, spec));
+        }));
+    }
+
+    private static OpenApiClient newClient(OpenApiConfig config, OpenApiSpec spec, HttpClient httpClient)
+    {
+        OpenApiServers servers = new OpenApiServers(config, spec);
+        return new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
     }
 
     private static OpenApiTableHandle getPagedTable()

@@ -15,12 +15,8 @@
 package pl.net.was;
 
 import com.google.inject.Binder;
-import com.google.inject.Provides;
-import com.google.inject.Singleton;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
-import io.airlift.http.client.HttpClient;
 import io.airlift.units.DataSize;
-import pl.net.was.authentication.AuthenticatingHttpClient;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
 
@@ -56,15 +52,5 @@ public class OpenApiModule
                 .withConfigDefaults(config -> config.setMaxResponseContentLength(DataSize.of(1, GIGABYTE)));
 
         httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
-    }
-
-    // the wrapped client is bound by the HTTP client binder, which closes it when the connector shuts down
-    @SuppressWarnings("CloseableProvides")
-    @Provides
-    @Singleton
-    @ForOpenApi
-    public static HttpClient createHttpClient(@ForUnauthenticatedOpenApi HttpClient httpClient, Authentication authentication)
-    {
-        return new AuthenticatingHttpClient(httpClient, authentication);
     }
 }

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
+import pl.net.was.authentication.Authentication;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -420,7 +421,8 @@ class TestOpenApiServers
     private List<List<?>> getRows(OpenApiConfig config, String tableName)
     {
         OpenApiSpec spec = new OpenApiSpec(config, httpClient);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config, spec));
+        OpenApiServers servers = new OpenApiServers(config, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(config, spec, servers, httpClient), spec, servers);
         return ImmutableList.copyOf(client.getRows(spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName)), 1, 1, false));
     }
 
