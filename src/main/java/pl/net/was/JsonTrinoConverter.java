@@ -76,6 +76,10 @@ public class JsonTrinoConverter
      * Marks object schemas created by merging properties of all object alternatives of a union.
      */
     public static final String MERGED_UNION_EXTENSION = "x-trino-merged-union";
+    /**
+     * Marks schemas of values that can't be mapped to a Trino type, which are kept as JSON text, like unions.
+     */
+    public static final String JSON_TEXT_EXTENSION = "x-trino-json-text";
 
     private static final int MAX_BIGINT_DIGITS = 19;
     // decimal numbers, and the special values that Float.toString() and Double.toString() return
@@ -119,7 +123,8 @@ public class JsonTrinoConverter
             return toUnscaledValue(value, decimalType);
         }
         if (type instanceof VarcharType) {
-            if (jsonNode.isValueNode()) {
+            // strings of unions are quoted, to tell them apart from other values, and to make the value valid JSON
+            if (jsonNode.isValueNode() && !isJsonText(schemaType)) {
                 return jsonNode.asText();
             }
             // fallback for unknown/invalid types
@@ -403,8 +408,8 @@ public class JsonTrinoConverter
         if (block.isNull(position)) {
             return null;
         }
-        if (isUnion(schemaType)) {
-            verify(type instanceof VarcharType, "OpenAPI union types must map to Trino VARCHAR");
+        if (isJsonText(schemaType)) {
+            verify(type instanceof VarcharType, "OpenAPI union and unknown types must map to Trino VARCHAR");
             return new RawValue(type.getSlice(block, position).toStringUtf8());
         }
         if (type instanceof BooleanType) {
@@ -490,8 +495,8 @@ public class JsonTrinoConverter
             else if (itemValue instanceof String stringValue) {
                 arrayNode.add(stringValue);
             }
-            else if (itemValue instanceof ArrayNode || itemValue instanceof ObjectNode) {
-                arrayNode.add((JsonNode) itemValue);
+            else if (itemValue instanceof JsonNode jsonNode) {
+                arrayNode.add(jsonNode);
             }
             else if (itemValue instanceof RawValue rawValue) {
                 arrayNode.addRawValue(rawValue);
@@ -557,8 +562,8 @@ public class JsonTrinoConverter
             // also includes dates and timestamps
             node.put(key, stringValue);
         }
-        else if (value instanceof ArrayNode || value instanceof ObjectNode) {
-            node.set(key, (JsonNode) value);
+        else if (value instanceof JsonNode jsonNode) {
+            node.set(key, jsonNode);
         }
         else if (value instanceof RawValue rawValue) {
             node.putRawValue(key, rawValue);
@@ -573,8 +578,13 @@ public class JsonTrinoConverter
         return schema.getExtensions() != null && TRUE.equals(schema.getExtensions().get(MERGED_UNION_EXTENSION));
     }
 
+    public static boolean isJsonText(Schema<?> schema)
+    {
+        return isUnion(schema) || (schema.getExtensions() != null && TRUE.equals(schema.getExtensions().get(JSON_TEXT_EXTENSION)));
+    }
+
     /**
-     * Union schemas are mapped to VARCHAR columns holding raw JSON, unless all alternatives are objects, see {@link #MERGED_UNION_EXTENSION}.
+     * Union schemas are mapped to VARCHAR columns holding JSON text, unless all alternatives are objects, see {@link #MERGED_UNION_EXTENSION}.
      */
     public static boolean isUnion(Schema<?> schema)
     {

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -107,6 +108,7 @@ import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerat
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
+import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.ceilDiv;
@@ -963,7 +965,7 @@ public class OpenApiClient
                 continue;
             }
             Object value = JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
-            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), parseJsonText(column, value));
         }
         return node;
     }
@@ -988,7 +990,7 @@ public class OpenApiClient
             }
             // updating a column to NULL sends an explicit null, which clears the field
             Object value = block.isNull(position) ? null : JsonTrinoConverter.convert(block, position, column.getType(), column.getSourceType(), OBJECT_MAPPER);
-            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), parseJsonText(column, value));
         }
         return node;
     }
@@ -1015,7 +1017,7 @@ public class OpenApiClient
                 // predicates hold the elements of an array, not a block with the array in its first position
                 value = JsonTrinoConverter.convert(writeNativeValue(column.getType(), block), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
-            else if (value instanceof String stringValue && JsonTrinoConverter.isUnion(column.getSourceType())) {
+            else if (value instanceof String stringValue && JsonTrinoConverter.isJsonText(column.getSourceType())) {
                 value = new RawValue(stringValue);
             }
             else if (value instanceof SqlRow sqlRow) {
@@ -1026,7 +1028,42 @@ public class OpenApiClient
             else if (value instanceof SqlMap sqlMap) {
                 value = JsonTrinoConverter.convertMap(sqlMap, (MapType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
-            JsonTrinoConverter.putValue(node, column.getSourceName(), value);
+            JsonTrinoConverter.putValue(node, column.getSourceName(), parseJsonText(column, value));
+        }
+        return node;
+    }
+
+    /**
+     * Replaces values of union and unknown types, which are VARCHAR columns holding JSON text, with the parsed JSON,
+     * so the request body doesn't include them as strings, or as invalid JSON.
+     */
+    private static Object parseJsonText(OpenApiColumn column, Object value)
+    {
+        Function<RawValue, JsonNode> parser = rawValue -> parseJsonValue(column, rawValue);
+        if (value instanceof RawValue rawValue) {
+            return parser.apply(rawValue);
+        }
+        if (value instanceof JsonNode node) {
+            return resolveRawValues(node, parser);
+        }
+        return value;
+    }
+
+    private static JsonNode parseJsonValue(OpenApiColumn column, RawValue rawValue)
+    {
+        JsonNode node;
+        try {
+            node = OBJECT_MAPPER.reader()
+                    .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .readTree(rawValue.rawValue().toString());
+        }
+        catch (JsonProcessingException _) {
+            // the parser's message quotes the value, which might be sensitive
+            node = MissingNode.getInstance();
+        }
+        // an empty or blank value is parsed into a missing node
+        if (node.isMissingNode()) {
+            throw new TrinoException(JSON_INPUT_CONVERSION_ERROR, format("Value of column %s is not valid JSON", column.getName()));
         }
         return node;
     }

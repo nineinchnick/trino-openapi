@@ -48,8 +48,9 @@ public class TestJira
     @Test
     public void searchIssues()
     {
+        // values of issue fields can have any type, so they're JSON text
         assertQuery(
-                "SELECT i.key, i.fields['summary'] FROM jira.default.rest_api_3_search_jql j CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"' AND j.fields = ARRAY['*all']",
+                "SELECT i.key, json_extract_scalar(i.fields['summary'], '$') FROM jira.default.rest_api_3_search_jql j CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"' AND j.fields = ARRAY['*all']",
                 "VALUES ('KAN-1', 'First issue')");
     }
 }

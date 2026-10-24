@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.swagger.v3.oas.models.PathItem;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
@@ -36,11 +37,13 @@ import java.util.OptionalInt;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static io.airlift.slice.Slices.utf8Slice;
+import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.util.Collections.nCopies;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
 class TestOpenApiClient
@@ -70,6 +73,19 @@ class TestOpenApiClient
 
         assertThat(serializeMap(spec, "echo_union_value", Domain.singleValue(column.getType(), utf8Slice("{\"number\":42}")), column).toString())
                 .isEqualTo("{\"value\":{\"number\":42}}");
+    }
+
+    @Test
+    void shouldRejectUnionPredicatesInRequestBodiesThatAreNotJson()
+    {
+        OpenApiSpec spec = loadSpec("echo.yml");
+        OpenApiColumn column = getColumn(spec, "echo_union_value", "value");
+
+        for (String value : List.of("plain text", "", "1 2")) {
+            assertThatThrownBy(() -> serializeMap(spec, "echo_union_value", Domain.singleValue(column.getType(), utf8Slice(value)), column))
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(JSON_INPUT_CONVERSION_ERROR.toErrorCode()))
+                    .hasMessage("Value of column value is not valid JSON");
+        }
     }
 
     @Test

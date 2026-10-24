@@ -2125,6 +2125,12 @@ class TestOpenApiSpec
                 .containsExactly(
                         Assertions.tuple("name", VARCHAR),
                         Assertions.tuple("tags", VARCHAR));
+        // the values are JSON, so they're sent as arrays in request bodies, not as strings
+        Assertions.assertThat(spec.getTables().get("items"))
+                .filteredOn(column -> column.getName().equals("tags"))
+                .extracting(OpenApiColumn::getSourceType)
+                .singleElement()
+                .matches(JsonTrinoConverter::isJsonText);
     }
 
     @Test
