@@ -167,6 +167,10 @@ uses them for every operation, with credentials from the catalog properties:
   reused until shortly before they expire. The `authorizationCode` and `implicit`
   flows are not supported.
 
+When an operation lists several security requirements, the connector uses the
+first one whose credentials are all configured, and fails the query, naming the
+missing properties, if there's none.
+
 Operations with `security: []`, or specs with an empty top-level `security`
 list, are called without credentials. If the specification doesn't declare any
 security requirements, the connector uses `authentication.type`.

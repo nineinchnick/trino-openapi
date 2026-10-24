@@ -187,7 +187,9 @@ class TestAuthentication
                 %s
                 """.formatted(OPERATION_RESPONSES));
 
-        assertNoCredentials(authentication.filterRequest(request("/secured")));
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the basicAuth security scheme is not declared in components.securitySchemes");
     }
 
     @Test
@@ -239,7 +241,7 @@ class TestAuthentication
 
         assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("The oauth OAuth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser");
+                .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the oauth security scheme must declare a password or clientCredentials flow, because other flows require a user to log in using a browser");
     }
 
     @Test
@@ -274,7 +276,7 @@ class TestAuthentication
 
         assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
                 .isInstanceOf(TrinoException.class)
-                .hasMessage("The password flow of the oauth OAuth security scheme requires the authentication.username and authentication.password configuration properties");
+                .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: the password flow of the oauth security scheme requires the authentication.username and authentication.password configuration properties");
     }
 
     @Test
