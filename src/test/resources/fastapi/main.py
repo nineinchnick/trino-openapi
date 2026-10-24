@@ -206,6 +206,11 @@ class UnionValueEcho(BaseModel):
     value: int | dict[str, int]
 
 
+class TupleEcho(BaseModel):
+    point: tuple[int, str]
+    points: list[tuple[int, str]]
+
+
 class Dimensions(BaseModel):
     width: int
     height: int
@@ -949,6 +954,12 @@ def echo_union_value(body: UnionValueEcho) -> UnionValueEcho:
     return body
 
 
+@router.post("/echo_tuple")
+def echo_tuple(body: TupleEcho) -> TupleEcho:
+    # validating the body rejects tuples sent as objects
+    return body
+
+
 @router.post("/echo_gadget")
 def echo_gadget(body: Gadget) -> Gadget:
     return body
@@ -1306,7 +1317,7 @@ def custom_openapi():
         "totalResultsPath": "$response.body#/total_results",
     }
     # these POST operations only read data, but POST operations are used for INSERT, unless marked otherwise
-    for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_gadget", "/echo_event", "/echo_memo"]:
+    for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_tuple", "/echo_gadget", "/echo_event", "/echo_memo"]:
         openapi_schema["paths"][path]["post"].setdefault("x-trino", {})["sqlOperation"] = "select"
     openapi_schema["paths"]["/bookmarks"]["post"]["x-trino"] = {"sqlOperation": "delete"}
     # pydantic describes optional values as unions with null, which are mapped to VARCHAR

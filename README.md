@@ -857,6 +857,7 @@ Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 | `string` with `format: date`                           | `DATE`                                                                 |
 | `string` with `format: date-time`                      | `TIMESTAMP(3)`, in UTC                                                 |
 | `array`                                                | `ARRAY` of the item type                                               |
+| `prefixItems` with `items: false` or `maxItems`        | `ROW` with fields `_col0`, `_col1`, ... for the elements of the tuple  |
 | `object` with `properties`                             | `ROW` with a field for every property                                  |
 | `object` with `additionalProperties`                   | `MAP(VARCHAR, ...)` of the value type                                  |
 | `type: [T, "null"]` (OpenAPI 3.1), or `nullable: true` | nullable `T`                                                           |
@@ -867,6 +868,11 @@ Integers outside the range of the column type, or with a fractional part, and
 numbers with more than 28 integer digits fail the query, because the API sent a
 value that doesn't match its specification. Numbers with more than 10 fractional
 digits are rounded half up.
+
+Tuples, which are arrays with elements of different types declared with
+`prefixItems`, are read from JSON arrays, and sent as JSON arrays in request
+bodies. Arrays that can have more elements than the declared ones are `VARCHAR`
+with the raw JSON.
 
 JSON values of a different type than the column, like an array in a `MAP` or
 `ROW` column, fail the query too. Numbers and booleans can be sent as JSON

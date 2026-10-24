@@ -599,6 +599,17 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectWithTuplesInRequestBody()
+    {
+        MaterializedResult result = getQueryRunner().execute("SELECT point._col0, point._col1, points[2]._col0, points[2]._col1 FROM fastapi.default.echo_tuple " +
+                "WHERE point = CAST(ROW(1, 'a') AS ROW(_col0 BIGINT, _col1 VARCHAR)) " +
+                "AND points = CAST(ARRAY[ROW(2, 'b'), ROW(3, 'c')] AS ARRAY(ROW(_col0 BIGINT, _col1 VARCHAR)))");
+        assertThat(result.getTypes()).containsExactly(BIGINT, VARCHAR, BIGINT, VARCHAR);
+        assertThat(result.getMaterializedRows()).hasSize(1);
+        assertThat(result.getMaterializedRows().getFirst().getFields()).containsExactly(1L, "a", 3L, "c");
+    }
+
+    @Test
     public void selectWithArrayInAllOfInRequestBody()
     {
         // the server returns the request body, so a JSON string sent instead of an array can't be read back

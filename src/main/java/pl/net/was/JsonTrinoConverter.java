@@ -319,6 +319,10 @@ public class JsonTrinoConverter
             blockBuilder.appendNull();
             return;
         }
+        if (isTuple(schemaType)) {
+            writeTuple(blockBuilder, node, rowType, schemaType);
+            return;
+        }
         if (!node.isObject()) {
             throw typeMismatch(node, rowType);
         }
@@ -334,6 +338,20 @@ public class JsonTrinoConverter
                 writeTo(fieldBuilders.get(i), value, fieldType);
             });
         });
+    }
+
+    private static void writeTuple(BlockBuilder blockBuilder, JsonNode node, RowType rowType, Schema<?> schemaType)
+    {
+        if (!node.isArray()) {
+            throw typeMismatch(node, rowType);
+        }
+        List<Schema> elementSchemas = schemaType.getPrefixItems();
+        ((RowBlockBuilder) blockBuilder).buildEntry(fieldBuilders -> IntStream.range(0, elementSchemas.size()).forEach(i -> {
+            Type fieldType = rowType.getTypeParameters().get(i);
+            // fields of elements missing from a shorter array are NULL
+            Object value = convert(node.get(i), fieldType, elementSchemas.get(i));
+            writeTo(fieldBuilders.get(i), value, fieldType);
+        }));
     }
 
     private static void writeTo(BlockBuilder rowBuilder, Object value, Type type)
@@ -523,8 +541,11 @@ public class JsonTrinoConverter
         return mapNode;
     }
 
-    public static ObjectNode convertRow(SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
+    public static JsonNode convertRow(SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
+        if (isTuple(schemaType)) {
+            return convertTuple(row, rowType, schemaType, objectMapper);
+        }
         ObjectNode rowNode = objectMapper.createObjectNode();
         boolean isMergedUnion = isMergedUnion(schemaType);
         for (int i = 0; i < row.getFieldCount(); i++) {
@@ -538,6 +559,16 @@ public class JsonTrinoConverter
             putValue(rowNode, key, value);
         }
         return rowNode;
+    }
+
+    private static ArrayNode convertTuple(SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
+    {
+        ArrayNode tupleNode = objectMapper.createArrayNode();
+        List<Schema> elementSchemas = schemaType.getPrefixItems();
+        for (int i = 0; i < row.getFieldCount(); i++) {
+            addValue(tupleNode, convert(row.getRawFieldBlock(i), row.getRawIndex(), rowType.getTypeParameters().get(i), elementSchemas.get(i), objectMapper));
+        }
+        return tupleNode;
     }
 
     public static void putValue(ObjectNode node, String key, Object value)
@@ -580,6 +611,14 @@ public class JsonTrinoConverter
     private static boolean isMergedUnion(Schema<?> schema)
     {
         return schema.getExtensions() != null && TRUE.equals(schema.getExtensions().get(MERGED_UNION_EXTENSION));
+    }
+
+    /**
+     * Tuples, which are arrays with elements of different types declared with {@code prefixItems}, are mapped to rows with a field for every element.
+     */
+    private static boolean isTuple(Schema<?> schema)
+    {
+        return schema.getPrefixItems() != null;
     }
 
     public static boolean isJsonText(Schema<?> schema)
