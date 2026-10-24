@@ -155,6 +155,7 @@ Trino version it's built for.
 | `max-response-size`                            | `OPENAPI_MAX_RESPONSE_SIZE`             | `16MB`               | Maximum size of a response body, after it's decompressed; see [HTTP client](#http-client)                       |
 | `domain-expansion-limit`                       | `OPENAPI_DOMAIN_EXPANSION_LIMIT`        | `256`                | Maximum number of values a range predicate is expanded to; see [Queries](#queries)                              |
 | `max-filter-combinations`                      | `OPENAPI_MAX_FILTER_COMBINATIONS`       | `1000`               | Maximum number of combinations of values of filters on several columns; see [Queries](#queries)                 |
+| `dynamic-filtering.wait-timeout`               | `OPENAPI_DYNAMIC_FILTER_TIMEOUT`        | `20s`                | Maximum time to wait for dynamic filters from joins; see [Queries](#queries)                                    |
 | `http-cache.directory`                         | `OPENAPI_HTTP_CACHE_DIRECTORY`          |                      | Directory to cache HTTP responses in; responses are not cached when it's not set. See [HTTP cache](#http-cache) |
 | `http-cache.max-size`                          | `OPENAPI_HTTP_CACHE_MAX_SIZE`           | `1GB`                | Maximum size of the cache of a catalog on a node; the least recently used responses are removed above it        |
 | `http-cache.max-entry-size`                    | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE`     | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
@@ -611,6 +612,14 @@ SELECT p.name
 FROM petstore.default.pet p
 WHERE p.pet_id IN (SELECT pet_id FROM memory.default.favorite_pets);
 ```
+
+Before reading the table, the connector waits for dynamic filters on columns
+that a request can send, up to `dynamic-filtering.wait-timeout`, which is 20
+seconds by default. The `dynamic_filtering_wait_timeout` catalog session
+property overrides it for a single query. The connector doesn't wait for
+dynamic filters on other columns, because the join applies them to the returned
+rows anyway. If a request requires a column with a dynamic filter, and the
+filter is not ready in time, the query fails.
 
 ## Changing data
 
