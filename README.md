@@ -930,6 +930,9 @@ included in the image, with `x-trino` extensions for pagination, or fixes for
 values the OpenAPI parser rejects. See [`dev/specs`](dev/specs/README.md) for
 how they're made.
 
+To keep an incremental copy of GitHub data in another catalog, like Iceberg,
+for archiving and analysis, use the [sync program](sync/README.md).
+
 # Limitations
 
 * Every Trino node reads the specification when the catalog starts, so every

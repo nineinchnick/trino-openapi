@@ -1,0 +1,22 @@
+# Steps run when the steps setting is not set, in this order.
+repos
+commits
+issues
+issue_comments
+pulls
+pull_commits
+review_comments
+reviews
+workflows
+runs
+jobs
+steps
+check_suites
+check_runs
+check_run_annotations
+# Steps that are not run by default:
+# org_repos - needs an organization as the owner; reads private repositories too
+# pull_stats - makes a request for every pull request, every time it's updated
+# artifacts - makes a request for every workflow run
+# teams, members - need an organization as the owner
+# collaborators - needs a token with push access to the repository
