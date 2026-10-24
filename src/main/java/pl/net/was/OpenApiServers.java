@@ -55,6 +55,7 @@ public class OpenApiServers
         requireNonNull(spec, "spec is null");
         this.baseUri = Optional.ofNullable(config.getBaseUri());
         this.serverUris = baseUri.isPresent() ? ImmutableMap.of() : getServerUris(spec, getSpecUri(config.getSpecLocation()));
+        checkCredentialTransportSecure(config, serverUris.values());
     }
 
     public URI getUri(HttpPath httpPath)
@@ -70,6 +71,21 @@ public class OpenApiServers
     public Set<URI> getUris()
     {
         return baseUri.<Set<URI>>map(ImmutableSet::of).orElseGet(() -> ImmutableSet.copyOf(serverUris.values()));
+    }
+
+    // base-uri is checked with the other properties, but declared servers are only known after the spec is parsed
+    private static void checkCredentialTransportSecure(OpenApiConfig config, Collection<URI> serverUris)
+    {
+        if (config.isAllowInsecureHttp() || !config.hasCredentials()) {
+            return;
+        }
+        String insecureUris = serverUris.stream()
+                .filter(uri -> "http".equalsIgnoreCase(uri.getScheme()))
+                .map(URI::toString)
+                .distinct()
+                .sorted()
+                .collect(joining(", "));
+        checkArgument(insecureUris.isEmpty(), "Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", insecureUris);
     }
 
     private static Optional<URI> getSpecUri(String specLocation)

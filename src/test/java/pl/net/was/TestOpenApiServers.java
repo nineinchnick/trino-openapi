@@ -370,6 +370,39 @@ class TestOpenApiServers
                 .hasMessage("The spec doesn't declare servers for POST /archive, GET /archive, so set base-uri");
     }
 
+    @Test
+    void testCredentialsOverHttp()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                servers:
+                  - url: https://api.example.com
+                paths:
+                  /forecast:
+                    servers:
+                      - url: %s
+                    get:
+                %s
+                  /archive:
+                    get:
+                %2$s
+                """.formatted(forecastUri, OK_RESPONSES))
+                .setBearerToken("token");
+
+        assertThatThrownBy(() -> newServers(config))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", forecastUri);
+        assertThat(newServers(config.setAllowInsecureHttp(true)).getUris())
+                .containsExactlyInAnyOrder(forecastUri, URI.create("https://api.example.com"));
+        assertThat(newServers(config.setAllowInsecureHttp(false).setBaseUri(URI.create("https://api.example.com"))).getUris())
+                .containsExactly(URI.create("https://api.example.com"));
+    }
+
     private OpenApiServers newServers(OpenApiConfig config)
     {
         return new OpenApiServers(config, new OpenApiSpec(config));

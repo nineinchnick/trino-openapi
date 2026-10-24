@@ -28,6 +28,7 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.trino.spi.TrinoException;
 import pl.net.was.OpenApiConfig;
+import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
 
 import java.net.URI;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -84,7 +86,7 @@ public class Authentication
     private final HttpClient httpClient;
     private final String clientId;
     private final String clientSecret;
-    private final URI baseUri;
+    private final Set<URI> serverUris;
     private final URI tokenUrl;
     private final ConcurrentMap<TokenRequest, TokenWithExpiry> tokens = new ConcurrentHashMap<>();
 
@@ -92,10 +94,12 @@ public class Authentication
     public Authentication(
             OpenApiConfig config,
             OpenApiSpec spec,
+            OpenApiServers servers,
             @OpenApiAuthenticationClient HttpClient httpClient)
     {
         requireNonNull(config, "config is null");
         requireNonNull(spec, "spec is null");
+        requireNonNull(servers, "servers is null");
         this.pathSecurityRequirements = spec.getPathSecurityRequirements();
         this.securityRequirements = spec.getSecurityRequirements();
         this.securitySchemas = spec.getSecuritySchemas();
@@ -111,7 +115,7 @@ public class Authentication
         this.httpClient = requireNonNull(httpClient, "httpClient is null");
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
-        this.baseUri = config.getBaseUri();
+        this.serverUris = servers.getUris();
         this.tokenUrl = config.getTokenUrl();
     }
 
@@ -296,7 +300,7 @@ public class Authentication
         }
         // the spec can come from another source than the API, so it can't decide where the client secret and the password are sent
         if (!isTrustedTokenUrl(URI.create(specTokenUrl))) {
-            return new Unresolved(format("%s sets tokenUrl to %s, which doesn't use HTTPS and has a different host than base-uri, so set authentication.token-url to use it", subject, specTokenUrl));
+            return new Unresolved(format("%s sets tokenUrl to %s, which doesn't use HTTPS and has a different host than the servers of the API, so set authentication.token-url to use it", subject, specTokenUrl));
         }
         return new Resolved(new OAuthCredential(new TokenRequest(specTokenUrl, grantType)));
     }
@@ -306,7 +310,7 @@ public class Authentication
         if ("https".equalsIgnoreCase(uri.getScheme())) {
             return true;
         }
-        return baseUri != null && Objects.equals(uri.getScheme(), baseUri.getScheme()) && Objects.equals(uri.getAuthority(), baseUri.getAuthority());
+        return serverUris.stream().anyMatch(serverUri -> Objects.equals(uri.getScheme(), serverUri.getScheme()) && Objects.equals(uri.getAuthority(), serverUri.getAuthority()));
     }
 
     private static Resolution missing(String subject, List<String> properties)
