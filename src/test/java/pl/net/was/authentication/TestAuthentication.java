@@ -17,12 +17,11 @@ import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
-import io.airlift.http.client.OAuth2TokenException;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.StaticBodyGenerator;
-import io.airlift.http.client.UnexpectedResponseException;
 import io.airlift.http.client.jetty.JettyHttpClient;
 import io.airlift.http.client.testing.TestingHttpClient;
+import io.trino.spi.ErrorCodeSupplier;
 import io.trino.spi.TrinoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,6 +31,7 @@ import pl.net.was.OpenApiSpec;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -53,6 +53,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.TestingOpenApiSpec.createSpec;
 
@@ -548,16 +550,12 @@ class TestAuthentication
                     .setTokenUrl(URI.create("http://127.0.0.1:%d/token".formatted(server.getAddress().getPort())));
 
             assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config, tokenClient).filterRequest(request("/secured"), UserCredentials.NONE))
-                    .isInstanceOfSatisfying(UnexpectedResponseException.class, e -> {
-                        assertThat(e.getStatusCode()).isEqualTo(401);
-                        assertThat(e.getResponseBody()).contains("invalid_client");
-                    });
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                    .hasMessage("Request POST http://127.0.0.1:%d/token for an OAuth token failed with HTTP 401", server.getAddress().getPort());
             assertThatThrownBy(() -> createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), config.setClientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC), tokenClient)
                     .filterRequest(request("/secured"), UserCredentials.NONE))
-                    .isInstanceOfSatisfying(OAuth2TokenException.class, e -> {
-                        assertThat(e.getStatusCode()).isEqualTo(401);
-                        assertThat(e.getError()).contains("invalid_client");
-                    });
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                    .hasMessage("Request POST http://127.0.0.1:%d/token for an OAuth token failed with HTTP 401", server.getAddress().getPort());
         }
         finally {
             server.stop(0);
@@ -635,6 +633,62 @@ class TestAuthentication
         assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Response of the token endpoint https://localhost:8081/token doesn't include an access_token");
+    }
+
+    @Test
+    void testOAuthTokenErrorResponse()
+            throws IOException
+    {
+        for (HttpStatus status : List.of(HttpStatus.BAD_REQUEST, HttpStatus.INTERNAL_SERVER_ERROR)) {
+            // token endpoints can repeat the credentials of the token request in the response
+            HttpClient tokenClient = new TestingHttpClient(request -> mockResponse(status, JSON_UTF_8, "{\"error\":\"invalid_client\",\"error_description\":\"%s\"}".formatted(getBody(request))));
+            for (ClientAuthenticationMethod method : ClientAuthenticationMethod.values()) {
+                assertTokenRequestFails(
+                        createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), failingTokenConfig(method), tokenClient),
+                        OPENAPI_HTTP_ERROR,
+                        "Request POST https://localhost:8081/token for an OAuth token failed with HTTP " + status.code());
+            }
+            assertTokenRequestFails(
+                    createAuthentication(clientCredentialsSpec("https://localhost:8081/token").replace("clientCredentials:", "password:"), failingTokenConfig(ClientAuthenticationMethod.CLIENT_SECRET_POST), tokenClient),
+                    OPENAPI_HTTP_ERROR,
+                    "Request POST https://localhost:8081/token for an OAuth token failed with HTTP " + status.code());
+        }
+    }
+
+    @Test
+    void testOAuthTokenConnectionFailure()
+            throws IOException
+    {
+        HttpClient tokenClient = new TestingHttpClient(_ -> {
+            throw new ConnectException("Connection refused");
+        });
+        for (ClientAuthenticationMethod method : ClientAuthenticationMethod.values()) {
+            assertTokenRequestFails(
+                    createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), failingTokenConfig(method), tokenClient),
+                    OPENAPI_CONNECTION_ERROR,
+                    "Request POST https://localhost:8081/token for an OAuth token failed: Connection refused");
+        }
+    }
+
+    @Test
+    void testOAuthTokenRefreshErrorResponse()
+            throws IOException
+    {
+        AtomicInteger tokenRequests = new AtomicInteger();
+        HttpClient tokenClient = new TestingHttpClient(_ -> {
+            if (tokenRequests.incrementAndGet() % 2 == 1) {
+                return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"token_type\":\"Bearer\",\"expires_in\":300}");
+            }
+            return mockResponse(HttpStatus.UNAUTHORIZED, JSON_UTF_8, "{\"error\":\"invalid_client\"}");
+        });
+        for (ClientAuthenticationMethod method : ClientAuthenticationMethod.values()) {
+            Authentication authentication = createAuthentication(clientCredentialsSpec("https://localhost:8081/token"), failingTokenConfig(method), tokenClient);
+            Request authenticatedRequest = authentication.filterRequest(request("/secured"), UserCredentials.NONE);
+
+            assertThatThrownBy(() -> authentication.refreshRejectedTokens(request("/secured"), authenticatedRequest, UserCredentials.NONE))
+                    .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                    .hasMessage("Request POST https://localhost:8081/token for an OAuth token failed with HTTP 401");
+        }
     }
 
     @Test
@@ -933,6 +987,27 @@ class TestAuthentication
                         .setClientId("client")
                         .setClientSecret("secret"),
                 tokenClient);
+    }
+
+    private static OpenApiConfig failingTokenConfig(ClientAuthenticationMethod method)
+    {
+        return new OpenApiConfig()
+                .setClientId("client")
+                .setClientSecret("client-s3cr3t")
+                .setUsername("user")
+                .setPassword("user-s3cr3t")
+                .setClientAuthenticationMethod(method)
+                .setTokenUrl(URI.create("https://localhost:8081/token?tenant=tenant-s3cr3t"));
+    }
+
+    private static void assertTokenRequestFails(Authentication authentication, ErrorCodeSupplier errorCode, String message)
+    {
+        assertThatThrownBy(() -> authentication.filterRequest(request("/secured"), UserCredentials.NONE))
+                .isInstanceOfSatisfying(TrinoException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(errorCode.toErrorCode());
+                    assertThat(getStackTraceAsString(e)).doesNotContain("s3cr3t", "invalid_client");
+                })
+                .hasMessage(message);
     }
 
     private static Request request(String path)
