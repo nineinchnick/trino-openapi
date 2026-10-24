@@ -5673,8 +5673,7 @@ class TestOpenApiSpec
         ObjectMapper objectMapper = new ObjectMapper();
         SqlRow row = (SqlRow) JsonTrinoConverter.convert(objectMapper.readTree("{\"id\": 7, \"email\": \"a@b.c\", \"meta\": {\"b\": 1}}"), actor.getType(), actor.getSourceType());
         Assertions.assertThat(row.getRawFieldBlock(1).isNull(row.getRawIndex())).isTrue();
-        ObjectNode node = objectMapper.createObjectNode();
-        JsonTrinoConverter.convertRow(node, row, actorType, actor.getSourceType(), objectMapper);
+        ObjectNode node = JsonTrinoConverter.convertRow(row, actorType, actor.getSourceType(), objectMapper);
         Assertions.assertThat(objectMapper.writeValueAsString(node)).isEqualTo("{\"id\":7,\"meta\":{\"b\":1},\"email\":\"a@b.c\"}");
     }
 

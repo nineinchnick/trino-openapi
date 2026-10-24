@@ -445,13 +445,10 @@ public class JsonTrinoConverter
             return convertMap(mapBlock, mapType, schemaType, objectMapper);
         }
         if (type instanceof RowType rowType) {
-            ObjectNode rowNode = objectMapper.createObjectNode();
             if (block.getPositionCount() == 0) {
-                return rowNode;
+                return objectMapper.createObjectNode();
             }
-            SqlRow rowBlock = rowType.getObject(block, position);
-            convertRow(rowNode, rowBlock, rowType, schemaType, objectMapper);
-            return rowNode;
+            return convertRow(rowType.getObject(block, position), rowType, schemaType, objectMapper);
         }
         throw new RuntimeException(format("Unsupported type %s (%s)", type.getDisplayName(), type.getClass().getCanonicalName()));
     }
@@ -474,38 +471,43 @@ public class JsonTrinoConverter
         ArrayNode arrayNode = objectMapper.createArrayNode();
         for (int i = 0; i < elements.getPositionCount(); i++) {
             Object itemValue = convert(elements, i, arrayType.getElementType(), schemaType.getItems(), objectMapper);
-            if (itemValue == null) {
-                arrayNode.addNull();
-            }
-            else if (itemValue instanceof Boolean booleanValue) {
-                arrayNode.add(booleanValue);
-            }
-            else if (itemValue instanceof Long longValue) {
-                arrayNode.add(longValue);
-            }
-            else if (itemValue instanceof Float floatValue) {
-                arrayNode.add(floatValue);
-            }
-            else if (itemValue instanceof Double doubleValue) {
-                arrayNode.add(doubleValue);
-            }
-            else if (itemValue instanceof BigDecimal decimalValue) {
-                arrayNode.add(decimalValue);
-            }
-            else if (itemValue instanceof String stringValue) {
-                arrayNode.add(stringValue);
-            }
-            else if (itemValue instanceof JsonNode jsonNode) {
-                arrayNode.add(jsonNode);
-            }
-            else if (itemValue instanceof RawValue rawValue) {
-                arrayNode.addRawValue(rawValue);
-            }
-            else {
-                throw new RuntimeException(format("Unsupported object of class %s", itemValue.getClass()));
-            }
+            addValue(arrayNode, itemValue);
         }
         return arrayNode;
+    }
+
+    private static void addValue(ArrayNode arrayNode, Object value)
+    {
+        if (value == null) {
+            arrayNode.addNull();
+        }
+        else if (value instanceof Boolean booleanValue) {
+            arrayNode.add(booleanValue);
+        }
+        else if (value instanceof Long longValue) {
+            arrayNode.add(longValue);
+        }
+        else if (value instanceof Float floatValue) {
+            arrayNode.add(floatValue);
+        }
+        else if (value instanceof Double doubleValue) {
+            arrayNode.add(doubleValue);
+        }
+        else if (value instanceof BigDecimal decimalValue) {
+            arrayNode.add(decimalValue);
+        }
+        else if (value instanceof String stringValue) {
+            arrayNode.add(stringValue);
+        }
+        else if (value instanceof JsonNode jsonNode) {
+            arrayNode.add(jsonNode);
+        }
+        else if (value instanceof RawValue rawValue) {
+            arrayNode.addRawValue(rawValue);
+        }
+        else {
+            throw new RuntimeException(format("Unsupported object of class %s", value.getClass()));
+        }
     }
 
     public static ObjectNode convertMap(SqlMap mapBlock, MapType mapType, Schema<?> schemaType, ObjectMapper objectMapper)
@@ -521,8 +523,9 @@ public class JsonTrinoConverter
         return mapNode;
     }
 
-    public static void convertRow(ObjectNode rowNode, SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
+    public static ObjectNode convertRow(SqlRow row, RowType rowType, Schema<?> schemaType, ObjectMapper objectMapper)
     {
+        ObjectNode rowNode = objectMapper.createObjectNode();
         boolean isMergedUnion = isMergedUnion(schemaType);
         for (int i = 0; i < row.getFieldCount(); i++) {
             RowType.Field field = rowType.getFields().get(i);
@@ -534,6 +537,7 @@ public class JsonTrinoConverter
             }
             putValue(rowNode, key, value);
         }
+        return rowNode;
     }
 
     public static void putValue(ObjectNode node, String key, Object value)
