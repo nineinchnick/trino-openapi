@@ -1343,7 +1343,7 @@ class TestOpenApiClientRequests
     private List<List<?>> getRowsMatching(OpenApiConfig config, String tableName, Map<String, Domain> columnDomains)
     {
         OpenApiSpec spec = new OpenApiSpec(config);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config));
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (!columnDomains.isEmpty()) {
             Map<ColumnHandle, Domain> domains = spec.getTables().get(tableName).stream()
@@ -1362,7 +1362,7 @@ class TestOpenApiClientRequests
     private void deleteRow(OpenApiConfig config, TupleDomain<ColumnHandle> constraint, String rowId)
     {
         OpenApiSpec spec = new OpenApiSpec(config);
-        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
+        OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config));
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
                 .cloneWithConstraint(constraint);
         client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);

@@ -91,9 +91,7 @@ class TestOpenApiClient
             VARCHAR.writeString(elementBuilder, "b");
         });
         Block tags = blockBuilder.build();
-        OpenApiClient client = new OpenApiClient(new OpenApiConfig(), new CatalogName("test"), new TestingHttpClient(_ -> {
-            throw new UnsupportedOperationException();
-        }), spec);
+        OpenApiClient client = createClient(spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "echo_numbers"));
 
         // rows written by INSERT and UPDATE
@@ -156,7 +154,15 @@ class TestOpenApiClient
         return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(request -> {
             requests.add(request.getUri());
             return mockResponse(HttpStatus.OK, JSON_UTF_8, firstPage);
-        }), loadSpec("paged.yml"));
+        }), loadSpec("paged.yml"), new OpenApiServers(config));
+    }
+
+    private static OpenApiClient createClient(OpenApiSpec spec)
+    {
+        OpenApiConfig config = new OpenApiConfig().setBaseUri(URI.create("http://localhost"));
+        return new OpenApiClient(config, new CatalogName("test"), new TestingHttpClient(_ -> {
+            throw new UnsupportedOperationException();
+        }), spec, new OpenApiServers(config));
     }
 
     private static OpenApiTableHandle getPagedTable()
@@ -175,9 +181,7 @@ class TestOpenApiClient
 
     private static Object serializeMap(OpenApiSpec spec, String tableName, Domain domain, OpenApiColumn column)
     {
-        OpenApiClient client = new OpenApiClient(new OpenApiConfig(), new CatalogName("test"), new TestingHttpClient(_ -> {
-            throw new UnsupportedOperationException();
-        }), spec);
+        OpenApiClient client = createClient(spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName))
                 .cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), domain)));
         return client.serializeMap(table, new HttpPath(PathItem.HttpMethod.POST, "/" + tableName));
