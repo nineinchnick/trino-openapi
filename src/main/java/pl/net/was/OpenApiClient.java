@@ -752,13 +752,13 @@ public class OpenApiClient
     {
         // values read from pages are already converted, and values read from predicates are native Trino values
         if (value instanceof JsonNode node) {
-            return resolveRawValues(node);
+            return resolveRawValues(node, OpenApiClient::parseRawValue);
         }
         if (value instanceof RawValue rawValue) {
             return parseRawValue(rawValue);
         }
         if (value instanceof Block || value instanceof SqlRow || value instanceof SqlMap) {
-            return resolveRawValues((JsonNode) JsonTrinoConverter.convert(writeNativeValue(column.getType(), value), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER));
+            return resolveRawValues((JsonNode) JsonTrinoConverter.convert(writeNativeValue(column.getType(), value), 0, column.getType(), column.getSourceType(), OBJECT_MAPPER), OpenApiClient::parseRawValue);
         }
         return TextNode.valueOf(formatParamValue(value));
     }
@@ -767,19 +767,19 @@ public class OpenApiClient
      * Replaces values of union types, which are converted to raw JSON, with parsed JSON nodes,
      * so they're serialized like any other value, instead of as the string representation of RawValue.
      */
-    private static JsonNode resolveRawValues(JsonNode node)
+    private static JsonNode resolveRawValues(JsonNode node, Function<RawValue, JsonNode> parser)
     {
         if (node instanceof POJONode pojoNode && pojoNode.getPojo() instanceof RawValue rawValue) {
-            return parseRawValue(rawValue);
+            return parser.apply(rawValue);
         }
         if (node.isArray()) {
             ArrayNode result = OBJECT_MAPPER.createArrayNode();
-            node.forEach(element -> result.add(resolveRawValues(element)));
+            node.forEach(element -> result.add(resolveRawValues(element, parser)));
             return result;
         }
         if (node.isObject()) {
             ObjectNode result = OBJECT_MAPPER.createObjectNode();
-            node.properties().forEach(field -> result.set(field.getKey(), resolveRawValues(field.getValue())));
+            node.properties().forEach(field -> result.set(field.getKey(), resolveRawValues(field.getValue(), parser)));
             return result;
         }
         return node;
