@@ -62,7 +62,7 @@ public class CachingHttpClient
         if (requestCacheControl.noStore()) {
             return delegate.execute(request, responseHandler);
         }
-        Optional<CachedResponse> stored = cache.get(request.getMethod(), request.getUri())
+        Optional<CachedResponse> stored = cache.get(request)
                 .filter(response -> response.matches(request));
         if (stored.isPresent() && !requestCacheControl.noCache() && stored.get().isFresh(clock.millis())) {
             return responseHandler.handle(request, stored.get().toResponse(clock.millis()));
@@ -84,14 +84,14 @@ public class CachingHttpClient
 
         if (response.statusCode() == NOT_MODIFIED && stored.isPresent()) {
             CachedResponse revalidated = stored.get().revalidated(response.headers(), requestTime, responseTime);
-            cache.put(request.getMethod(), request.getUri(), revalidated);
+            cache.put(request, revalidated);
             return responseHandler.handle(request, revalidated.toResponse(clock.millis()));
         }
         if (isStorable(response)) {
-            cache.put(request.getMethod(), request.getUri(), CachedResponse.fromResponse(request, response, requestTime, responseTime));
+            cache.put(request, CachedResponse.fromResponse(request, response, requestTime, responseTime));
         }
         else if (stored.isPresent() && replacesStoredResponse(response.statusCode())) {
-            cache.remove(request.getMethod(), request.getUri());
+            cache.remove(request);
         }
         return responseHandler.handle(request, response);
     }
@@ -142,9 +142,9 @@ public class CachingHttpClient
             public T handle(Request request, Response response)
                     throws E
             {
-                // a successful change makes stored responses of the same resource outdated, see RFC 9111, section 4.4
+                // a successful change makes stored responses of the same resource outdated, whatever headers they were requested with, see RFC 9111, section 4.4
                 if (response.getStatusCode() < 400) {
-                    CACHEABLE_METHODS.forEach(method -> cache.remove(method, request.getUri()));
+                    CACHEABLE_METHODS.forEach(method -> cache.removeAll(method, request.getUri()));
                 }
                 return responseHandler.handle(request, response);
             }
