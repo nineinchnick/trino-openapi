@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import io.airlift.slice.SizeOf;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.SortItem;
 import io.trino.spi.predicate.Domain;
@@ -59,6 +60,26 @@ class TestOpenApiTableHandle
                 handle.toBuilder().setRowFilter(TupleDomain.all()).build(),
                 handle.toBuilder().setSpecHash("other").build()))
                 .allSatisfy(different -> assertThat(different).isNotEqualTo(handle));
+    }
+
+    @Test
+    void testRetainedSizeCountsEveryField()
+    {
+        OpenApiTableHandle handle = fullHandle();
+
+        assertThat(List.of(
+                handle.toBuilder().setSelectPaths(List.of()).build(),
+                handle.toBuilder().setInsertPaths(List.of()).build(),
+                handle.toBuilder().setUpdatePaths(List.of()).build(),
+                handle.toBuilder().setDeletePaths(List.of()).build(),
+                handle.toBuilder().setConstraint(TupleDomain.none()).build(),
+                handle.toBuilder().setLimit(OptionalLong.empty()).build(),
+                handle.toBuilder().setSortItem(Optional.empty()).build(),
+                handle.toBuilder().setRowFilter(TupleDomain.all()).build(),
+                handle.toBuilder().setSpecHash("").build()))
+                .allSatisfy(smaller -> assertThat(smaller.getRetainedSizeInBytes()).isLessThan(handle.getRetainedSizeInBytes()));
+        assertThat(handle.getRetainedSizeInBytes() - handle.toBuilder().setSortItem(Optional.empty()).build().getRetainedSizeInBytes())
+                .isEqualTo(SizeOf.OPTIONAL_INSTANCE_SIZE + SizeOf.instanceSize(SortItem.class) + SizeOf.estimatedSizeOf("id"));
     }
 
     private static OpenApiTableHandle fullHandle()
