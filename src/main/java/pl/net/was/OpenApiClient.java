@@ -31,6 +31,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Streams;
+import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
@@ -1064,21 +1065,30 @@ public class OpenApiClient
             }
             return new ResultsPage(
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
-                    getLong(jsonNode, pagination.totalResultsPointer()),
-                    getLong(jsonNode, pagination.totalPagesPointer()),
+                    getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPointer()),
+                    getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPointer()),
                     getBoolean(jsonNode, pagination.hasMorePointer()));
         }
 
-        private static OptionalLong getLong(JsonNode jsonNode, JsonPointer pointer)
+        private static OptionalLong getLong(Request request, JsonNode jsonNode, String propertyName, JsonPointer pointer)
         {
             if (JsonPointer.empty().equals(pointer)) {
                 return OptionalLong.empty();
             }
             JsonNode valueNode = jsonNode.at(pointer);
-            if (!valueNode.canConvertToExactIntegral() || !valueNode.canConvertToLong()) {
+            if (valueNode.isMissingNode() || valueNode.isNull()) {
                 return OptionalLong.empty();
             }
-            return OptionalLong.of(valueNode.asLong());
+            if (valueNode.isNumber() && valueNode.canConvertToExactIntegral() && valueNode.canConvertToLong()) {
+                return OptionalLong.of(valueNode.asLong());
+            }
+            // some servers send big numbers as strings, so JavaScript clients don't lose their precision
+            Long textValue = valueNode.isTextual() ? Longs.tryParse(valueNode.asText()) : null;
+            if (textValue != null) {
+                return OptionalLong.of(textValue);
+            }
+            // the value is not included, because the response might contain sensitive information
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of %s %s in the response to %s is not a whole number", propertyName, pointer, describe(request)));
         }
 
         private static Optional<Boolean> getBoolean(JsonNode jsonNode, JsonPointer pointer)

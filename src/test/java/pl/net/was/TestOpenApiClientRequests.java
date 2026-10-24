@@ -155,6 +155,44 @@ class TestOpenApiClientRequests
             %s
             """.formatted(OK_RESPONSES);
 
+    private static final String PAGED_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /paged:
+                get:
+                  operationId: listPaged
+                  parameters:
+                    - name: page
+                      in: query
+                      schema:
+                        type: integer
+                  x-trino:
+                    pageParam: page
+                    resultsPath: $response.body#/results
+                    totalResultsPath: $response.body#/total
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              results:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: integer
+                              total:
+                                type: string
+            """;
+
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
     private final Queue<URI> requestUris = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
@@ -603,6 +641,31 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Invalid value of column id in the response to GET %s/items: Cannot read a JSON string as bigint", baseUri)
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details", "s3cr3t"));
+    }
+
+    @Test
+    void testTotalSentAsString()
+            throws IOException
+    {
+        // the server returns the last page for every page number past it, so only the total ends pagination
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"total\":\"2\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"total\":\"2\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"total\":\"2\"}"));
+
+        assertThat(getRows(newConfig(PAGED_SPEC), "paged", null)).hasSize(2);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testTotalThatIsNotANumberIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"total\":\"internal-details\"}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(PAGED_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value of totalResultsPath /total in the response to GET %s/paged is not a whole number", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
     }
 
     @Test

@@ -544,8 +544,8 @@ paths:
 | `pageParam`         | Parameter with the page number; enables pagination                                                                                                  |
 | `limitParam`        | Parameter with the page size                                                                                                                        |
 | `resultsPath`       | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
-| `totalResultsPath`  | JSON pointer to the total number of results                                                                                                         |
-| `totalPagesPath`    | JSON pointer to the total number of pages                                                                                                           |
+| `totalResultsPath`  | JSON pointer to the total number of results, a number or a string with a number                                                                     |
+| `totalPagesPath`    | JSON pointer to the total number of pages, a number or a string with a number                                                                       |
 | `hasMorePath`       | JSON pointer to a boolean that is `false` on the last page                                                                                          |
 | `maxPages`          | Maximum number of pages to request                                                                                                                  |
 | `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
