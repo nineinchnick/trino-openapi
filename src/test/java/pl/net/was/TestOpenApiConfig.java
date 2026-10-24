@@ -245,33 +245,13 @@ class TestOpenApiConfig
     }
 
     @Test
-    void testApiKeysCombinedWithApiKeyName()
+    void testApiKeysCombinedWithSingleApiKey()
     {
-        assertFailsValidation(ImmutableMap.<String, String>builder()
-                .putAll(REQUIRED_PROPERTIES)
-                .put("authentication.api-key-name", "X-API-Key")
-                .put("authentication.api-keys", "a=1,b=2")
-                .buildOrThrow());
-    }
-
-    @Test
-    void testApiKeysCombinedWithApiKeyValue()
-    {
-        assertFailsValidation(ImmutableMap.<String, String>builder()
-                .putAll(REQUIRED_PROPERTIES)
-                .put("authentication.api-key-value", "secret")
-                .put("authentication.api-keys", "a=1,b=2")
-                .buildOrThrow());
-    }
-
-    @Test
-    void testApiKeysCombinedWithApiKeyValueCredentialName()
-    {
-        assertFailsValidation(ImmutableMap.<String, String>builder()
-                .putAll(REQUIRED_PROPERTIES)
-                .put("authentication.api-key-value-credential-name", "openapi_api_key")
-                .put("authentication.api-keys", "a=1,b=2")
-                .buildOrThrow());
+        assertFailsValidation("authentication.api-key-name", "X-API-Key");
+        assertFailsValidation("authentication.api-key-value", "secret");
+        assertFailsValidation("authentication.api-key-value-credential-name", "openapi_api_key");
+        // a blank value is set, so it can reveal mistakes like a typo in an environment variable name
+        assertFailsValidation("authentication.api-key-name", "");
     }
 
     @Test
@@ -295,17 +275,6 @@ class TestOpenApiConfig
                 "authentication.bearer-token-credential-name", "openapi_token")))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("base-uri and authentication.token-url must use HTTPS when credentials are configured");
-    }
-
-    @Test
-    void testApiKeysCombinedWithBlankApiKeyName()
-    {
-        // a blank value is set, so it can reveal mistakes like a typo in an environment variable name
-        assertFailsValidation(ImmutableMap.<String, String>builder()
-                .putAll(REQUIRED_PROPERTIES)
-                .put("authentication.api-key-name", "")
-                .put("authentication.api-keys", "a=1,b=2")
-                .buildOrThrow());
     }
 
     @Test
@@ -427,9 +396,13 @@ class TestOpenApiConfig
                 .hasMessageContaining("Invalid configuration property stride-splits: must be greater than or equal to 1");
     }
 
-    private static void assertFailsValidation(Map<String, String> properties)
+    private static void assertFailsValidation(String singleApiKeyProperty, String value)
     {
-        assertThatThrownBy(() -> buildConfig(properties))
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put(singleApiKeyProperty, value)
+                .put("authentication.api-keys", "a=1,b=2")
+                .buildOrThrow()))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("authentication.api-keys cannot be combined with authentication.api-key-name, authentication.api-key-value, or authentication.api-key-value-credential-name");
     }
