@@ -40,12 +40,14 @@ import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
+import io.airlift.http.client.FormDataBodyBuilder;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
+import io.airlift.http.client.StaticBodyGenerator;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.swagger.v3.oas.models.PathItem;
@@ -117,6 +119,7 @@ import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
+import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.intBitsToFloat;
@@ -613,12 +616,41 @@ public class OpenApiClient
 
     private BodyGenerator toBodyGenerator(HttpPath httpPath, ObjectNode fields)
     {
+        if (openApiSpec.hasFormRequestBody(httpPath)) {
+            return toFormBody(httpPath, fields);
+        }
         try {
             return createStaticBodyGenerator(toBytes(toRequestBody(httpPath, fields)));
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private static BodyGenerator toFormBody(HttpPath httpPath, ObjectNode fields)
+    {
+        FormDataBodyBuilder body = new FormDataBodyBuilder();
+        for (Map.Entry<String, JsonNode> field : fields.properties()) {
+            // arrays are sent as repeated fields, like with the default form style, and forms can't send NULL values, so they're omitted
+            List<JsonNode> values = field.getValue().isArray() ? ImmutableList.copyOf(field.getValue()) : List.of(field.getValue());
+            values.stream()
+                    .filter(value -> !value.isNull())
+                    .forEach(value -> body.addField(field.getKey(), formatFormValue(httpPath, field.getKey(), value)));
+        }
+        StaticBodyGenerator bodyGenerator = body.build();
+        logRequestBody(bodyGenerator.getBody());
+        return bodyGenerator;
+    }
+
+    private static String formatFormValue(HttpPath httpPath, String name, JsonNode value)
+    {
+        if (!value.isValueNode()) {
+            throw new TrinoException(NOT_SUPPORTED, format("Field %s of the form request body of %s has a nested value, which can't be sent as a form field", name, httpPath));
+        }
+        if (value.isNumber()) {
+            return formatParamValue(value.numberValue());
+        }
+        return value.asText();
     }
 
     private JsonNode toRequestBody(HttpPath httpPath, ObjectNode fields)

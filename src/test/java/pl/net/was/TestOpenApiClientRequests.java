@@ -22,10 +22,12 @@ import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.jetty.JettyHttpClient;
 import io.airlift.units.Duration;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +62,7 @@ import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
@@ -477,9 +480,49 @@ class TestOpenApiClientRequests
                                 type: string
                     """);
 
+    private static final String FORM_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /search:
+                post:
+                  operationId: searchItems
+                  x-trino:
+                    sqlOperation: select
+                  requestBody:
+                    content:
+                      application/x-www-form-urlencoded:
+                        schema:
+                          type: object
+                          properties:
+                            text:
+                              type: string
+                            count:
+                              type: integer
+                            ratio:
+                              type: number
+                              format: double
+                            enabled:
+                              type: boolean
+                            color:
+                              type: string
+                              enum: [red, green]
+                            tags:
+                              type: array
+                              items:
+                                type: string
+                            note:
+                              type: string
+            %s
+            """.formatted(OK_RESPONSES);
+
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
     private final Queue<URI> requestUris = new ConcurrentLinkedQueue<>();
     private final Queue<Headers> requestHeaders = new ConcurrentLinkedQueue<>();
+    private final Queue<String> requestBodies = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
     private HttpServer server;
     private HttpClient httpClient;
@@ -497,6 +540,7 @@ class TestOpenApiClientRequests
             requestCount.incrementAndGet();
             requestUris.add(exchange.getRequestURI());
             requestHeaders.add(exchange.getRequestHeaders());
+            requestBodies.add(new String(exchange.getRequestBody().readAllBytes(), UTF_8));
             HttpHandler handler = responses.poll();
             if (handler == null) {
                 handler = respond(200, "[]");
@@ -521,6 +565,7 @@ class TestOpenApiClientRequests
         responses.clear();
         requestUris.clear();
         requestHeaders.clear();
+        requestBodies.clear();
         requestCount.set(0);
     }
 
@@ -607,6 +652,26 @@ class TestOpenApiClientRequests
         assertThat(requestHeaders)
                 .map(headers -> headers.getFirst("Content-Type"))
                 .containsExactly(null, "application/json; charset=utf-8", null);
+    }
+
+    @Test
+    void testSendsFormRequestBodies()
+            throws IOException
+    {
+        ArrayType tagsType = new ArrayType(VARCHAR);
+        BlockBuilder tags = VARCHAR.createBlockBuilder(null, 2);
+        VARCHAR.writeString(tags, "new");
+        VARCHAR.writeString(tags, "on sale");
+        assertThat(getRowsMatching(newConfig(FORM_SPEC), "search", Map.of(
+                "text", Domain.singleValue(VARCHAR, utf8Slice("a b&c=d")),
+                "count", Domain.singleValue(BIGINT, 3L),
+                "ratio", Domain.singleValue(DOUBLE, 1.0e7),
+                "enabled", Domain.singleValue(BOOLEAN, true),
+                "color", Domain.singleValue(VARCHAR, utf8Slice("green")),
+                "tags", Domain.singleValue(tagsType, tags.build())))).isEmpty();
+        assertThat(requestHeaders.peek().getFirst("Content-Type")).isEqualTo("application/x-www-form-urlencoded");
+        // the note isn't filtered on, so it's not sent, and arrays are sent as repeated fields
+        assertThat(requestBodies).containsExactly("text=a+b%26c%3Dd&count=3&ratio=10000000&enabled=true&color=green&tags=new&tags=on+sale");
     }
 
     @Test
