@@ -36,6 +36,7 @@ import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
+import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
@@ -62,6 +63,9 @@ class TestAuthentication
                   type: apiKey
                   in: query
                   name: api_key
+                bearerAuth:
+                  type: http
+                  scheme: bearer
             """;
     private static final String OPERATION_RESPONSES =
             """
@@ -318,6 +322,163 @@ class TestAuthentication
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequests).hasValue(1);
+    }
+
+    @Test
+    void testApiKeysWithReservedCharacters()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - apiKeyHeader: []
+                    apiKeyCookie: []
+                    apiKeyQuery: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, SECURITY_SCHEMES),
+                new OpenApiConfig()
+                        .setApiKeys("X-API-Key=ab+c/d,session=ab+c/d;e,api_key=ab+c/d%&e"));
+
+        Request request = authentication.filterRequest(request("/secured"));
+        assertThat(request.getHeader(HeaderName.of("X-API-Key"))).isEqualTo("ab+c/d");
+        assertThat(request.getHeader(COOKIE)).isEqualTo("session=ab%2Bc%2Fd%3Be");
+        assertThat(request.getUri().getRawQuery()).isEqualTo("api_key=ab%2Bc%2Fd%25%26e");
+    }
+
+    @Test
+    void testPasswordWithReservedCharacters()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - basicAuth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, SECURITY_SCHEMES),
+                new OpenApiConfig()
+                        .setUsername("user")
+                        .setPassword("a~~~"));
+
+        // the standard base64 encoding of user:a~~~ ends with +, and base64url would use - instead
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjphfn5+");
+    }
+
+    @Test
+    void testQueryApiKeyKeepsEncodedFilterValues()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - apiKeyQuery: []
+                paths:
+                  /{tenant}/items:
+                    get:
+                      parameters:
+                        - name: tenant
+                          in: path
+                          required: true
+                          schema:
+                            type: string
+                        - name: q
+                          in: query
+                          schema:
+                            type: string
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, SECURITY_SCHEMES));
+
+        Request request = authentication.filterRequest(prepareGet()
+                .setUri(URI.create(BASE_URI + "/a%2Fb/items?q=x%26admin%3Dtrue#top"))
+                .addHeader(OPENAPI_PATH_HEADER, "/{tenant}/items")
+                .build());
+        assertThat(request.getUri()).isEqualTo(URI.create(BASE_URI + "/a%2Fb/items?q=x%26admin%3Dtrue&api_key=query-secret#top"));
+    }
+
+    @Test
+    void testPartiallyConfiguredSecurityRequirements()
+            throws Exception
+    {
+        String spec =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - apiKeyHeader: []
+                    apiKeyQuery: []
+                  - bearerAuth: []
+                  - basicAuth: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, SECURITY_SCHEMES);
+
+        Authentication withBasicAuth = createAuthentication(spec, new OpenApiConfig()
+                .setApiKeys("X-API-Key=header-secret")
+                .setUsername("user")
+                .setPassword("password"));
+        Request request = withBasicAuth.filterRequest(request("/secured"));
+        assertThat(request.getHeaders().get(AUTHORIZATION)).containsExactly("Basic dXNlcjpwYXNzd29yZA==");
+        assertThat(request.getHeader(HeaderName.of("X-API-Key"))).isNull();
+        assertThat(request.getUri().getQuery()).isNull();
+
+        Authentication withoutCredentials = createAuthentication(spec, new OpenApiConfig()
+                .setApiKeys("X-API-Key=header-secret")
+                .setUsername("user"));
+        assertThatThrownBy(() -> withoutCredentials.filterRequest(request("/secured")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
+                .hasMessage("Cannot authenticate the GET /secured request, because none of its security requirements can be satisfied: " +
+                        "the apiKeyQuery security scheme requires the api_key key in the authentication.api-keys configuration property; " +
+                        "the bearerAuth security scheme requires the authentication.bearer-token configuration property; " +
+                        "the basicAuth security scheme requires the authentication.password configuration property");
+    }
+
+    @Test
+    void testDefaultAuthenticationWithoutCredentials()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /items:
+                    get:
+                %s
+                """.formatted(OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setAuthenticationType(AuthenticationType.HTTP)
+                        .setAuthenticationScheme(AuthenticationScheme.BEARER));
+
+        assertThatThrownBy(() -> authentication.filterRequest(request("/items")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
+                .hasMessage("Cannot authenticate the GET /items request, because the http authentication type requires the authentication.bearer-token configuration property");
     }
 
     @Test
