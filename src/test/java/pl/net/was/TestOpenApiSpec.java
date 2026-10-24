@@ -3655,7 +3655,7 @@ class TestOpenApiSpec
                               name:
                                 type: string
                 """,
-                config.getTrimmedPathPrefixes());
+                new TableMappingOptions(config.getTrimmedPathPrefixes()));
 
         // the longest prefix is trimmed, only at a segment boundary, and paths that end up with the same name get numeric suffixes
         Assertions.assertThat(spec.getTables().keySet().stream()
@@ -6019,10 +6019,10 @@ class TestOpenApiSpec
 
     private OpenApiSpec parseSpec(String spec)
     {
-        return parseSpec(spec, List.of());
+        return parseSpec(spec, new TableMappingOptions(List.of()));
     }
 
-    private OpenApiSpec parseSpec(String spec, List<String> trimmedPathPrefixes)
+    private OpenApiSpec parseSpec(String spec, TableMappingOptions tableMappingOptions)
     {
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
@@ -6030,6 +6030,6 @@ class TestOpenApiSpec
         if (result.getMessages() != null && !result.getMessages().isEmpty()) {
             throw new IllegalArgumentException("Failed to parse the OpenAPI spec: " + String.join(", ", result.getMessages()));
         }
-        return new OpenApiSpec(result.getOpenAPI(), "test", trimmedPathPrefixes);
+        return new OpenApiSpec(result.getOpenAPI(), "test", tableMappingOptions);
     }
 }
