@@ -3253,6 +3253,58 @@ class TestOpenApiSpec
         }
     }
 
+    @Test
+    public void testParameterDefaultsWithConst()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: mode
+                        schema:
+                          const: fast
+                      - in: query
+                        name: state
+                        schema:
+                          anyOf:
+                          - const: open
+                          - const: closed
+                      x-trino:
+                        parameterDefaults:
+                          mode: fast
+                          state: closed
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                """;
+        HttpPath listPath = new HttpPath(PathItem.HttpMethod.GET, "/items");
+        Map<String, OpenApiColumn> columns = parseSpec(specContents).getTables().get("items").stream()
+                .collect(toImmutableMap(OpenApiColumn::getName, identity()));
+        Assertions.assertThat(columns.get("mode").getParameterDefaults()).containsExactly(Map.entry(listPath, utf8Slice("fast")));
+        Assertions.assertThat(columns.get("state").getParameterDefaults()).containsExactly(Map.entry(listPath, utf8Slice("closed")));
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("mode: fast", "mode: slow")))
+                .hasMessage("Invalid value of parameterDefaults: slow for parameter mode of GET /items is not one of [fast]");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: closed", "state: all")))
+                .hasMessage("Invalid value of parameterDefaults: all for parameter state of GET /items is not one of [open, closed]");
+    }
+
     private static String exclusiveBoundsSpec(String version, String bounds, int perPage)
     {
         return """
