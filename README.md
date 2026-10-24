@@ -430,12 +430,29 @@ DELETE FROM petstore.default.pet WHERE pet_id = 100;
 
 An `UPDATE` using `PATCH` sends only the updated columns, and the required
 fields of the request body, like identifiers. Setting a column to `NULL` sends
-an explicit `null`. Other requests send all columns that are not `NULL`. A
-`DELETE` sends the query filters, and when it uses an operation with a request
+an explicit `null`. Other requests send all columns that are not `NULL`. When
+the request body is an array, like in `POST /user/createWithList` of the
+Petstore API, its columns are the fields of the array items, and every row is
+sent as an array with a single item.
+
+`UPDATE` and `DELETE` send a request for every row they change, with path
+parameters that identify the resource of the row, like `petId` in
+`DELETE /pet/{petId}`. Their values come from the hidden `__trino_row_id`
+column of the row, which holds them as a JSON object, like `{"pet_id":"100"}`.
+When a parameter is [linked to a response field](#resource-identifiers), or
+has the same name as one, the value comes from that field of the row, so rows
+read from a list of resources are identified too. Otherwise, it's the value of
+the parameter used to read the row. Other parameters of a `DELETE`
+get values from the query filters, and when it uses an operation with a request
 body, like a `POST` marked with `sqlOperation: delete`, the body includes the
-filters on its fields. When the request body is an array, like in
-`POST /user/createWithList` of the Petstore API, its columns are the fields of
-the array items, and every row is sent as an array with a single item.
+filters on its fields.
+
+When a row doesn't have the values of the path parameters, like a row read from
+a list without a filter on a parameter that is not linked to a field, the
+statement fails, instead of sending a request that changes another resource, or
+none. Filter on the parameter, or link it to a field. Filters with more than one
+value on other parameters of these requests fail too, because a request can only
+send one.
 
 A write succeeds if the server responds with any `2xx` status. Writes are not
 transactional: if a statement fails halfway, the rows already sent stay
@@ -512,7 +529,8 @@ always nullable, because they can't be set in an `INSERT`.
 
 Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 
-* `__trino_row_id` identifies rows in `UPDATE` and `DELETE`;
+* `__trino_row_id` holds the values of the path parameters that identify the
+  resource of a row in `UPDATE` and `DELETE`;
 * pagination parameters, like the page number and page size;
 * response fields next to the results at `resultsPath`, like the total number
   of results, unless another operation returns them as a field of its results;
@@ -1022,8 +1040,6 @@ how they're made.
   [#255](https://github.com/nineinchnick/trino-openapi/issues/255)).
 * Without the `sqlOperation` extension, SQL statements are mapped from HTTP
   methods, so a `POST` search endpoint is used for `INSERT`, not for `SELECT`.
-  The row ID used by `UPDATE` and `DELETE` comes from the query filters, not
-  from the rows ([#254](https://github.com/nineinchnick/trino-openapi/issues/254)).
 * Only equality and `IN` filters, ranges expanded to single values, and ranges
   of fields with [range filters](#range-filters) are sent in requests. Other
   operators, like `LIKE`, are applied by Trino
