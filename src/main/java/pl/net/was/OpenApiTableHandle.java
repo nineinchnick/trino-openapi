@@ -174,7 +174,8 @@ public class OpenApiTableHandle
     }
 
     /**
-     * Filters on parameters that the path selected for a split doesn't send, so the connector applies them to the returned rows.
+     * Filters on parameters that the path selected for a split doesn't send, or that are also response fields,
+     * so the connector applies them to the returned rows.
      */
     @JsonProperty
     public TupleDomain<ColumnHandle> getRowFilter()
@@ -274,7 +275,8 @@ public class OpenApiTableHandle
                 currentConstraint = TupleDomain.withColumnDomains(domains);
             }
             found = true;
-            // if the path selected for a split doesn't send this filter, the connector applies it to the returned rows
+            // if the path selected for a split doesn't send this filter, or the rows get this column from the response,
+            // the connector applies it to the returned rows
             summary = summary.filter(
                     (columnHandle, _) -> !columnHandle.equals(column.getHandle()));
         }

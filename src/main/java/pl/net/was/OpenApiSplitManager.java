@@ -244,6 +244,12 @@ public class OpenApiSplitManager
                 OpenApiColumn openApiColumn = columns.get(((OpenApiColumnHandle) column).getName());
                 return isParameter(openApiColumn) && !isSentByPath(openApiColumn, httpPath);
             });
+            // servers can match sent values loosely, like by a substring or ignoring case,
+            // and rows get values of parameters that are also response fields from the response, so they must still match the sent value
+            TupleDomain<ColumnHandle> sentResponseFieldFilter = TupleDomain.withColumnDomains(newDomains).filter((column, _) -> {
+                OpenApiColumn openApiColumn = columns.get(((OpenApiColumnHandle) column).getName());
+                return !openApiColumn.isRequestOnly() && isSentByPath(openApiColumn, httpPath);
+            });
             newDomains.keySet().removeIf(column -> !isSentByPath(columns.get(((OpenApiColumnHandle) column).getName()), httpPath));
             // ranges are the same for every split, and are sent as bounds, so they don't make more splits
             originalDomains.forEach((column, domain) -> {
@@ -255,7 +261,7 @@ public class OpenApiSplitManager
             splitTables.put(splitConstraint, new SplitTable(
                     table.toBuilder()
                             .setConstraint(splitConstraint)
-                            .setRowFilter(rowFilter)
+                            .setRowFilter(rowFilter.intersect(sentResponseFieldFilter))
                             .build(),
                     httpPath));
         }
