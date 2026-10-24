@@ -1111,13 +1111,12 @@ public class TestOpenApiQueries
         return (String) requests.getField(1);
     }
 
-    @SafeVarargs
-    private synchronized String assertDefaultedItems(String query, long expectedRequests, List<Object>... expectedRows)
+    private synchronized String assertDefaultedItems(String query, long expectedRequests, List<?>... expectedRows)
     {
         long requestsBefore = (long) getDefaultedItemsRequests().getField(0);
         assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
-                .extracting(MaterializedRow::getFields)
-                .containsExactlyInAnyOrder(expectedRows);
+                .extracting(row -> (Object) row.getFields())
+                .containsExactlyInAnyOrder((Object[]) expectedRows);
         MaterializedRow requests = getDefaultedItemsRequests();
         assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
         return (String) requests.getField(1);

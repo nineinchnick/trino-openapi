@@ -48,7 +48,7 @@ import static java.util.Objects.requireNonNull;
 // stores responses in files, so they survive restarts, and evicts the least recently used ones over the size limit;
 // a file has a header with the format version and the length of the metadata, the metadata as JSON, and the raw body,
 // so the body is written and read without being encoded or copied
-public class HttpCache
+public final class HttpCache
 {
     private static final Logger log = Logger.get(HttpCache.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
