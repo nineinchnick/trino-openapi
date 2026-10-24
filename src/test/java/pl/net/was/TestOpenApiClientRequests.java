@@ -1240,6 +1240,19 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testPlainValueResults()
+            throws IOException
+    {
+        responses.add(respond(200, "[\"a\",\"b\"]"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: string")), "values", null))
+                .containsExactly(List.of("a"), List.of("b"));
+
+        responses.add(respond(200, "{\"results\":[\"c\"]}"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: string")), "wrapped_values", null))
+                .containsExactly(List.of("c"));
+    }
+
+    @Test
     void testNotFoundListFails()
             throws IOException
     {
@@ -1311,6 +1324,44 @@ class TestOpenApiClientRequests
                 .hasCauseInstanceOf(IOException.class)
                 .message()
                 .doesNotContain("s3cr3t");
+    }
+
+    private static String plainValuesSpec(String itemSchema)
+    {
+        return """
+               openapi: 3.0.0
+               info:
+                 title: test
+                 version: '1'
+               paths:
+                 /values:
+                   get:
+                     responses:
+                       '200':
+                         description: OK
+                         content:
+                           application/json:
+                             schema:
+                               type: array
+                               items:
+               %s
+                 /wrapped_values:
+                   get:
+                     x-trino:
+                       resultsPath: $response.body#/results
+                     responses:
+                       '200':
+                         description: OK
+                         content:
+                           application/json:
+                             schema:
+                               type: object
+                               properties:
+                                 results:
+                                   type: array
+                                   items:
+               %s
+               """.formatted(itemSchema.indent(18).stripTrailing(), itemSchema.indent(22).stripTrailing());
     }
 
     private OpenApiConfig newConfig()

@@ -544,6 +544,13 @@ Column names follow the same rules as table names. Columns are disambiguated:
   field has different types in different operations, the next ones get numeric
   suffixes (`_2`, `_3`, and so on).
 
+Columns are built from the fields of the results. Results that are plain
+values, like a response with an array of strings or numbers, have no fields, so
+they're mapped to a single column named `value`, typed from the item schema,
+with a row for every element. If a field next to the results at `resultsPath`,
+or a request parameter or body field, is also named `value`, it keeps its name,
+and the column of the results gets a numeric suffix, like `value_2`.
+
 Columns are nullable, unless the schema they come from lists them as required.
 Columns built from responses are nullable, unless they're required and not
 nullable in responses of all operations used for `SELECT`, because a query uses
@@ -1092,10 +1099,9 @@ how they're made.
   query.
 * Only JSON request and response bodies are supported, not form-encoded or
   multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
-* Responses that are arrays of plain values
-  ([#219](https://github.com/nineinchnick/trino-openapi/issues/219)), and objects
-  with dynamic keys ([#172](https://github.com/nineinchnick/trino-openapi/issues/172)),
-  are not mapped to rows. Some unions, like `anyOf` with a `null` alternative,
+* Responses that are objects with dynamic keys
+  ([#172](https://github.com/nineinchnick/trino-openapi/issues/172)) are not
+  mapped to rows. Some unions, like `anyOf` with a `null` alternative,
   are mapped to `VARCHAR` holding JSON, with quoted strings
   ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
 * Timestamps are always `TIMESTAMP(3)`.

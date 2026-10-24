@@ -1353,13 +1353,16 @@ public class OpenApiClient
             Map<String, Object> recordParams,
             JsonNode jsonNode)
     {
-        if (!jsonNode.isObject()) {
+        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
+        boolean hasResultsPointer = resultsPointer != null && !JsonPointer.empty().equals(resultsPointer);
+        // without resultsPath, elements of a response that is an array of plain values are the results
+        boolean resultsArePlainValues = !hasResultsPointer && columns.stream().anyMatch(column -> column.getPlainValuePaths().contains(httpPath));
+        if (!jsonNode.isObject() && !resultsArePlainValues) {
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s contains a JSON %s where an object was expected", describe(request), jsonNode.getNodeType()));
         }
 
         Iterable<JsonNode> resultNodes = List.of(jsonNode);
-        List<OpenApiColumn> columns = openApiSpec.getTables().get(table.getSchemaTableName().getTableName());
-        if (resultsPointer != null && !JsonPointer.empty().equals(resultsPointer)) {
+        if (hasResultsPointer) {
             resultNodes = getResultNodes(request, resultsPointer, jsonNode.at(resultsPointer));
         }
 
@@ -1374,6 +1377,10 @@ public class OpenApiClient
                     // the row ID holds values of other columns, which are read later
                     rowIdField = recordBuilder.size();
                     recordBuilder.add(null);
+                    continue;
+                }
+                if (column.getPlainValuePaths().contains(httpPath)) {
+                    recordBuilder.add(convertToRecordValue(request, column, resultNode));
                     continue;
                 }
                 String parameterName = column.getSourceName();
