@@ -211,7 +211,9 @@ public class OpenApiClient
                 .map(directory -> new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()));
         this.openApiSpec = openApiSpec;
         this.rateLimiter = config.getMaxRequestsPerSecond().map(RateLimiter::create).orElse(null);
-        this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
+        this.retryPolicy = new RetryPolicy(
+                new RetryOptions(config.getMaxRetries(), config.getRetryInitialDelay().toJavaTime(), config.getRetryMaxDelay().toJavaTime()),
+                openApiSpec.getRateLimitHeaders());
     }
 
     public Iterable<List<?>> getRows(ConnectorSession session, OpenApiSplit split, boolean revalidateCachedResponses)

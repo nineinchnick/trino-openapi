@@ -30,7 +30,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.nullToEmpty;
 import static io.airlift.units.Duration.succinctNanos;
 import static java.lang.String.format;
@@ -57,24 +56,13 @@ final class RetryPolicy
     private final Duration maxDelay;
     private final Optional<RateLimitHeaders> rateLimitHeaders;
 
-    private RetryPolicy(int maxRetries, Duration initialDelay, Duration maxDelay, Optional<RateLimitHeaders> rateLimitHeaders)
+    RetryPolicy(RetryOptions options, Optional<RateLimitHeaders> rateLimitHeaders)
     {
-        checkArgument(maxRetries >= 0, "maxRetries is negative");
-        this.maxRetries = maxRetries;
-        this.initialDelay = requireNonNull(initialDelay, "initialDelay is null");
-        this.maxDelay = requireNonNull(maxDelay, "maxDelay is null");
-        checkArgument(!initialDelay.isNegative(), "initialDelay is negative");
-        checkArgument(maxDelay.compareTo(initialDelay) >= 0, "maxDelay is less than initialDelay");
+        requireNonNull(options, "options is null");
+        this.maxRetries = options.maxRetries();
+        this.initialDelay = options.initialDelay();
+        this.maxDelay = options.maxDelay();
         this.rateLimitHeaders = requireNonNull(rateLimitHeaders, "rateLimitHeaders is null");
-    }
-
-    static RetryPolicy fromConfig(OpenApiConfig config, Optional<RateLimitHeaders> rateLimitHeaders)
-    {
-        return new RetryPolicy(
-                config.getMaxRetries(),
-                config.getRetryInitialDelay().toJavaTime(),
-                config.getRetryMaxDelay().toJavaTime(),
-                rateLimitHeaders);
     }
 
     /**
