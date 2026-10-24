@@ -3513,6 +3513,67 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testColumnsMissingFromSomeSelectPathsAreNullable()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /orgs:
+                    get:
+                      responses:
+                        "200":
+                          description: Orgs
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  required:
+                                  - id
+                                  properties:
+                                    id:
+                                      type: integer
+                  /orgs/{org}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: org
+                        required: true
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Org
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                required:
+                                - id
+                                - name
+                                properties:
+                                  id:
+                                    type: integer
+                                  name:
+                                    type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        // selecting all orgs uses /orgs, which doesn't return the name
+        Assertions.assertThat(spec.getTables().get("orgs"))
+                .extracting(OpenApiColumn::getName, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("id", false),
+                        Assertions.tuple("name", true),
+                        Assertions.tuple("org", true));
+    }
+
+    @Test
     public void testOpenApi31NullableResults()
     {
         String specContents =
