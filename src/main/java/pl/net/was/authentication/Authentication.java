@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import static com.google.common.base.Strings.nullToEmpty;
-import static com.google.common.io.BaseEncoding.base64Url;
+import static com.google.common.io.BaseEncoding.base64;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
@@ -265,7 +265,7 @@ public class Authentication
 
     private static String getAuthHeader(String scheme, String username, String password)
     {
-        return capitalize(scheme) + " " + base64Url().encode("%s:%s".formatted(username, password).getBytes(UTF_8));
+        return capitalize(scheme) + " " + base64().encode("%s:%s".formatted(username, password).getBytes(UTF_8));
     }
 
     private static String capitalize(String input)
