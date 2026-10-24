@@ -777,9 +777,19 @@ public class OpenApiSpec
         return getOperation(httpPath)
                 .map(Operation::getRequestBody)
                 .map(RequestBody::getContent)
-                .flatMap(OpenApiSpec::getJsonMediaType)
+                .flatMap(OpenApiSpec::getRequestBodyMediaType)
                 .map(OpenApiSpec::toRequestedMediaType)
                 .orElse(JSON_UTF_8);
+    }
+
+    public boolean hasFormRequestBody(HttpPath httpPath)
+    {
+        return getOperation(httpPath)
+                .map(Operation::getRequestBody)
+                .map(RequestBody::getContent)
+                .flatMap(OpenApiSpec::getRequestBodyMediaType)
+                .filter(OpenApiSpec::isFormMediaType)
+                .isPresent();
     }
 
     // only the first server is used, because the others are usually alternatives, like a sandbox, which must be chosen on purpose

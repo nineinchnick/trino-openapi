@@ -503,6 +503,10 @@ the request body is an array, like in `POST /user/createWithList` of the
 Petstore API, its columns are the fields of the array items, and every row is
 sent as an array with a single item.
 
+Form request bodies have the values formatted like query parameters, and arrays
+are sent as repeated fields. A form can't send `NULL`, so such fields are not
+sent, and setting a column to `NULL` in an `UPDATE` doesn't clear the field.
+
 `UPDATE` and `DELETE` send a request for every row they change, with path
 parameters that identify the resource of the row, like `petId` in
 `DELETE /pet/{petId}`. Their values come from the hidden `__trino_row_id`
