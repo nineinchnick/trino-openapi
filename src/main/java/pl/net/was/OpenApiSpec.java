@@ -501,9 +501,9 @@ public class OpenApiSpec
         PreprocessingParser parser = new PreprocessingParser();
         String specLocation = config.getSpecLocation();
         Optional<URI> specUri = OpenApiServers.getSpecUri(specLocation);
-        // references to other documents are still loaded by the parser, relative to the spec location
+        // references to other documents are still loaded by the parser, relative to the spec location, and without credentials
         SwaggerParseResult result = specUri
-                .map(uri -> parser.readContents(SpecFetcher.fetch(uri, httpClient, RetryPolicy.fromConfig(config, Optional.empty())), null, parseOptions, specLocation))
+                .map(uri -> parser.readContents(SpecFetcher.fetch(config, uri, httpClient), null, parseOptions, specLocation))
                 .orElseGet(() -> parser.readLocation(specLocation, null, parseOptions));
         OpenAPI openAPI = result.getOpenAPI();
 

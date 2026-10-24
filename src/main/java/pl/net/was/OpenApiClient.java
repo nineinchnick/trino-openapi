@@ -896,7 +896,7 @@ public class OpenApiClient
         return format("Request %s %s for %s failed", request.getMethod(), withoutQuery(request.getUri()), operation);
     }
 
-    private static String describeRedirect(URI requestUri, HttpRequestFailure.ErrorResponse error)
+    static String describeRedirect(URI requestUri, HttpRequestFailure.ErrorResponse error)
     {
         if (HttpStatus.familyForStatusCode(error.getStatusCode()) != HttpStatus.Family.REDIRECTION) {
             return "";

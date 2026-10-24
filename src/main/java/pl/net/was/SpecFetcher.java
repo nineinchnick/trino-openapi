@@ -19,6 +19,8 @@ import io.airlift.http.client.Request;
 import io.airlift.http.client.Response;
 import io.airlift.http.client.ResponseHandler;
 import io.trino.spi.TrinoException;
+import pl.net.was.authentication.Authentication;
+import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,6 +35,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static pl.net.was.OpenApiClient.USER_AGENT_VALUE;
+import static pl.net.was.OpenApiClient.describeRedirect;
 import static pl.net.was.OpenApiClient.withoutQuery;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
@@ -48,20 +51,30 @@ final class SpecFetcher
 
     private SpecFetcher() {}
 
-    static String fetch(URI location, HttpClient httpClient, RetryPolicy retryPolicy)
+    static String fetch(OpenApiConfig config, URI location, HttpClient httpClient)
     {
+        requireNonNull(config, "config is null");
         requireNonNull(location, "location is null");
         requireNonNull(httpClient, "httpClient is null");
-        Request request = prepareGet()
-                .setUri(location)
-                .addHeader(USER_AGENT, USER_AGENT_VALUE)
-                .addHeader(ACCEPT, ACCEPT_VALUE)
-                .build();
-        return retryPolicy.execute(
+        Request request = createRequest(config, location);
+        return RetryPolicy.fromConfig(config, Optional.empty()).execute(
                 request,
                 true,
                 () -> httpClient.execute(request, new SpecResponseHandler()),
                 (failure, attempts, notRetriedReason) -> toTrinoException(location, failure, attempts, notRetriedReason));
+    }
+
+    private static Request createRequest(OpenApiConfig config, URI location)
+    {
+        Request.Builder builder = prepareGet()
+                .setUri(location)
+                .addHeader(USER_AGENT, USER_AGENT_VALUE)
+                .addHeader(ACCEPT, ACCEPT_VALUE);
+        if (config.getSpecLocationAuthentication() != SpecLocationAuthentication.CATALOG) {
+            return builder.build();
+        }
+        // the HTTP client would send the credentials to any host the server redirects to
+        return Authentication.addDefaultCredentials(config, builder.setFollowRedirects(false).build(), "GET " + withoutQuery(location));
     }
 
     private static TrinoException toTrinoException(URI location, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)
@@ -76,7 +89,12 @@ final class SpecFetcher
                     error.getCause());
             case HttpRequestFailure.ErrorResponse error -> new TrinoException(
                     OPENAPI_HTTP_ERROR,
-                    format("%s with HTTP %d%s%s", context, error.getStatusCode(), attemptsSuffix, notRetriedReason.map(reason -> "; " + reason).orElse("")));
+                    format("%s with HTTP %d%s%s%s",
+                            context,
+                            error.getStatusCode(),
+                            attemptsSuffix,
+                            describeRedirect(location, error),
+                            notRetriedReason.map(reason -> "; " + reason).orElse("")));
         };
     }
 
