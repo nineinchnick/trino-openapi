@@ -17,26 +17,5 @@ ADD catalog/ /etc/trino/catalog/disabled/
 ADD specs/ /etc/trino/specs/
 ADD docker-entrypoint.sh /usr/local/bin/
 
-ENV OPENAPI_AUTH_TYPE=none \
-    OPENAPI_CLIENT_ID="" \
-    OPENAPI_CLIENT_SECRET="" \
-    OPENAPI_USERNAME="" \
-    OPENAPI_PASSWORD="" \
-    OPENAPI_BEARER_TOKEN="" \
-    OPENAPI_API_KEY_NAME="" \
-    OPENAPI_API_KEY_VALUE="" \
-    OPENAPI_API_KEYS="" \
-    OPENAPI_MAX_REQUESTS_PER_SECOND="1.7976931348623157e+308" \
-    OPENAPI_MAX_SPLITS_PER_SECOND="1.7976931348623157e+308" \
-    OPENAPI_MAX_RETRIES="3" \
-    OPENAPI_RETRY_INITIAL_DELAY="1s" \
-    OPENAPI_RETRY_MAX_DELAY="1m" \
-    OPENAPI_DOMAIN_EXPANSION_LIMIT="256" \
-    OPENAPI_HTTP_CACHE_DIRECTORY="" \
-    OPENAPI_HTTP_CACHE_MAX_SIZE="1GB" \
-    OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE="10MB" \
-    OPENAPI_SPLIT_STRATEGY="off" \
-    OPENAPI_PROBE_LIMIT="none"
-
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/usr/lib/trino/bin/launcher", "run", "--etc-dir", "/etc/trino"]

@@ -5,7 +5,13 @@ set -eo pipefail
 catalog_dir=/etc/trino/catalog
 
 if [ -n "$OPENAPI_BASE_URI" ]; then
-    cp $catalog_dir/disabled/openapi.properties $catalog_dir/openapi.properties
+    # skip properties of environment variables that are not set, to use their default values
+    while IFS= read -r line; do
+        if [[ $line =~ \$\{ENV:([A-Z_]+)\} && ! -v ${BASH_REMATCH[1]} ]]; then
+            continue
+        fi
+        echo "$line"
+    done <$catalog_dir/disabled/openapi.properties >$catalog_dir/openapi.properties
 fi
 if [ -n "$PETSTORE_URL" ]; then
     cp $catalog_dir/disabled/petstore.properties $catalog_dir/petstore.properties
