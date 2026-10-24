@@ -206,7 +206,7 @@ public class OpenApiSpec
     @Inject
     public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
     {
-        this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")),
+        this(parse(requireNonNull(config, "config is null"), new UnchallengedResponseHttpClient(httpClient)),
                 new TableMappingOptions(config.getTrimmedPathPrefixes(), config.isSchemaFromTags()));
     }
 
