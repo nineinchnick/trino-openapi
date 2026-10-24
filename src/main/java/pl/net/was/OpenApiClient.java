@@ -1028,7 +1028,7 @@ public class OpenApiClient
         }
     }
 
-    static String withoutQuery(URI uri)
+    public static String withoutQuery(URI uri)
     {
         String port = uri.getPort() == -1 ? "" : ":" + uri.getPort();
         return uri.getScheme() + "://" + uri.getHost() + port + uri.getRawPath();
