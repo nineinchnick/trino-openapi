@@ -62,6 +62,7 @@ import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static pl.net.was.OpenApiSessionProperties.getDynamicFilteringWaitTimeout;
 import static pl.net.was.OpenApiSessionProperties.getProbeLimit;
 import static pl.net.was.OpenApiSessionProperties.getSplitStrategy;
 import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
@@ -69,8 +70,6 @@ import static pl.net.was.OpenApiSessionProperties.isHttpCacheEnabled;
 public class OpenApiSplitManager
         implements ConnectorSplitManager
 {
-    private static final long TIMEOUT_MILLIS = 20000;
-
     private final OpenApiSpec spec;
     private final OpenApiClient client;
     private final NodeManager nodeManager;
@@ -107,7 +106,10 @@ public class OpenApiSplitManager
     {
         OpenApiTableHandle tableHandle = (OpenApiTableHandle) table;
         tableHandle.checkHasPaths("SELECT", tableHandle.getSelectPaths());
-        return new DynamicFilteringSplitSource(session, table, dynamicFilterColumns);
+        Duration dynamicFilteringWaitTimeout = canSendDynamicFilters(tableHandle, dynamicFilterColumns)
+                ? getDynamicFilteringWaitTimeout(session)
+                : new Duration(0, MILLISECONDS);
+        return new DynamicFilteringSplitSource(session, table, dynamicFilterColumns, dynamicFilteringWaitTimeout);
     }
 
     @PreDestroy
@@ -116,25 +118,37 @@ public class OpenApiSplitManager
         executor.shutdownNow();
     }
 
+    // the join applies dynamic filters anyway, so waiting for them only delays reading a table if no request can send their values, or bounds of their ranges
+    private boolean canSendDynamicFilters(OpenApiTableHandle table, Set<ColumnHandle> dynamicFilterColumns)
+    {
+        List<OpenApiColumn> columns = spec.getTables().get(table.getSchemaTableName().getTableName());
+        Set<ColumnHandle> boundParameters = RangePushdown.getBoundParameters(columns, table.getConstraint());
+        return columns.stream()
+                .filter(column -> dynamicFilterColumns.contains(column.getHandle()) && !boundParameters.contains(column.getHandle()))
+                .anyMatch(column -> isSentBySomePath(column, table) || table.getSelectPaths().stream().anyMatch(column.getRangeFilters()::containsKey));
+    }
+
     private class DynamicFilteringSplitSource
             implements ConnectorSplitSource
     {
         private final ConnectorSession session;
         private final ConnectorTableHandle table;
         private final Set<ColumnHandle> dynamicFilterColumns;
+        private final Duration dynamicFilteringWaitTimeout;
         private Optional<ConnectorSplitSource> delegate = Optional.empty();
 
-        private DynamicFilteringSplitSource(ConnectorSession session, ConnectorTableHandle table, Set<ColumnHandle> dynamicFilterColumns)
+        private DynamicFilteringSplitSource(ConnectorSession session, ConnectorTableHandle table, Set<ColumnHandle> dynamicFilterColumns, Duration dynamicFilteringWaitTimeout)
         {
             this.session = requireNonNull(session, "session is null");
             this.table = requireNonNull(table, "table is null");
             this.dynamicFilterColumns = ImmutableSet.copyOf(requireNonNull(dynamicFilterColumns, "dynamicFilterColumns is null"));
+            this.dynamicFilteringWaitTimeout = requireNonNull(dynamicFilteringWaitTimeout, "dynamicFilteringWaitTimeout is null");
         }
 
         @Override
         public long getRequestedDynamicFilterWaitTimeoutMillis()
         {
-            return TIMEOUT_MILLIS;
+            return dynamicFilteringWaitTimeout.toMillis();
         }
 
         @Override
@@ -160,7 +174,7 @@ public class OpenApiSplitManager
         private synchronized ConnectorSplitSource getDelegate(DynamicFilterSnapshot dynamicFilterSnapshot)
         {
             if (delegate.isEmpty()) {
-                delegate = Optional.of(getSplitSource(session, table, dynamicFilterSnapshot, dynamicFilterColumns));
+                delegate = Optional.of(getSplitSource(session, table, dynamicFilterSnapshot, dynamicFilterColumns, dynamicFilteringWaitTimeout));
             }
             return delegate.get();
         }
@@ -175,7 +189,8 @@ public class OpenApiSplitManager
             ConnectorSession session,
             ConnectorTableHandle tableHandle,
             DynamicFilterSnapshot dynamicFilterSnapshot,
-            Set<ColumnHandle> dynamicFilterColumns)
+            Set<ColumnHandle> dynamicFilterColumns,
+            Duration dynamicFilteringWaitTimeout)
     {
         OpenApiTableHandle originalTable = (OpenApiTableHandle) tableHandle;
         List<OpenApiColumn> columnList = spec.getTables().get(originalTable.getSchemaTableName().getTableName());
@@ -248,7 +263,7 @@ public class OpenApiSplitManager
             for (Map.Entry<ColumnHandle, Domain> entry : splitDomains) {
                 newDomains.put(entry.getKey(), entry.getValue());
             }
-            HttpPath httpPath = selectPath(table, columnList, newDomains, dynamicFilterSnapshot, dynamicFilterColumns);
+            HttpPath httpPath = selectPath(table, columnList, newDomains, dynamicFilterSnapshot, dynamicFilterColumns, dynamicFilteringWaitTimeout);
             // the connector applies filters on parameters the selected path doesn't send to the returned rows,
             // so splits that differ only in these filters would return the same rows;
             // dynamic filters are left out, because the join still applies them
@@ -365,7 +380,8 @@ public class OpenApiSplitManager
             List<OpenApiColumn> columns,
             Map<ColumnHandle, Domain> domains,
             DynamicFilterSnapshot dynamicFilterSnapshot,
-            Set<ColumnHandle> dynamicFilterColumns)
+            Set<ColumnHandle> dynamicFilterColumns,
+            Duration dynamicFilteringWaitTimeout)
     {
         Predicate<OpenApiColumn> hasValue = column -> domains.containsKey(column.getHandle());
         Optional<HttpPath> path = PathSelector.selectPath(columns, table.getSelectPaths(), hasValue);
@@ -383,10 +399,10 @@ public class OpenApiSplitManager
             throw new TrinoException(INVALID_ROW_FILTER, message);
         }
         if (!dynamicFilterSnapshot.isComplete()) {
-            throw new TrinoException(INVALID_ROW_FILTER, "%s. Dynamic filters from joins for %s were not ready after %d ms".formatted(
+            throw new TrinoException(INVALID_ROW_FILTER, "%s. Dynamic filters from joins for %s were not ready after %s (dynamic_filtering_wait_timeout)".formatted(
                     message,
                     String.join(", ", missingDynamicFilters),
-                    TIMEOUT_MILLIS));
+                    dynamicFilteringWaitTimeout));
         }
         throw new TrinoException(INVALID_ROW_FILTER, "%s. Dynamic filters from joins for %s have values that can't be sent, like ranges with more than %d values (domain-expansion-limit)".formatted(
                 message,

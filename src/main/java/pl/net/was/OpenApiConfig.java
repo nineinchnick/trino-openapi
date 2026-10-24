@@ -97,6 +97,8 @@ public class OpenApiConfig
     // Too large IN lists cause too many requests being made, so a hard limit is required.
     private int domainExpansionLimit = 256;
     private int maxFilterCombinations = 1000;
+    // long enough to get dynamic filters from small tables, and from some larger subqueries
+    private Duration dynamicFilteringWaitTimeout = new Duration(20, SECONDS);
     private SplitStrategy splitStrategy = SplitStrategy.OFF;
     private ProbeLimit probeLimit = ProbeLimit.NONE;
 
@@ -655,6 +657,21 @@ public class OpenApiConfig
     public OpenApiConfig setMaxFilterCombinations(int maxFilterCombinations)
     {
         this.maxFilterCombinations = maxFilterCombinations;
+        return this;
+    }
+
+    @NotNull
+    @MinDuration("0ms")
+    public Duration getDynamicFilteringWaitTimeout()
+    {
+        return dynamicFilteringWaitTimeout;
+    }
+
+    @Config("dynamic-filtering.wait-timeout")
+    @ConfigDescription("Maximum time to wait for dynamic filters from joins, before reading a table whose requests can send their values")
+    public OpenApiConfig setDynamicFilteringWaitTimeout(Duration dynamicFilteringWaitTimeout)
+    {
+        this.dynamicFilteringWaitTimeout = dynamicFilteringWaitTimeout;
         return this;
     }
 

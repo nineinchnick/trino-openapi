@@ -88,6 +88,7 @@ class TestOpenApiConfig
                 .setHttpCacheMaxEntrySize(DataSize.of(10, MEGABYTE))
                 .setDomainExpansionLimit(256)
                 .setMaxFilterCombinations(1000)
+                .setDynamicFilteringWaitTimeout(new Duration(20, SECONDS))
                 .setSplitStrategy(SplitStrategy.OFF)
                 .setProbeLimit(ProbeLimit.NONE));
     }
@@ -129,6 +130,7 @@ class TestOpenApiConfig
                 .put("http-cache.max-entry-size", "100kB")
                 .put("domain-expansion-limit", "10")
                 .put("max-filter-combinations", "100")
+                .put("dynamic-filtering.wait-timeout", "5s")
                 .put("split-strategy", "STRIDE")
                 .put("probe-limit", "4")
                 .buildOrThrow();
@@ -167,6 +169,7 @@ class TestOpenApiConfig
                 .setHttpCacheMaxEntrySize(DataSize.of(100, KILOBYTE))
                 .setDomainExpansionLimit(10)
                 .setMaxFilterCombinations(100)
+                .setDynamicFilteringWaitTimeout(new Duration(5, SECONDS))
                 .setSplitStrategy(SplitStrategy.STRIDE)
                 .setProbeLimit(new ProbeLimit(OptionalInt.of(4)));
 
