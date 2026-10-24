@@ -275,10 +275,11 @@ public class Authentication
 
     private static Resolution resolveApiKey(CatalogCredentials catalogCredentials, String subject, SecurityScheme scheme, UserCredentials userCredentials)
     {
-        String name = requireNonNullElse(scheme.getName(), catalogCredentials.getApiKeyName().orElse(null));
-        if (name == null) {
+        Optional<String> keyName = Optional.ofNullable(scheme.getName()).or(catalogCredentials::getApiKeyName);
+        if (keyName.isEmpty()) {
             return missing(catalogCredentials, subject, List.of("authentication.api-key-name"));
         }
+        String name = keyName.get();
         if (scheme.getIn() == null) {
             return new Unresolved(format("%s doesn't declare where to send the API key", subject));
         }

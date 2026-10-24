@@ -692,6 +692,27 @@ class TestAuthentication
     }
 
     @Test
+    void testDefaultApiKeyWithoutName()
+            throws IOException
+    {
+        String spec =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /secured:
+                    get:
+                %s
+                """.formatted(OPERATION_RESPONSES);
+
+        assertThatThrownBy(() -> createAuthentication(spec, new OpenApiConfig().setAuthenticationType(AuthenticationType.API_KEY).setApiKeyValue("secret")).filterRequest(request("/secured"), UserCredentials.NONE))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
+                .hasMessageContaining("authentication.api-key-name");
+    }
+
+    @Test
     void testApiKeysWithReservedCharacters()
             throws Exception
     {
