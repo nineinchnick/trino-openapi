@@ -709,30 +709,31 @@ paths:
         sqlOperation: [insert, update]
 ```
 
-| Property            | Description                                                                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pageParam`         | Parameter with the page number; enables pagination                                                                                                  |
-| `limitParam`        | Parameter with the page size                                                                                                                        |
-| `resultsPath`       | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
-| `totalResultsPath`  | JSON pointer to the total number of results, a number or a string with a number                                                                     |
-| `totalPagesPath`    | JSON pointer to the total number of pages, a number or a string with a number                                                                       |
-| `hasMorePath`       | JSON pointer to a boolean that is `false` on the last page                                                                                          |
-| `cursorParam`       | Parameter with the cursor of the next page; enables [cursor pagination](#cursor-pagination)                                                         |
-| `nextCursorPath`    | JSON pointer to the cursor of the next page in the response; required with `cursorParam`                                                            |
-| `maxPages`          | Maximum number of pages to request                                                                                                                  |
-| `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
-| `splitStrategy`     | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
-| `strideSplits`      | Number of splits reading pages with the `stride` strategy, instead of the number of worker nodes                                                    |
-| `probeLimit`        | Page size of the first page requested by the `probe` split strategy, overriding the `probe-limit` catalog property                                  |
-| `errorPath`         | JSON pointer to a human-readable message in error responses                                                                                         |
-| `rangeFilters`      | Parameters that limit values of response fields, see below                                                                                          |
-| `sqlOperation`      | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
-| `sortParam`         | Parameter that selects the field to sort results by                                                                                                 |
-| `sortValues`        | Map of response field names to the `sortParam` values that sort by them, see [Pagination](#pagination)                                              |
-| `directionParam`    | Parameter with the sort direction; required with `sortParam`                                                                                        |
-| `ascendingValue`    | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
-| `descendingValue`   | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
-| `parameterDefaults` | Values of parameters sent when the query doesn't filter on them, see [Parameter defaults](#parameter-defaults)                                      |
+| Property             | Description                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageParam`          | Parameter with the page number; enables pagination                                                                                                  |
+| `limitParam`         | Parameter with the page size                                                                                                                        |
+| `resultsPath`        | JSON pointer to the results in the response, like `$response.body#/items`                                                                           |
+| `totalResultsPath`   | JSON pointer to the total number of results, a number or a string with a number                                                                     |
+| `totalPagesPath`     | JSON pointer to the total number of pages, a number or a string with a number                                                                       |
+| `hasMorePath`        | JSON pointer to a boolean that is `false` on the last page                                                                                          |
+| `cursorParam`        | Parameter with the cursor of the next page; enables [cursor pagination](#cursor-pagination)                                                         |
+| `nextCursorPath`     | JSON pointer to the cursor of the next page in the response; required with `cursorParam`, unless `nextPageLinkHeader` is set                        |
+| `nextPageLinkHeader` | `true` to read the next page from the `Link` header, see [Links to the next page](#links-to-the-next-page)                                          |
+| `maxPages`           | Maximum number of pages to request                                                                                                                  |
+| `maxResults`         | Maximum number of results to read; pages past it are not requested                                                                                  |
+| `splitStrategy`      | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
+| `strideSplits`       | Number of splits reading pages with the `stride` strategy, instead of the number of worker nodes                                                    |
+| `probeLimit`         | Page size of the first page requested by the `probe` split strategy, overriding the `probe-limit` catalog property                                  |
+| `errorPath`          | JSON pointer to a human-readable message in error responses                                                                                         |
+| `rangeFilters`       | Parameters that limit values of response fields, see below                                                                                          |
+| `sqlOperation`       | SQL statements using the operation instead of the default ones: `select`, `insert`, `update`, `delete`, or several in a list or separated by commas |
+| `sortParam`          | Parameter that selects the field to sort results by                                                                                                 |
+| `sortValues`         | Map of response field names to the `sortParam` values that sort by them, see [Pagination](#pagination)                                              |
+| `directionParam`     | Parameter with the sort direction; required with `sortParam`                                                                                        |
+| `ascendingValue`     | Value of `directionParam` for the ascending order; required with `sortParam`                                                                        |
+| `descendingValue`    | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
+| `parameterDefaults`  | Values of parameters sent when the query doesn't filter on them, see [Parameter defaults](#parameter-defaults)                                      |
 
 The schema at `resultsPath` must be an array, with a row for every item, an
 object, which is a single row, or a union of them. Loading the spec fails
@@ -845,6 +846,42 @@ x-trino:
 The cursor parameter must be a string or an integer, and it can be sent in the
 query, a header, a cookie, or the request body. A page is requested either by
 its number or by a cursor, so `cursorParam` can't be set with `pageParam`.
+
+### Pagination headers
+
+The values of `totalResultsPath`, `totalPagesPath`, `hasMorePath`, and
+`nextCursorPath` can also be read from response headers, like
+`$response.header#X-Total-Count`. A header value of `hasMorePath` must be
+`true` or `false`, ignoring case.
+
+### Links to the next page
+
+Some APIs, like GitHub, link to the next page in the `Link` header, described in
+[RFC 8288](https://www.rfc-editor.org/rfc/rfc8288):
+
+```
+Link: <https://api.github.com/repositories/1/issues?page=2>; rel="next", <https://api.github.com/repositories/1/issues?page=5>; rel="last"
+```
+
+When `nextPageLinkHeader` is `true`, the connector requests the first page, and
+then the link with the `next` relation from the previous response, until a
+response has no such link, or another condition of
+[cursor pagination](#cursor-pagination) ends it. The link has all the query
+parameters, so it's requested as it is, with the header and cookie parameters
+of the query. Requests have credentials, so a link to another host, port, or
+scheme than the one of the server of the operation fails the query, instead of
+sending them there.
+
+```yaml
+x-trino:
+  nextPageLinkHeader: true
+  resultsPath: "$response.body#/items"
+```
+
+With `cursorParam`, the connector reads only the value of that query parameter
+from the link, and sends it like a cursor read from `nextCursorPath`, so the
+link can point to another host. `nextPageLinkHeader` can't be set with
+`pageParam` or `nextCursorPath`.
 
 ### Reading pages concurrently
 

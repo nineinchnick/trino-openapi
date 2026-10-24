@@ -132,6 +132,7 @@ public class OpenApiSpec
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
     private static final String PAGINATION_CURSOR_PARAM = "cursorParam";
     private static final String PAGINATION_NEXT_CURSOR_PATH = "nextCursorPath";
+    private static final String PAGINATION_NEXT_PAGE_LINK_HEADER = "nextPageLinkHeader";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
@@ -164,6 +165,9 @@ public class OpenApiSpec
     private static final Set<String> PLAIN_TYPES = ImmutableSet.of("string", "integer", "number", "boolean", "int", "float");
     private static final String PLAIN_VALUE_COLUMN = "value";
     private static final String ENTRY_KEY_COLUMN = "key";
+    private static final String HEADER_PREFIX = "$response.header#";
+    // header names are tokens, which can't contain separators or spaces
+    private static final Pattern HEADER_PATTERN = Pattern.compile(Pattern.quote(HEADER_PREFIX) + "([!#$%&'*+.^_`|~0-9A-Za-z-]+)");
     private static final Pattern SUCCESS_STATUS_PATTERN = Pattern.compile("2(\\d\\d|XX)", Pattern.CASE_INSENSITIVE);
 
     // should only be used to manually resolving references
@@ -1694,7 +1698,8 @@ public class OpenApiSpec
                         entry -> {
                             Object rawExtension = entry.getValue().getExtensions().get(SPEC_EXTENSION);
                             Map<String, String> specExtension = getMapOfStrings(rawExtension);
-                            validatePageParam(specExtension, new HttpPath(entry.getKey(), path));
+                            boolean nextPageLinkHeader = rawExtension instanceof Map<?, ?> map && getBoolean(map, PAGINATION_NEXT_PAGE_LINK_HEADER).orElse(false);
+                            validatePageParam(specExtension, nextPageLinkHeader, new HttpPath(entry.getKey(), path));
                             return Pagination.builder()
                                     .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
                                     .setTotalResultsPath(responsePath(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
@@ -1702,6 +1707,7 @@ public class OpenApiSpec
                                     .setHasMorePath(responsePath(specExtension, PAGINATION_HAS_MORE_PATH))
                                     .setCursorParam(Optional.ofNullable(specExtension.get(PAGINATION_CURSOR_PARAM)))
                                     .setNextCursorPath(responsePath(specExtension, PAGINATION_NEXT_CURSOR_PATH))
+                                    .setNextPageLinkHeader(nextPageLinkHeader)
                                     .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
@@ -1712,13 +1718,14 @@ public class OpenApiSpec
                         }));
     }
 
-    private static void validatePageParam(Map<String, String> specExtension, HttpPath httpPath)
+    private static void validatePageParam(Map<String, String> specExtension, boolean nextPageLinkHeader, HttpPath httpPath)
     {
         if (!specExtension.containsKey(PAGINATION_PAGE_PARAM)) {
             return;
         }
-        // a page is requested either by its number or by the cursor from the previous page
+        // a page is requested either by its number or by the cursor or the link from the previous page
         checkArgument(!specExtension.containsKey(PAGINATION_CURSOR_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_CURSOR_PARAM, PAGINATION_PAGE_PARAM);
+        checkArgument(!nextPageLinkHeader, "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_NEXT_PAGE_LINK_HEADER, PAGINATION_PAGE_PARAM);
     }
 
     private static OptionalInt getOptionalInt(Object specExtension, String extensionName)
@@ -1825,6 +1832,12 @@ public class OpenApiSpec
 
     private static Optional<ResponsePath> responsePath(Map<String, String> specExtension, String extensionName)
     {
+        String expression = requireNonNullElse(specExtension.get(extensionName), "");
+        Matcher headerMatcher = HEADER_PATTERN.matcher(expression);
+        if (headerMatcher.matches()) {
+            return Optional.of(new ResponsePath.Header(headerMatcher.group(1)));
+        }
+        checkArgument(!expression.startsWith(HEADER_PREFIX), "Invalid value of %s: %s, the header name must not be empty or contain spaces or separators", extensionName, expression);
         JsonPointer pointer = pointer(specExtension, extensionName);
         if (pointer.equals(JsonPointer.empty())) {
             return Optional.empty();

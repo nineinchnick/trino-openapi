@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.base.CharMatcher;
+import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -83,6 +84,7 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
@@ -108,6 +110,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.net.HttpHeaders.LINK;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
@@ -182,10 +185,13 @@ public class OpenApiClient
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, column -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
+        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Optional<OpenApiColumn> cursorColumn = getUnfilteredCursorColumn(table, httpPath);
+        // without a cursor parameter, the link is the whole URI of the next page
+        boolean followsLinks = pagination.nextPageLinkHeader() && pagination.cursorParam().isEmpty();
         Predicate<List<?>> rowFilter = getRowFilter(table);
-        if (pageColumn.isEmpty() && cursorColumn.isEmpty()) {
+        if (pageColumn.isEmpty() && cursorColumn.isEmpty() && !followsLinks) {
             return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
@@ -194,15 +200,9 @@ public class OpenApiClient
         OpenApiTableHandle pagedTable = sortedTable.orElse(table);
         // without the sort parameters, the first rows are not the top ones, so all pages must be read
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
-        Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
-        if (cursorColumn.isPresent()) {
+        if (cursorColumn.isPresent() || followsLinks) {
             return cursorIterator(
-                    cursor -> getPage(
-                            cursor.map(value -> withCursor(pagedTable, cursorColumn.get(), value)).orElse(pagedTable),
-                            httpPath,
-                            pathWithParams.getValue(),
-                            cursor.isEmpty(),
-                            revalidateCachedResponses),
+                    next -> getNextPage(pagedTable, httpPath, pathWithParams.getValue(), cursorColumn, next, revalidateCachedResponses),
                     queryLimit.orElse(Long.MAX_VALUE),
                     pagination.maxResults().orElse(Long.MAX_VALUE),
                     pagination.maxPages(),
@@ -456,6 +456,24 @@ public class OpenApiClient
         // the body must be serialized for every page, since it can contain the page number,
         // and the response handler copies the page number to every row
         return makeRequest(pageTable, httpPath, pathParameters, getParameterValues(pageTable, httpPath), revalidateCachedResponses, getBodyGenerator(pageTable, httpPath), getResponseHandler(pageTable, httpPath, notFoundIsEmpty));
+    }
+
+    private ResultsPage getNextPage(
+            OpenApiTableHandle table,
+            HttpPath httpPath,
+            Map<OpenApiColumn, Object> pathParameters,
+            Optional<OpenApiColumn> cursorColumn,
+            Optional<String> next,
+            boolean revalidateCachedResponses)
+    {
+        if (next.isEmpty()) {
+            return getPage(table, httpPath, pathParameters, true, revalidateCachedResponses);
+        }
+        if (cursorColumn.isPresent()) {
+            return getPage(withCursor(table, cursorColumn.get(), next.get()), httpPath, pathParameters, false, revalidateCachedResponses);
+        }
+        // the link already has all query parameters, and the response handler checked that it points to the host of the base URI
+        return sendRequest(table, httpPath, URI.create(next.get()), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, false));
     }
 
     private OptionalLong getPageSize(OpenApiTableHandle table, HttpPath httpPath)
@@ -1314,10 +1332,10 @@ public class OpenApiClient
             failOnReportedError(request, response.getStatusCode(), jsonNode);
             return new ResultsPage(
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
-                    getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPath()),
-                    getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPath()),
-                    getBoolean(jsonNode, pagination.hasMorePath()),
-                    getCursor(request, jsonNode, pagination.nextCursorPath()));
+                    getLong(request, response, jsonNode, "totalResultsPath", pagination.totalResultsPath()),
+                    getLong(request, response, jsonNode, "totalPagesPath", pagination.totalPagesPath()),
+                    getBoolean(response, jsonNode, pagination.hasMorePath()),
+                    getNextCursor(request, response, jsonNode));
         }
 
         // some servers respond with status 200 and an error instead of the results
@@ -1341,12 +1359,85 @@ public class OpenApiClient
             throw new TrinoException(OPENAPI_HTTP_ERROR, format("%s with HTTP %d: %s", describeFailedRequest(httpPath, request), statusCode, errorNode));
         }
 
-        private static OptionalLong getLong(Request request, JsonNode jsonNode, String propertyName, Optional<ResponsePath> path)
+        private Optional<String> getNextCursor(Request request, Response response, JsonNode jsonNode)
         {
-            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
+            if (!pagination.nextPageLinkHeader()) {
+                return getCursor(request, response, jsonNode, pagination.nextCursorPath());
+            }
+            Optional<URI> nextLink = getNextLink(request, response);
+            if (nextLink.isEmpty()) {
+                return Optional.empty();
+            }
+            if (pagination.cursorParam().isPresent()) {
+                return getQueryParameter(nextLink.get(), pagination.cursorParam().get());
+            }
+            // requests have credentials, which must not be sent to any host the server links to
+            if (!isSameOrigin(servers.getUri(httpPath), nextLink.get())) {
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format(
+                        "Response to %s links to the next page on another host, %s, but requests are sent only to the server of the operation, so credentials are not sent to other hosts",
+                        describe(request),
+                        withoutQuery(nextLink.get())));
+            }
+            return Optional.of(nextLink.get().toString());
+        }
+
+        private static Optional<URI> getNextLink(Request request, Response response)
+        {
+            Optional<String> nextLink = LinkHeader.getNextLink(response.getHeaders().get(HeaderName.of(LINK)));
+            if (nextLink.isEmpty()) {
+                return Optional.empty();
+            }
+            try {
+                return Optional.of(request.getUri().resolve(nextLink.get()));
+            }
+            catch (IllegalArgumentException _) {
+                // the link is not included, because it might contain sensitive information
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Response to %s has an invalid link to the next page in the Link header", describe(request)));
+            }
+        }
+
+        private static Optional<String> getQueryParameter(URI uri, String name)
+        {
+            return Splitter.on('&').omitEmptyStrings().splitToStream(nullToEmpty(uri.getRawQuery()))
+                    .map(parameter -> parameter.split("=", 2))
+                    .filter(parameter -> URLDecoder.decode(parameter[0], UTF_8).equals(name))
+                    .map(parameter -> parameter.length == 2 ? URLDecoder.decode(parameter[1], UTF_8) : "")
+                    .filter(value -> !value.isEmpty())
+                    .findFirst();
+        }
+
+        private static boolean isSameOrigin(URI uri, URI other)
+        {
+            return uri.getScheme().equalsIgnoreCase(other.getScheme())
+                    && uri.getHost().equalsIgnoreCase(nullToEmpty(other.getHost()))
+                    && getPort(uri) == getPort(other);
+        }
+
+        private static int getPort(URI uri)
+        {
+            if (uri.getPort() != -1) {
+                return uri.getPort();
+            }
+            return uri.getScheme().equalsIgnoreCase("https") ? 443 : 80;
+        }
+
+        private static JsonNode getValue(Response response, JsonNode jsonNode, ResponsePath path)
+        {
+            return switch (path) {
+                case ResponsePath.Body(JsonPointer pointer) -> jsonNode.at(pointer);
+                case ResponsePath.Header(String name) -> response.getHeaders().get(HeaderName.of(name)).stream()
+                        .findFirst()
+                        .<JsonNode>map(TextNode::valueOf)
+                        .orElse(MissingNode.getInstance());
+            };
+        }
+
+        private static OptionalLong getLong(Request request, Response response, JsonNode jsonNode, String propertyName, Optional<ResponsePath> path)
+        {
+            if (path.isEmpty()) {
                 return OptionalLong.empty();
             }
-            JsonNode valueNode = jsonNode.at(pointer);
+            JsonNode valueNode = getValue(response, jsonNode, path.get());
             if (valueNode.isMissingNode() || valueNode.isNull()) {
                 return OptionalLong.empty();
             }
@@ -1359,35 +1450,39 @@ public class OpenApiClient
                 return OptionalLong.of(textValue);
             }
             // the value is not included, because the response might contain sensitive information
-            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of %s %s in the response to %s is not a whole number", propertyName, pointer, describe(request)));
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of %s %s in the response to %s is not a whole number", propertyName, path.get(), describe(request)));
         }
 
-        private static Optional<String> getCursor(Request request, JsonNode jsonNode, Optional<ResponsePath> path)
+        private static Optional<String> getCursor(Request request, Response response, JsonNode jsonNode, Optional<ResponsePath> path)
         {
-            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
+            if (path.isEmpty()) {
                 return Optional.empty();
             }
-            JsonNode valueNode = jsonNode.at(pointer);
+            JsonNode valueNode = getValue(response, jsonNode, path.get());
             if (valueNode.isMissingNode() || valueNode.isNull()) {
                 return Optional.empty();
             }
             if (!valueNode.isTextual() && !valueNode.isIntegralNumber()) {
-                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of nextCursorPath %s in the response to %s is a JSON %s, not a string or a whole number", pointer, describe(request), valueNode.getNodeType()));
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of nextCursorPath %s in the response to %s is a JSON %s, not a string or a whole number", path.get(), describe(request), valueNode.getNodeType()));
             }
             // servers can send an empty cursor with the last page, instead of leaving it out
             return Optional.of(valueNode.asText()).filter(cursor -> !cursor.isEmpty());
         }
 
-        private static Optional<Boolean> getBoolean(JsonNode jsonNode, Optional<ResponsePath> path)
+        private static Optional<Boolean> getBoolean(Response response, JsonNode jsonNode, Optional<ResponsePath> path)
         {
-            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
+            if (path.isEmpty()) {
                 return Optional.empty();
             }
-            JsonNode valueNode = jsonNode.at(pointer);
-            if (!valueNode.isBoolean()) {
-                return Optional.empty();
+            JsonNode valueNode = getValue(response, jsonNode, path.get());
+            if (valueNode.isBoolean()) {
+                return Optional.of(valueNode.booleanValue());
             }
-            return Optional.of(valueNode.booleanValue());
+            // header values are always text
+            if (path.get() instanceof ResponsePath.Header && (valueNode.asText().equalsIgnoreCase("true") || valueNode.asText().equalsIgnoreCase("false"))) {
+                return Optional.of(Boolean.parseBoolean(valueNode.asText()));
+            }
+            return Optional.empty();
         }
     }
 

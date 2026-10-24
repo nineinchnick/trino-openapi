@@ -470,6 +470,14 @@ class TestOpenApiClientRequests
                     "- name: cursor\n          in: query\n          schema:\n            type: string\n")
             .replace("pageParam: page\n", "cursorParam: cursor\n        nextCursorPath: $response.body#/next\n");
 
+    private static final String HEADER_CURSOR_SPEC = CURSOR_SPEC.replace("$response.body#/next", "$response.header#X-Next-Cursor");
+
+    private static final String HEADER_TOTAL_SPEC = PAGED_SPEC.replace("$response.body#/total", "$response.header#X-Total-Count");
+
+    private static final String LINK_SPEC = PAGED_SPEC.replace("pageParam: page\n", "nextPageLinkHeader: true\n");
+
+    private static final String LINK_CURSOR_SPEC = CURSOR_SPEC.replace("nextCursorPath: $response.body#/next", "nextPageLinkHeader: true");
+
     private static final String PAGED_PATH_PARAMETER_SPEC = PAGED_SPEC
             .replace("  /paged:\n", "  /{tenant}/paged:\n")
             .replace(
@@ -1403,6 +1411,80 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value of nextCursorPath /next in the response to GET %s/paged is a JSON OBJECT, not a string or a whole number", baseUri)
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+    }
+
+    @Test
+    void testTotalInHeader()
+            throws IOException
+    {
+        // the server returns the last page for every page number past it, so only the total ends pagination
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "X-Total-Count", "2"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}", "X-Total-Count", "2"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}", "X-Total-Count", "2"));
+
+        assertThat(getRows(newConfig(HEADER_TOTAL_SPEC), "paged", null)).hasSize(2);
+        assertThat(requestCount).hasValue(2);
+
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "X-Total-Count", "internal-details"));
+
+        assertThatThrownBy(() -> getRows(newConfig(HEADER_TOTAL_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value of totalResultsPath header X-Total-Count in the response to GET %s/paged is not a whole number", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+    }
+
+    @Test
+    void testCursorInHeader()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "X-Next-Cursor", "b"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}"));
+
+        assertThat(getRows(newConfig(HEADER_CURSOR_SPEC), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=b"));
+    }
+
+    @Test
+    void testFollowsNextLinks()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "Link", "<%s/paged?page=2&per_page=1>; rel=\"next\", <%s/paged?page=3>; rel=\"last\"".formatted(baseUri, baseUri)));
+        // links can be relative to the URI of the request
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}", "Link", "</paged?page=3>; rel=\"next\""));
+        responses.add(respond(200, "{\"results\":[{\"id\":3}]}", "Link", "</paged?page=1>; rel=\"first\""));
+
+        assertThat(getRows(newConfig(LINK_SPEC), "paged", null)).hasSize(3);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?page=2&per_page=1"), URI.create("/paged?page=3"));
+    }
+
+    @Test
+    void testNextLinkToAnotherHostFails()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "Link", "<https://other.example/paged?page=2&api_key=secret>; rel=\"next\""));
+
+        assertThatThrownBy(() -> getRows(newConfig(LINK_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/paged links to the next page on another host, https://other.example/paged, but requests are sent only to the server of the operation, so credentials are not sent to other hosts", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("secret"));
+
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "Link", "<http://127.0.0.1:1/paged?page=2>; rel=\"next\""));
+
+        assertThatThrownBy(() -> getRows(newConfig(LINK_SPEC), "paged", null))
+                .hasMessage("Response to GET %s/paged links to the next page on another host, http://127.0.0.1:1/paged, but requests are sent only to the server of the operation, so credentials are not sent to other hosts", baseUri);
+        assertThat(requestCount).hasValue(2);
+    }
+
+    @Test
+    void testCursorFromNextLink()
+            throws IOException
+    {
+        // only the cursor is read from the link, so it can point to another host
+        responses.add(respond(200, "{\"results\":[{\"id\":1}]}", "Link", "<https://other.example/paged?limit=1&cursor=a%20b>; rel=\"next\""));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}]}"));
+
+        assertThat(getRows(newConfig(LINK_CURSOR_SPEC), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=a%20b"));
     }
 
     @Test
