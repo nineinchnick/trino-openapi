@@ -54,6 +54,7 @@ import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Throwables.getStackTraceAsString;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
@@ -1003,15 +1004,19 @@ class TestOpenApiClientRequests
 
     private List<List<?>> getRows(OpenApiConfig config, String tableName, String columnName, String value)
     {
+        return getRowsMatching(config, tableName, value == null ? Map.of() : Map.of(columnName, Domain.singleValue(VARCHAR, utf8Slice(value))));
+    }
+
+    private List<List<?>> getRowsMatching(OpenApiConfig config, String tableName, Map<String, Domain> columnDomains)
+    {
         OpenApiSpec spec = new OpenApiSpec(config);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
-        if (value != null) {
-            OpenApiColumn column = spec.getTables().get(tableName).stream()
-                    .filter(candidate -> candidate.getName().equals(columnName))
-                    .findFirst()
-                    .orElseThrow();
-            table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(value)))));
+        if (!columnDomains.isEmpty()) {
+            Map<ColumnHandle, Domain> domains = spec.getTables().get(tableName).stream()
+                    .filter(column -> columnDomains.containsKey(column.getName()))
+                    .collect(toImmutableMap(OpenApiColumn::getHandle, column -> columnDomains.get(column.getName())));
+            table = table.cloneWithConstraint(TupleDomain.withColumnDomains(domains));
         }
         return ImmutableList.copyOf(client.getRows(table, 1, 1, false));
     }
