@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.util.RawValue;
+import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
@@ -90,6 +91,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.net.MediaType.JSON_UTF_8;
@@ -566,6 +568,9 @@ public class OpenApiClient
         for (Map.Entry<OpenApiColumn, Object> entry : pathParameters.entrySet()) {
             OpenApiColumn column = entry.getKey();
             String value = getParameterStyle(column, httpPath, ParameterLocation.PATH).serializePathValue(column.getSourceName(), toJsonNode(column, entry.getValue()));
+            if (value.isEmpty()) {
+                throw new TrinoException(INVALID_ROW_FILTER, format("Path parameter %s can't be empty", column.getName()));
+            }
             uriPath = uriPath.replace(format("{%s}", column.getSourceName()), value);
         }
         URI uri;
@@ -678,16 +683,27 @@ public class OpenApiClient
         return Map.entry(httpPath, pathParams);
     }
 
-    private static URI buildUri(URI uri, String path, List<String> queryParams)
+    private static URI buildUri(URI baseUri, String path, List<String> queryParams)
             throws URISyntaxException
     {
         // both the path and query parameters are already percent-encoded, according to their parameter styles,
-        // and HttpUriBuilder would decode and encode them again, for example turning encoded slashes into path separators
-        URI resolved = uri.resolve(new URI(uri.getRawPath() + path));
-        if (queryParams.isEmpty()) {
-            return resolved;
+        // and HttpUriBuilder would decode and encode them again, for example turning encoded slashes into path separators.
+        // Joining the paths as text, instead of resolving a reference, makes sure the result can't change the host
+        StringBuilder uri = new StringBuilder()
+                .append(baseUri.getScheme())
+                .append("://")
+                .append(baseUri.getRawAuthority())
+                .append(CharMatcher.is('/').trimTrailingFrom(nullToEmpty(baseUri.getRawPath())))
+                .append(path);
+        List<String> query = new ArrayList<>();
+        if (baseUri.getRawQuery() != null) {
+            query.add(baseUri.getRawQuery());
         }
-        return new URI(resolved + "?" + String.join("&", queryParams));
+        query.addAll(queryParams);
+        if (!query.isEmpty()) {
+            uri.append('?').append(String.join("&", query));
+        }
+        return new URI(uri.toString());
     }
 
     private List<String> getQueryParams(OpenApiTableHandle table, HttpPath httpPath, Function<OpenApiColumn, Object> valueProvider)

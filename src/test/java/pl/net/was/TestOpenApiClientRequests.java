@@ -50,6 +50,7 @@ import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.base.Throwables.getStackTraceAsString;
 import static io.airlift.slice.Slices.utf8Slice;
+import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -134,7 +135,27 @@ class TestOpenApiClientRequests
             paths:
             """);
 
+    private static final String PATH_PARAMETER_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /{tenant}/items:
+                get:
+                  operationId: listTenantItems
+                  parameters:
+                    - name: tenant
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+            %s
+            """.formatted(OK_RESPONSES);
+
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
+    private final Queue<URI> requestUris = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
     private HttpServer server;
     private HttpClient httpClient;
@@ -150,6 +171,7 @@ class TestOpenApiClientRequests
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             requestCount.incrementAndGet();
+            requestUris.add(exchange.getRequestURI());
             HttpHandler handler = responses.poll();
             if (handler == null) {
                 handler = respond(200, "[]");
@@ -172,7 +194,52 @@ class TestOpenApiClientRequests
     void resetServer()
     {
         responses.clear();
+        requestUris.clear();
         requestCount.set(0);
+    }
+
+    @Test
+    void testBaseUriWithTrailingSlash()
+            throws IOException
+    {
+        assertThat(getRows(newConfig().setBaseUri(URI.create(baseUri + "/")), "items", "x")).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/items?secret=x"));
+    }
+
+    @Test
+    void testBaseUriWithPath()
+            throws IOException
+    {
+        assertThat(getRows(newConfig().setBaseUri(URI.create(baseUri + "/v1")), "items", "x")).isEmpty();
+        assertThat(getRows(newConfig().setBaseUri(URI.create(baseUri + "/v1/")), "items", "x")).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/v1/items?secret=x"), URI.create("/v1/items?secret=x"));
+    }
+
+    @Test
+    void testBaseUriWithQuery()
+            throws IOException
+    {
+        assertThat(getRows(newConfig().setBaseUri(URI.create(baseUri + "/v1?api-version=2")), "items", "x")).isEmpty();
+        assertThat(getRows(newConfig().setBaseUri(URI.create(baseUri + "/v1?api-version=2")), "items", null)).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/v1/items?api-version=2&secret=x"), URI.create("/v1/items?api-version=2"));
+    }
+
+    @Test
+    void testLeadingPathParameter()
+            throws IOException
+    {
+        assertThat(getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", "a")).isEmpty();
+        assertThat(requestUris).containsExactly(URI.create("/a/items"));
+    }
+
+    @Test
+    void testEmptyPathParameter()
+            throws IOException
+    {
+        assertThatThrownBy(() -> getRows(newConfig(PATH_PARAMETER_SPEC), "items", "tenant", ""))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_ROW_FILTER.toErrorCode()))
+                .hasMessage("Path parameter tenant can't be empty");
+        assertThat(requestCount).hasValue(0);
     }
 
     @Test
@@ -575,15 +642,20 @@ class TestOpenApiClientRequests
 
     private List<List<?>> getRows(OpenApiConfig config, String tableName, String secret)
     {
+        return getRows(config, tableName, "secret", secret);
+    }
+
+    private List<List<?>> getRows(OpenApiConfig config, String tableName, String columnName, String value)
+    {
         OpenApiSpec spec = new OpenApiSpec(config);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
-        if (secret != null) {
+        if (value != null) {
             OpenApiColumn column = spec.getTables().get(tableName).stream()
-                    .filter(candidate -> candidate.getName().equals("secret"))
+                    .filter(candidate -> candidate.getName().equals(columnName))
                     .findFirst()
                     .orElseThrow();
-            table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(secret)))));
+            table = table.cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(value)))));
         }
         return ImmutableList.copyOf(client.getRows(table, 1, 1, false));
     }
