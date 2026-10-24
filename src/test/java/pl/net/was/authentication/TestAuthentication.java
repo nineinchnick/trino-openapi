@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.COOKIE;
+import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -317,6 +318,53 @@ class TestAuthentication
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequests).hasValue(1);
+    }
+
+    @Test
+    void testCookieApiKeyIsMergedWithCookieParameters()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - apiKeyCookie: []
+                paths:
+                  /secured:
+                    get:
+                %s
+                %s
+                """.formatted(OPERATION_RESPONSES, SECURITY_SCHEMES));
+
+        Request request = fromRequest(request("/secured"))
+                .addHeader(COOKIE, "page=2")
+                .build();
+        assertThat(authentication.filterRequest(request).getHeaders().get(COOKIE)).containsExactly("page=2; session=cookie-secret");
+        assertThat(authentication.filterRequest(request("/secured")).getHeaders().get(COOKIE)).containsExactly("session=cookie-secret");
+    }
+
+    @Test
+    void testPathHeaderIsNotSent()
+            throws Exception
+    {
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /items:
+                    get:
+                %s
+                """.formatted(OPERATION_RESPONSES));
+
+        Request request = authentication.filterRequest(request("/items"));
+        assertThat(request.getHeader(OPENAPI_PATH_HEADER)).isNull();
+        assertThat(request.getHeader(AUTHORIZATION)).isEqualTo("Basic dXNlcjpwYXNzd29yZA==");
     }
 
     private Authentication createAuthentication(String specContents)
