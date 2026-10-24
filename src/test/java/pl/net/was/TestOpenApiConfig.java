@@ -45,7 +45,7 @@ class TestOpenApiConfig
 {
     private static final Map<String, String> REQUIRED_PROPERTIES = ImmutableMap.of(
             "spec-location", "spec.yaml",
-            "base-uri", "http://localhost:8080");
+            "base-uri", "https://localhost:8080");
 
     @Test
     void testDefaults()
@@ -64,6 +64,7 @@ class TestOpenApiConfig
                 .setClientId(null)
                 .setClientSecret(null)
                 .setTokenUrl(null)
+                .setAllowInsecureHttp(false)
                 .setMaxRequestsPerSecond(Double.MAX_VALUE)
                 .setMaxSplitsPerSecond(Double.MAX_VALUE)
                 .setMaxRetries(3)
@@ -93,6 +94,7 @@ class TestOpenApiConfig
                 .put("authentication.client-id", "client")
                 .put("authentication.client-secret", "client-secret")
                 .put("authentication.token-url", "https://auth.example.com/token")
+                .put("authentication.allow-insecure-http", "true")
                 .put("max-requests-per-second", "10")
                 .put("max-splits-per-second", "5")
                 .put("max-retries", "5")
@@ -119,6 +121,7 @@ class TestOpenApiConfig
                 .setClientId("client")
                 .setClientSecret("client-secret")
                 .setTokenUrl(URI.create("https://auth.example.com/token"))
+                .setAllowInsecureHttp(true)
                 .setMaxRequestsPerSecond(10)
                 .setMaxSplitsPerSecond(5)
                 .setMaxRetries(5)
@@ -148,6 +151,36 @@ class TestOpenApiConfig
                         "authentication.api-keys",
                         "authentication.api-key-value",
                         "authentication.client-secret");
+    }
+
+    @Test
+    void testCredentialsOverHttp()
+    {
+        Map<String, String> properties = Map.of(
+                "spec-location", "spec.yaml",
+                "base-uri", "http://localhost:8080",
+                "authentication.bearer-token", "token");
+        assertThatThrownBy(() -> buildConfig(properties))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("base-uri and authentication.token-url must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set");
+        assertThat(buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(properties)
+                .put("authentication.allow-insecure-http", "true")
+                .buildOrThrow())
+                .isAllowInsecureHttp())
+                .isTrue();
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("authentication.client-secret", "secret")
+                .put("authentication.token-url", "http://auth.example.com/token")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("must use HTTPS");
+        assertThat(buildConfig(Map.of(
+                "spec-location", "spec.yaml",
+                "base-uri", "http://localhost:8080"))
+                .getBaseUri())
+                .isEqualTo(URI.create("http://localhost:8080"));
     }
 
     @Test

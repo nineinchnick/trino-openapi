@@ -97,6 +97,7 @@ public class OpenApiQueryRunner
             properties.put("spec-location", server.getSpecUrl());
             properties.put("base-uri", server.getApiUrl());
             // the test servers use HTTP, and Keycloak runs on another port than the API
+            properties.put("authentication.allow-insecure-http", "true");
             properties.put("authentication.token-url", server.getTokenUrl());
         }
         else {

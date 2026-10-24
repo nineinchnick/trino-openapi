@@ -138,6 +138,7 @@ Trino version it's built for.
 | `authentication.client-id`           | `OPENAPI_CLIENT_ID`                 |           | OAuth client ID                                                                                                 |
 | `authentication.client-secret`       | `OPENAPI_CLIENT_SECRET`             |           | OAuth client secret                                                                                             |
 | `authentication.token-url`           | `OPENAPI_TOKEN_URL`                 |           | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
+| `authentication.allow-insecure-http` | `OPENAPI_ALLOW_INSECURE_HTTP`       | `false`   | Allow sending credentials over HTTP, without TLS                                                                |
 | `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited | Maximum number of HTTP requests per second from a single Trino node                                             |
 | `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited | Maximum number of splits per second generated for a query                                                       |
 | `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
