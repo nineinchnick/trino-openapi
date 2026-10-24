@@ -1315,15 +1315,25 @@ public class OpenApiClient
     private static class AnyResponseHandler
             implements ResponseHandler<Void, RuntimeException>
     {
+        private boolean sent;
+
         @Override
         public Void handleException(Request request, Exception exception)
         {
+            sent = true;
             throw new HttpRequestFailure.TransportError(exception);
         }
 
         @Override
         public Void handle(Request request, Response response)
         {
+            boolean retried = sent;
+            sent = true;
+            // the previous attempt could have deleted the resource before failing with a gateway error or a timeout
+            if (retried && request.getMethod().equals("DELETE") && isGone(response.getStatusCode())) {
+                log.debug("Received response code %d to a retried DELETE, so the resource was already deleted", response.getStatusCode());
+                return null;
+            }
             // servers often respond to writes with 201 Created, 202 Accepted, or 204 No Content
             if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
                 throw HttpRequestFailure.ErrorResponse.read(response);
@@ -1332,6 +1342,11 @@ public class OpenApiClient
             log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
             bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
             return null;
+        }
+
+        private static boolean isGone(int statusCode)
+        {
+            return statusCode == HttpStatus.NOT_FOUND.code() || statusCode == HttpStatus.GONE.code();
         }
     }
 
