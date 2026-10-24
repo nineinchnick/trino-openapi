@@ -143,7 +143,7 @@ public class JsonTrinoConverter
         }
         if (type instanceof ArrayType arrayType) {
             if (!(jsonNode instanceof ArrayNode arrayNode)) {
-                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON %s as %s", jsonNode.getNodeType(), type));
+                throw typeMismatch(jsonNode, type);
             }
             return buildArray(arrayNode, arrayType, schemaType);
         }
@@ -200,6 +200,11 @@ public class JsonTrinoConverter
             // neither the value, nor the parser's exception that quotes it, are included, because the value might be sensitive
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON string as %s", type));
         }
+    }
+
+    private static TrinoException typeMismatch(JsonNode jsonNode, Type type)
+    {
+        return new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON %s as %s", jsonNode.getNodeType(), type));
     }
 
     private static Object toUnscaledValue(BigDecimal value, DecimalType type)
