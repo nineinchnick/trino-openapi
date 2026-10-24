@@ -180,9 +180,10 @@ uses them for every operation, with credentials from the catalog properties:
   doesn't need a user to log in using a browser: the `password` flow, if the
   scheme declares it and `authentication.username` and `authentication.password`
   are set, otherwise the `clientCredentials` flow, using
-  `authentication.client-id` and `authentication.client-secret`. Tokens are
-  reused until shortly before they expire. The `authorizationCode` and `implicit`
-  flows are not supported.
+  `authentication.client-id` and `authentication.client-secret`. The token is
+  requested with the scopes the security requirement lists, and reused for
+  operations requiring the same scopes until shortly before it expires. The
+  `authorizationCode` and `implicit` flows are not supported.
 
 When an operation lists several security requirements, the connector uses the
 first one whose credentials are all configured, and fails the query, naming the

@@ -17,6 +17,7 @@ import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.Request;
+import io.airlift.http.client.StaticBodyGenerator;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.trino.spi.TrinoException;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.prepareGet;
 import static io.airlift.http.client.testing.TestingResponse.mockResponse;
 import static io.trino.spi.StandardErrorCode.INVALID_CATALOG_PROPERTY;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
@@ -325,6 +327,55 @@ class TestAuthentication
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(tokenRequests).hasValue(1);
+    }
+
+    @Test
+    void testOAuthScopesOfSecurityRequirement()
+            throws Exception
+    {
+        List<String> tokenRequestBodies = new ArrayList<>();
+        Authentication authentication = createAuthentication(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                security:
+                  - oauth: [read]
+                paths:
+                  /secured:
+                    get:
+                %s
+                  /admin:
+                    get:
+                      security:
+                        - oauth: [read, write]
+                %s
+                components:
+                  securitySchemes:
+                    oauth:
+                      type: oauth2
+                      flows:
+                        clientCredentials:
+                          tokenUrl: https://localhost:8081/token
+                          scopes:
+                            read: Read items
+                            write: Change items
+                """.formatted(OPERATION_RESPONSES, OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setClientId("client")
+                        .setClientSecret("secret"),
+                new TestingHttpClient(request -> {
+                    tokenRequestBodies.add(getBody(request));
+                    return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":300}".formatted(tokenRequestBodies.size()));
+                }));
+
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(authentication.filterRequest(request("/admin")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-2");
+        assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
+        assertThat(tokenRequestBodies).containsExactly(
+                "grant_type=client_credentials&scope=read&client_id=client&client_secret=secret",
+                "grant_type=client_credentials&scope=read+write&client_id=client&client_secret=secret");
     }
 
     @Test
@@ -722,6 +773,11 @@ class TestAuthentication
                 .setUri(BASE_URI.resolve(path))
                 .addHeader(OPENAPI_PATH_HEADER, path)
                 .build();
+    }
+
+    private static String getBody(Request request)
+    {
+        return new String(((StaticBodyGenerator) request.getBodyGenerator()).getBody(), UTF_8);
     }
 
     private static void assertNoCredentials(Request request)
