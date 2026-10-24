@@ -186,6 +186,74 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void listTablesInInformationSchema()
+    {
+        assertQuery(
+                "SELECT schema_name FROM petstore.information_schema.schemata",
+                "VALUES 'default', 'information_schema'");
+        assertQuery(
+                "SELECT table_name, table_type FROM petstore.information_schema.tables WHERE table_schema = 'default'",
+                "VALUES ('pet_find_by_status', 'BASE TABLE'), ('pet_find_by_tags', 'BASE TABLE'), ('store_inventory', 'BASE TABLE'), ('store_order', 'BASE TABLE'), ('pet', 'BASE TABLE'), " +
+                        "('user', 'BASE TABLE'), ('user_create_with_list', 'BASE TABLE'), ('user_login', 'BASE TABLE'), ('pet_upload_image', 'BASE TABLE')");
+    }
+
+    @Test
+    public void describeTable()
+    {
+        assertQuery(
+                "DESCRIBE petstore.default.store_order",
+                "VALUES ('id', 'bigint', '', ''), ('pet_id', 'bigint', '', ''), ('quantity', 'integer', '', ''), ('ship_date', 'timestamp(3)', '', ''), " +
+                        "('status', 'varchar', '', 'Order Status'), ('complete', 'boolean', '', ''), ('order_id', 'bigint', '', '')");
+        assertThat(computeScalar("SHOW CREATE TABLE petstore.default.store_order")).isEqualTo(
+                """
+                CREATE TABLE petstore.default.store_order (
+                   id bigint,
+                   pet_id bigint,
+                   quantity integer,
+                   ship_date timestamp(3),
+                   status varchar COMMENT 'Order Status',
+                   complete boolean,
+                   order_id bigint
+                )""");
+    }
+
+    @Test
+    public void explainSelect()
+    {
+        assertExplain(
+                "EXPLAIN SELECT id FROM petstore.default.store_order WHERE order_id = 1",
+                "TableScan\\[table = petstore:store_order\\]");
+    }
+
+    @Test
+    public void unsupportedDdl()
+    {
+        assertQueryFails("CREATE SCHEMA petstore.other", "This connector does not support creating schemas");
+        assertQueryFails("ALTER SCHEMA petstore.default RENAME TO other", "This connector does not support renaming schemas");
+        assertQueryFails("DROP SCHEMA petstore.default", ".*Cannot drop non-empty schema 'default'");
+        assertQueryFails("DROP TABLE petstore.default.store_order", "This connector does not support dropping tables");
+        assertQueryFails("TRUNCATE TABLE petstore.default.store_order", "This connector does not support truncating tables");
+        assertQueryFails("ALTER TABLE petstore.default.store_order ADD COLUMN new_column bigint", "This connector does not support adding columns");
+        assertQueryFails("ALTER TABLE petstore.default.store_order DROP COLUMN status", "This connector does not support dropping columns");
+        assertQueryFails("ALTER TABLE petstore.default.store_order RENAME COLUMN status TO new_status", "This connector does not support renaming columns");
+        assertQueryFails("ALTER TABLE petstore.default.store_order ALTER COLUMN quantity SET DATA TYPE bigint", "This connector does not support setting column types");
+        assertQueryFails("COMMENT ON TABLE petstore.default.store_order IS 'orders'", "This connector does not support setting table comments");
+        assertQueryFails("COMMENT ON COLUMN petstore.default.store_order.status IS 'status'", "This connector does not support setting column comments");
+        assertQueryFails("CREATE MATERIALIZED VIEW petstore.default.new_view AS SELECT 1 AS id", "This connector does not support creating materialized views");
+    }
+
+    @Test
+    @Disabled("getTableHandle throws TableNotFoundException for a missing table instead of returning null, so Trino can't check if the table exists")
+    public void unsupportedDdlOfMissingTables()
+    {
+        assertQueryFails("SELECT * FROM petstore.default.missing", ".*Table 'petstore.default.missing' does not exist");
+        assertQueryFails("CREATE TABLE petstore.default.new_table (id bigint)", "This connector does not support creating tables");
+        assertQueryFails("CREATE TABLE petstore.default.new_table AS SELECT 1 AS id", "This connector does not support creating tables with data");
+        assertQueryFails("ALTER TABLE petstore.default.store_order RENAME TO new_order", "This connector does not support renaming tables");
+        assertQueryFails("CREATE VIEW petstore.default.new_view AS SELECT 1 AS id", "This connector does not support creating views");
+    }
+
+    @Test
     public void selectFromPetTable()
     {
         assertQuery(
