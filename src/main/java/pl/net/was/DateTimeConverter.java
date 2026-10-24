@@ -48,13 +48,13 @@ import static java.lang.Math.min;
 import static java.lang.Math.multiplyExact;
 import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
-import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static java.time.ZoneOffset.UTC;
 import static java.time.format.DateTimeFormatter.ISO_DATE_TIME;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
 import static java.time.temporal.ChronoField.INSTANT_SECONDS;
 import static java.time.temporal.ChronoField.NANO_OF_SECOND;
 import static java.util.Objects.requireNonNullElse;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 
 /**
  * Converts between text in the formats of OpenAPI schemas and native values of DATE and TIMESTAMP columns.
@@ -68,9 +68,7 @@ public class DateTimeConverter
             .mapToObj(DateTimeConverter::rfc3339Formatter)
             .collect(toImmutableList());
 
-    private DateTimeConverter()
-    {
-    }
+    private DateTimeConverter() {}
 
     public static int parseDate(String text, Schema<?> schema)
     {

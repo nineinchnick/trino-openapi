@@ -19,5 +19,5 @@ public enum AuthenticationType
     HTTP,
     API_KEY,
     OAUTH,
-    /**/;
+    /**/
 }

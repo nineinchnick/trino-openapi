@@ -62,7 +62,6 @@ import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
-
 import pl.net.was.cache.CachingHttpClient;
 import pl.net.was.cache.HttpCache;
 
@@ -93,12 +92,12 @@ import java.util.stream.Stream;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.HeaderNames.ACCEPT;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.HeaderNames.USER_AGENT;
-import static com.google.common.net.MediaType.JSON_UTF_8;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
@@ -167,7 +166,7 @@ public class OpenApiClient
     {
         List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
-        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, (column) -> getFilter(column, table.getConstraint()));
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, column -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
@@ -274,7 +273,7 @@ public class OpenApiClient
 
     public boolean canReadPagesWithStride(OpenApiTableHandle table)
     {
-        HttpPath httpPath = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint())).getKey();
+        HttpPath httpPath = selectPath(table, table.getSelectPaths(), column -> getFilter(column, table.getConstraint())).getKey();
         if (getUnfilteredPageColumn(table, httpPath).isEmpty()) {
             return false;
         }
@@ -288,7 +287,7 @@ public class OpenApiClient
 
     public Optional<OpenApiTableHandle> getFirstPageWithTotals(OpenApiTableHandle table)
     {
-        HttpPath httpPath = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint())).getKey();
+        HttpPath httpPath = selectPath(table, table.getSelectPaths(), column -> getFilter(column, table.getConstraint())).getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         if (JsonPointer.empty().equals(pagination.totalResultsPointer()) && JsonPointer.empty().equals(pagination.totalPagesPointer())) {
             return Optional.empty();
@@ -299,7 +298,7 @@ public class OpenApiClient
 
     public List<OpenApiSplit> getSplitsAfterFirstPage(OpenApiTableHandle table, ProbeLimit probeLimit, boolean revalidateCachedResponses)
     {
-        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, table.getSelectPaths(), (column) -> getFilter(column, table.getConstraint()));
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, table.getSelectPaths(), column -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
         OpenApiColumn pageColumn = getUnfilteredPageColumn(table, httpPath).orElseThrow();
@@ -376,8 +375,7 @@ public class OpenApiClient
     private static OpenApiTableHandle withPage(OpenApiTableHandle table, OpenApiColumn pageColumn, long page)
     {
         TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
-                pageColumn.getHandle(),
-                NullableValue.of(pageColumn.getType(), page)));
+                pageColumn.getHandle(), NullableValue.of(pageColumn.getType(), page)));
         return table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
     }
 
@@ -475,7 +473,7 @@ public class OpenApiClient
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
                 table.getTableHandle(),
                 table.getTableHandle().getDeletePaths(),
-                (column) -> getFilter(column, table.getTableHandle().getConstraint()));
+                column -> getFilter(column, table.getTableHandle().getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         makeRequest(
                 table.getTableHandle(),

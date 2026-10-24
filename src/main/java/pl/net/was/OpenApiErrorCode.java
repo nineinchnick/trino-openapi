@@ -27,6 +27,7 @@ public enum OpenApiErrorCode
     OPENAPI_INVALID_RESPONSE(2, EXTERNAL);
 
     // codes are part of the client protocol, so they must not change, and the offset must not be used by Trino plugins
+
     private static final int OFFSET = 0x0700_0000;
 
     private final ErrorCode errorCode;

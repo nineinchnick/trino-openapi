@@ -46,7 +46,8 @@ public class TestJira
     @Test
     public void searchIssues()
     {
-        assertQuery("SELECT i.key, i.fields['summary'] FROM jira.default.rest_api_3_search_jql j CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"' AND j.fields = ARRAY['*all']",
+        assertQuery(
+                "SELECT i.key, i.fields['summary'] FROM jira.default.rest_api_3_search_jql j CROSS JOIN unnest(issues) i WHERE jql = 'text ~ \"first*\"' AND j.fields = ARRAY['*all']",
                 "VALUES ('KAN-1', 'First issue')");
     }
 }

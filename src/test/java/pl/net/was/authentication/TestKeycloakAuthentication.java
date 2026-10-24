@@ -101,7 +101,8 @@ class TestKeycloakAuthentication
             throws IOException, InvalidConfigurationException
     {
         // declare both flows to check that the password flow is only used when credentials are configured
-        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"), """
+        Path specFile = Files.writeString(tempDir.resolve("spec.yaml"),
+                """
                 openapi: 3.0.0
                 info:
                   title: test

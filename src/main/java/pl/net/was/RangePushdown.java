@@ -201,8 +201,7 @@ public final class RangePushdown
         try {
             return switch (parameter.getType()) {
                 case DateType _ -> OptionalInt.of(Long.compare(DateTimeConverter.parseDate(DateTimeConverter.formatDate((long) value, schema), schema), (long) value));
-                case TimestampType type when value instanceof Long epochMicros ->
-                        OptionalInt.of(Long.compare((long) DateTimeConverter.parseTimestamp(DateTimeConverter.formatTimestamp(epochMicros, type, schema), type, schema), epochMicros));
+                case TimestampType type when value instanceof Long epochMicros -> OptionalInt.of(Long.compare((long) DateTimeConverter.parseTimestamp(DateTimeConverter.formatTimestamp(epochMicros, type, schema), type, schema), epochMicros));
                 case TimestampType _ -> OptionalInt.empty();
                 default -> OptionalInt.of(0);
             };

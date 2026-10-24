@@ -67,7 +67,8 @@ import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 @TestInstance(PER_CLASS)
 class TestOpenApiClientRequests
 {
-    private static final String OK_RESPONSES = """
+    private static final String OK_RESPONSES =
+            """
                   responses:
                     '200':
                       description: OK
@@ -81,7 +82,8 @@ class TestOpenApiClientRequests
                                 id:
                                   type: integer
             """;
-    private static final String SPEC = """
+    private static final String SPEC =
+            """
             openapi: 3.0.0
             info:
               title: test
@@ -116,7 +118,8 @@ class TestOpenApiClientRequests
             """.formatted(OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES);
 
     // like GitHub, which sends the reset time with every response, including ones that fail because of missing permissions
-    private static final String RATE_LIMITED_SPEC = SPEC.replace("paths:\n", """
+    private static final String RATE_LIMITED_SPEC = SPEC.replace("paths:\n",
+            """
             x-trino:
               rateLimitResetHeader: x-ratelimit-reset
               rateLimitResetFormat: epochSeconds
@@ -124,7 +127,8 @@ class TestOpenApiClientRequests
             paths:
             """);
 
-    private static final String DOCUMENT_ERROR_PATH_SPEC = SPEC.replace("paths:\n", """
+    private static final String DOCUMENT_ERROR_PATH_SPEC = SPEC.replace("paths:\n",
+            """
             x-trino:
               errorPath: $response.body#/error
             paths:

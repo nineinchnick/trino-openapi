@@ -21,5 +21,5 @@ public enum ParameterLocation
     HEADER,
     COOKIE,
     BODY,
-    ANY
+    ANY,
 }

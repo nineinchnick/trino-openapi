@@ -54,12 +54,12 @@ import static io.airlift.json.JsonCodec.jsonCodec;
 import static io.trino.spi.StandardErrorCode.CONFIGURATION_INVALID;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.Math.min;
-import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.joining;
+import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 import static pl.net.was.authentication.AuthenticationScheme.BEARER;
 
 public class Authentication
@@ -90,7 +90,8 @@ public class Authentication
             .build(CacheLoader.from(this::fetchTokenWithExpiry));
 
     @Inject
-    public Authentication(OpenApiConfig config,
+    public Authentication(
+            OpenApiConfig config,
             OpenApiSpec spec,
             @OpenApiAuthenticationClient HttpClient httpClient)
     {
@@ -159,7 +160,7 @@ public class Authentication
         // only one of the requirements needs to be satisfied - test which methods are configured, pick first one, and only fail if there are none
         for (SecurityRequirement requirement : requirements) {
             try {
-                requirement.forEach((name, options) -> {
+                requirement.forEach((name, _) -> {
                     SecurityScheme securitySchema = securitySchemas.get(name);
                     requireNonNull(securitySchema, "securitySchema is null");
                     switch (securitySchema.getType()) {
