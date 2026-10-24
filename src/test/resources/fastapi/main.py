@@ -525,6 +525,21 @@ def get_defaulted_items_requests() -> RequestCount:
     return defaulted_items_requests
 
 
+class OwnedItem(BaseModel):
+    name: str
+    ownerId: str
+
+
+owned_items = [OwnedItem(name="Portal Gun", ownerId="Rick"), OwnedItem(name="Plumbus", ownerId="Morty")]
+
+
+@router.get("/owned_items")
+def list_owned_items(name: str = None, ownerId: str = None) -> list[OwnedItem]:
+    # like search endpoints, names match by a substring and owners ignore case
+    return [item for item in owned_items
+            if (name is None or name in item.name) and (ownerId is None or ownerId.lower() == item.ownerId.lower())]
+
+
 @router.post("/paged_search")
 def paged_search(q: PageFilter) -> Results:
     return Results(

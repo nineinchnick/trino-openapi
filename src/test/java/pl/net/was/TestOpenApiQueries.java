@@ -915,6 +915,21 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void parametersThatAreResponseFields()
+    {
+        // the column name is normalized from ownerId, and rows get its value from the response, with or without a filter
+        assertQuery("SELECT name, owner_id FROM fastapi.default.owned_items", "VALUES ('Portal Gun', 'Rick'), ('Plumbus', 'Morty')");
+        assertQuery("SELECT name, owner_id FROM fastapi.default.owned_items WHERE owner_id = 'Rick'", "VALUES ('Portal Gun', 'Rick')");
+        // the server ignores case, but the returned value doesn't match the filter
+        assertQueryReturnsEmptyResult("SELECT name, owner_id FROM fastapi.default.owned_items WHERE owner_id = 'rick'");
+        // the server matches names by a substring
+        assertQueryReturnsEmptyResult("SELECT name FROM fastapi.default.owned_items WHERE name = 'Plum'");
+        assertQuery("SELECT name FROM fastapi.default.owned_items WHERE name = 'Plumbus'", "VALUES 'Plumbus'");
+        assertQuery("SELECT name FROM fastapi.default.owned_items WHERE name IN ('Plum', 'Plumbus')", "VALUES 'Plumbus'");
+        assertQuery("SELECT name FROM fastapi.default.owned_items WHERE name = 'Plumbus' LIMIT 1", "VALUES 'Plumbus'");
+    }
+
+    @Test
     public void selectFromTableWithoutSelectOperation()
     {
         // POST operations are used for SELECT only when marked with the sqlOperation extension
