@@ -441,7 +441,7 @@ public class Authentication
 
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
-        String token = uncheckedCacheGet(tokenProviders, tokenRequest, () -> createTokenProvider(tokenRequest)).getToken();
+        String token = uncheckedCacheGet(tokenProviders, tokenRequest, () -> new ErrorReportingTokenProvider(createTokenProvider(tokenRequest), URI.create(tokenRequest.tokenUrl()))).getToken();
         return builder.addHeader(AUTHORIZATION, BEARER_PREFIX + token);
     }
 
