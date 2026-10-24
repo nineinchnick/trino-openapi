@@ -176,6 +176,13 @@ openApi.http-client.log.enabled=true
 openApi.http-client.log.path=logs
 ```
 
+The request log, and request spans when Trino has
+[tracing](https://trino.io/docs/current/admin/opentelemetry.html) enabled,
+include the full URL of every request. When an API key is sent in the query
+string, it's recorded there too, so prefer sending keys in a header, if the API
+supports it, or keep the request log and traces as protected as the
+credentials.
+
 The connector asks servers for gzip-compressed responses, with
 `Accept-Encoding: gzip`, and decompresses them, because JSON usually compresses
 about ten times.
