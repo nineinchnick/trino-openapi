@@ -38,6 +38,7 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Streams;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
+import com.google.common.io.CountingInputStream;
 import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
@@ -83,6 +84,7 @@ import javax.crypto.spec.PBEKeySpec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -1379,20 +1381,7 @@ public class OpenApiClient
             if (response.getStatusCode() == HttpStatus.NO_CONTENT.code()) {
                 return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty(), Optional.empty());
             }
-            String result = readBody(response);
-            log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
-            bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
-
-            JsonNode jsonNode;
-            try {
-                jsonNode = OBJECT_MAPPER.readTree(result);
-            }
-            catch (JsonProcessingException ex) {
-                String message = format("Response to %s is not valid JSON", describe(request));
-                // the parser's message quotes the response, which might contain sensitive information, so it's only logged
-                bodyLog.debug(ex, message);
-                throw new TrinoException(OPENAPI_INVALID_RESPONSE, message);
-            }
+            JsonNode jsonNode = readJson(request, response);
             failOnReportedError(request, response.getStatusCode(), jsonNode);
             return new ResultsPage(
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
@@ -1400,6 +1389,33 @@ public class OpenApiClient
                     getLong(request, response, jsonNode, "totalPagesPath", pagination.totalPagesPath()),
                     getBoolean(response, jsonNode, pagination.hasMorePath()),
                     getNextCursor(request, response, jsonNode));
+        }
+
+        private static JsonNode readJson(Request request, Response response)
+        {
+            try (CountingInputStream input = new CountingInputStream(response.getInputStream())) {
+                // the parser reads the body directly, so it's not held in memory as a string too, unless it's logged
+                JsonNode jsonNode = bodyLog.isDebugEnabled() ? readLoggedJson(response, input) : OBJECT_MAPPER.readTree(input);
+                log.debug("Received response code %d with %d bytes", response.getStatusCode(), input.getCount());
+                return jsonNode;
+            }
+            catch (JsonProcessingException ex) {
+                String message = format("Response to %s is not valid JSON", describe(request));
+                // the parser's message quotes the response, which might contain sensitive information, so it's only logged
+                bodyLog.debug(ex, message);
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, message);
+            }
+            catch (IOException e) {
+                throw new HttpRequestFailure.TransportError(e);
+            }
+        }
+
+        private static JsonNode readLoggedJson(Response response, InputStream input)
+                throws IOException
+        {
+            String result = new InputStreamReader(input, UTF_8).readAllAsString();
+            bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
+            return OBJECT_MAPPER.readTree(result);
         }
 
         // some servers respond with status 200 and an error instead of the results
@@ -1547,16 +1563,6 @@ public class OpenApiClient
                 return Optional.of(Boolean.parseBoolean(valueNode.asText()));
             }
             return Optional.empty();
-        }
-    }
-
-    private static String readBody(Response response)
-    {
-        try {
-            return new InputStreamReader(response.getInputStream(), UTF_8).readAllAsString();
-        }
-        catch (IOException e) {
-            throw new HttpRequestFailure.TransportError(e);
         }
     }
 
@@ -1766,10 +1772,22 @@ public class OpenApiClient
             if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
                 throw HttpRequestFailure.ErrorResponse.read(response);
             }
-            String result = readBody(response);
-            log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
-            bodyLog.debug("Received response code %d: %s", response.getStatusCode(), result);
+            log.debug("Received response code %d", response.getStatusCode());
+            // the body of a response to a write is not used, so it's read only to be logged
+            if (bodyLog.isDebugEnabled()) {
+                bodyLog.debug("Received response code %d: %s", response.getStatusCode(), readBody(response));
+            }
             return null;
+        }
+
+        private static String readBody(Response response)
+        {
+            try (InputStream input = response.getInputStream()) {
+                return new InputStreamReader(input, UTF_8).readAllAsString();
+            }
+            catch (IOException e) {
+                throw new HttpRequestFailure.TransportError(e);
+            }
         }
 
         private static boolean isGone(int statusCode)
