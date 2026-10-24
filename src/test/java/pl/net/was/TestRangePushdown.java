@@ -14,6 +14,7 @@
 
 package pl.net.was;
 
+import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.trino.spi.TrinoException;
@@ -25,8 +26,11 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.predicate.ValueSet;
+import io.trino.spi.type.LongTimestamp;
+import io.trino.spi.type.Type;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +39,10 @@ import java.util.Optional;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.swagger.v3.oas.models.PathItem.HttpMethod.GET;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MILLIS;
+import static io.trino.spi.type.TimestampType.TIMESTAMP_NANOS;
 import static java.time.ZoneOffset.UTC;
 import static java.time.temporal.ChronoField.NANO_OF_SECOND;
 import static java.util.function.Function.identity;
@@ -222,6 +229,59 @@ class TestRangePushdown
                 .hasMessage("Cannot push down a predicate for since, which is a bound of an already pushed down range");
     }
 
+    @Test
+    void sendBoundsOfDateRanges()
+    {
+        // the custom format is sent too, so the server can read the date
+        for (String format : List.of("date", "dd.MM.yyyy")) {
+            OpenApiColumn day = rangeColumn("day", DATE, dateTimeSchema("date"), "from", "to");
+            OpenApiColumn from = queryParameter("from", DATE, dateTimeSchema(format));
+            OpenApiColumn to = queryParameter("to", DATE, dateTimeSchema(format));
+            List<OpenApiColumn> dateColumns = List.of(day, from, to);
+            long first = LocalDate.parse("2024-01-02").toEpochDay();
+            long last = LocalDate.parse("2024-01-04").toEpochDay();
+            Domain domain = domain(Range.range(DATE, first, true, last, false));
+
+            assertThat(RangePushdown.getBoundValues(dateColumns, CHANGES, TupleDomain.withColumnDomains(Map.of(day.getHandle(), domain))))
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(from, first, to, last));
+            assertThat(RangePushdown.isEnforcedByAllPaths(dateColumns, List.of(CHANGES), Map.of(), day, domain)).isTrue();
+        }
+    }
+
+    @Test
+    void sendBoundsOfNonTemporalRanges()
+    {
+        Schema<?> integerSchema = new IntegerSchema();
+        OpenApiColumn id = rangeColumn("id", BIGINT, integerSchema, "min_id", "max_id");
+        OpenApiColumn minId = queryParameter("min_id", BIGINT, integerSchema);
+        OpenApiColumn maxId = queryParameter("max_id", BIGINT, integerSchema);
+        List<OpenApiColumn> idColumns = List.of(id, minId, maxId);
+        Domain domain = domain(Range.range(BIGINT, 10L, true, 20L, false));
+
+        assertThat(RangePushdown.getBoundValues(idColumns, CHANGES, TupleDomain.withColumnDomains(Map.of(id.getHandle(), domain))))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(minId, 10L, maxId, 20L));
+        assertThat(RangePushdown.isEnforcedByAllPaths(idColumns, List.of(CHANGES), Map.of(), id, domain)).isTrue();
+    }
+
+    @Test
+    void skipBoundsThatCantBeReadBack()
+    {
+        // a format without the date can't be parsed back, so it's unknown which value the API receives
+        OpenApiColumn timeSince = queryParameter("since", TIMESTAMP_MILLIS, dateTimeSchema("HH:mm"));
+        OpenApiColumn timeUntil = queryParameter("until", TIMESTAMP_MILLIS, dateTimeSchema("HH:mm"));
+        Domain domain = domain(Range.range(TIMESTAMP_MILLIS, micros("2024-01-02T00:00"), true, micros("2024-01-04T00:00"), false));
+
+        assertThat(RangePushdown.getBoundValues(List.of(updatedAt, timeSince, timeUntil), CHANGES, TupleDomain.withColumnDomains(Map.of(updatedAt.getHandle(), domain)))).isEmpty();
+        assertThat(RangePushdown.isSentBySomePath(List.of(updatedAt, timeSince, timeUntil), List.of(CHANGES), Map.of(), updatedAt, domain)).isFalse();
+
+        // values of timestamps with more than microsecond precision are not compared
+        OpenApiColumn nanosUpdatedAt = rangeColumn("updated_at", TIMESTAMP_NANOS, dateTimeSchema("date-time"), "since", "until");
+        OpenApiColumn nanosSince = queryParameter("since", TIMESTAMP_NANOS, dateTimeSchema("date-time"));
+        Domain nanosDomain = domain(Range.greaterThanOrEqual(TIMESTAMP_NANOS, new LongTimestamp(micros("2024-01-02T00:00"), 0)));
+
+        assertThat(RangePushdown.getBoundValues(List.of(nanosUpdatedAt, nanosSince), CHANGES, TupleDomain.withColumnDomains(Map.of(nanosUpdatedAt.getHandle(), nanosDomain)))).isEmpty();
+    }
+
     private Map<OpenApiColumn, Object> getBoundValues(HttpPath httpPath, Domain domain)
     {
         return RangePushdown.getBoundValues(columns, httpPath, TupleDomain.withColumnDomains(Map.of(updatedAt.getHandle(), domain)));
@@ -251,6 +311,32 @@ class TestRangePushdown
                 .setType(TIMESTAMP_MILLIS)
                 .setSourceType(dateTimeSchema(format))
                 .setOptionalPredicate(Map.of(httpPath, ParameterLocation.QUERY))
+                .build();
+    }
+
+    private static OpenApiColumn rangeColumn(String name, Type type, Schema<?> schema, String lowerParameter, String upperParameter)
+    {
+        RangeFilter rangeFilter = new RangeFilter(
+                Optional.of(new RangeFilter.Bound(lowerParameter, true)),
+                Optional.of(new RangeFilter.Bound(upperParameter, false)),
+                true);
+        return OpenApiColumn.builder()
+                .setName(name)
+                .setSourceName(name)
+                .setType(type)
+                .setSourceType(schema)
+                .setRangeFilters(Map.of(CHANGES, rangeFilter))
+                .build();
+    }
+
+    private static OpenApiColumn queryParameter(String name, Type type, Schema<?> schema)
+    {
+        return OpenApiColumn.builder()
+                .setName(name)
+                .setSourceName(name)
+                .setType(type)
+                .setSourceType(schema)
+                .setOptionalPredicate(Map.of(CHANGES, ParameterLocation.QUERY))
                 .build();
     }
 
