@@ -214,9 +214,10 @@ public class OpenApiClient
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
     }
 
-    public Iterable<List<?>> getRows(ConnectorSession session, OpenApiTableHandle table, int firstPage, int pageIncrement, boolean revalidateCachedResponses)
+    public Iterable<List<?>> getRows(ConnectorSession session, OpenApiSplit split, boolean revalidateCachedResponses)
     {
         UserCredentials credentials = extraCredentialProvider.getUserCredentials(session.getIdentity());
+        OpenApiTableHandle table = split.getTableHandle();
         List<HttpPath> selectPaths = table.getSelectPaths();
         checkState(!selectPaths.isEmpty(), "paths are empty");
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, column -> getFilter(column, table.getConstraint()));
@@ -252,11 +253,11 @@ public class OpenApiClient
                 : (page, _) -> getPage(credentials, withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses);
         return pageIterator(
                 pageGetter,
-                firstPage - 1,
+                split.getFirstPage() - 1,
                 queryLimit.orElse(Long.MAX_VALUE),
                 // pages are requested until the previous ones have fewer results than this, so a page that would start past it is never requested
                 pagination.maxResults().orElse(Long.MAX_VALUE),
-                pageIncrement,
+                split.getPageIncrement(),
                 getPageSize(table, httpPath),
                 pagination.maxPages(),
                 rowFilter);
