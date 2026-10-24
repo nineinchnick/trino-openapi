@@ -1363,9 +1363,7 @@ public class OpenApiClient
                 value = new RawValue(stringValue);
             }
             else if (value instanceof SqlRow sqlRow) {
-                ObjectNode rowNode = OBJECT_MAPPER.createObjectNode();
-                JsonTrinoConverter.convertRow(rowNode, sqlRow, (RowType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
-                value = rowNode;
+                value = JsonTrinoConverter.convertRow(sqlRow, (RowType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
             }
             else if (value instanceof SqlMap sqlMap) {
                 value = JsonTrinoConverter.convertMap(sqlMap, (MapType) column.getType(), column.getSourceType(), OBJECT_MAPPER);
