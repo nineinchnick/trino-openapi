@@ -15,8 +15,10 @@
 package pl.net.was;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.Map;
+import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -25,10 +27,12 @@ import static java.util.Objects.requireNonNull;
  * Request parameters that make the server sort results by a column, so reading only the first pages returns the top rows.
  *
  * @param sortValues values of the sort parameter, by the name of the response field they sort by
+ * @param binaryOrderFields response fields the server sorts like Trino, even though their type can be sorted in other ways, like text ignoring case
  */
 public record Sorting(
         String sortParam,
         Map<String, String> sortValues,
+        Set<String> binaryOrderFields,
         String directionParam,
         String ascendingValue,
         String descendingValue)
@@ -41,7 +45,10 @@ public record Sorting(
         checkArgument(!directionParam.equals(sortParam), "directionParam must be different from sortParam");
         checkArgument(ascendingValue != null, "ascendingValue is required with sortParam");
         checkArgument(descendingValue != null, "descendingValue is required with sortParam");
+        requireNonNull(binaryOrderFields, "binaryOrderFields is null");
+        checkArgument(sortValues.keySet().containsAll(binaryOrderFields), "binaryOrderFields must be in sortValues");
         sortValues = ImmutableMap.copyOf(sortValues);
+        binaryOrderFields = ImmutableSet.copyOf(binaryOrderFields);
     }
 
     public String directionValue(boolean ascending)
@@ -58,6 +65,7 @@ public record Sorting(
     {
         private String sortParam;
         private Map<String, String> sortValues = ImmutableMap.of();
+        private Set<String> binaryOrderFields = ImmutableSet.of();
         private String directionParam;
         private String ascendingValue;
         private String descendingValue;
@@ -73,6 +81,12 @@ public record Sorting(
         public Builder setSortValues(Map<String, String> sortValues)
         {
             this.sortValues = sortValues;
+            return this;
+        }
+
+        public Builder setBinaryOrderFields(Set<String> binaryOrderFields)
+        {
+            this.binaryOrderFields = binaryOrderFields;
             return this;
         }
 
@@ -96,7 +110,7 @@ public record Sorting(
 
         public Sorting build()
         {
-            return new Sorting(sortParam, sortValues, directionParam, ascendingValue, descendingValue);
+            return new Sorting(sortParam, sortValues, binaryOrderFields, directionParam, ascendingValue, descendingValue);
         }
     }
 }
