@@ -110,6 +110,7 @@ public class OpenApiConfig
         return this;
     }
 
+    @NotNull
     public AuthenticationType getAuthenticationType()
     {
         return authenticationType;
@@ -121,6 +122,13 @@ public class OpenApiConfig
     {
         this.authenticationType = authenticationType;
         return this;
+    }
+
+    @AssertTrue(message = "authentication.type cannot be oauth, because OAuth needs the token URL and flows of an oauth2 security scheme declared in the specification, "
+            + "so it's not supported as the default authentication; remove authentication.type if the specification declares its security requirements")
+    public boolean isAuthenticationTypeSupported()
+    {
+        return authenticationType != AuthenticationType.OAUTH;
     }
 
     @NotNull

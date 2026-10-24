@@ -279,7 +279,6 @@ class TestAuthentication
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()
-                        .setAuthenticationType(AuthenticationType.OAUTH)
                         .setClientId("client")
                         .setClientSecret("secret"));
 
@@ -315,7 +314,6 @@ class TestAuthentication
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()
-                        .setAuthenticationType(AuthenticationType.OAUTH)
                         .setClientId("client")
                         .setClientSecret("secret"),
                 new TestingHttpClient(_ -> mockResponse(
@@ -356,7 +354,6 @@ class TestAuthentication
             return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"expires_in\":30}");
         });
         OpenApiConfig config = new OpenApiConfig()
-                .setAuthenticationType(AuthenticationType.OAUTH)
                 .setClientId("client")
                 .setClientSecret("secret");
 
@@ -682,7 +679,6 @@ class TestAuthentication
                           scopes: {}
                 """.formatted(OPERATION_RESPONSES),
                 new OpenApiConfig()
-                        .setAuthenticationType(AuthenticationType.OAUTH)
                         .setClientId("client")
                         .setClientSecret("secret"),
                 tokenClient);
