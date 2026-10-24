@@ -505,6 +505,7 @@ Hidden columns don't appear in `SELECT *`, but can be selected and filtered:
 | `object` with `properties`                             | `ROW` with a field for every property                                  |
 | `object` with `additionalProperties`                   | `MAP(VARCHAR, ...)` of the value type                                  |
 | `type: [T, "null"]` (OpenAPI 3.1), or `nullable: true` | nullable `T`                                                           |
+| `oneOf` or `anyOf` of `T` and `type: "null"`           | nullable `T`                                                           |
 | unions, and anything else                              | see [Union types](#union-types), otherwise `VARCHAR` with the raw JSON |
 
 Integers outside the range of the column type, or with a fractional part, and

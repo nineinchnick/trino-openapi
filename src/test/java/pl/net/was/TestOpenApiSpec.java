@@ -4094,6 +4094,89 @@ class TestOpenApiSpec
                         Assertions.tuple("values", VARCHAR));
     }
 
+    @Test
+    public void testUnionsWithNullAlternative()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /events:
+                    get:
+                      responses:
+                        "200":
+                          description: Events
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    count:
+                                      anyOf:
+                                      - type: integer
+                                      - type: "null"
+                                    created_at:
+                                      oneOf:
+                                      - type: string
+                                        format: date-time
+                                      - type: "null"
+                                    tags:
+                                      anyOf:
+                                      - type: array
+                                        items:
+                                          type: string
+                                      - type: "null"
+                                    owner:
+                                      anyOf:
+                                      - type: object
+                                        properties:
+                                          login:
+                                            type: string
+                                      - type: "null"
+                                    labels:
+                                      anyOf:
+                                      - type: object
+                                        additionalProperties:
+                                          type: integer
+                                      - type: "null"
+                                    ratio:
+                                      type: object
+                                      properties:
+                                        value:
+                                          anyOf:
+                                          - type: number
+                                            format: double
+                                          - type: "null"
+                                    value:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      - type: "null"
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getTables().get("events"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("count", BIGINT, true),
+                        Assertions.tuple("created_at", TIMESTAMP_MILLIS, true),
+                        Assertions.tuple("tags", new ArrayType(VARCHAR), true),
+                        Assertions.tuple("owner", RowType.from(List.of(RowType.field("login", VARCHAR))), true),
+                        Assertions.tuple("labels", new MapType(VARCHAR, BIGINT, new TypeOperators()), true),
+                        Assertions.tuple("ratio", RowType.from(List.of(RowType.field("value", DOUBLE))), true),
+                        // a union of more than one type holds the raw JSON value
+                        Assertions.tuple("value", VARCHAR, true));
+        // values are decoded and serialized using the schema of the alternative that isn't null
+        Assertions.assertThat(spec.getTables().get("events"))
+                .filteredOn(column -> !column.getName().equals("value"))
+                .allSatisfy(column -> Assertions.assertThat(JsonTrinoConverter.isUnion(column.getSourceType())).isFalse());
+    }
+
     private static List<Tuple> rowFields(List<OpenApiColumn> columns, String name)
     {
         RowType rowType = (RowType) columns.stream()
