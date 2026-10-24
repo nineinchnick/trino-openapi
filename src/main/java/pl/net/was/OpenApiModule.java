@@ -15,7 +15,11 @@
 package pl.net.was;
 
 import com.google.inject.Binder;
+import com.google.inject.Provides;
+import com.google.inject.Singleton;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
+import io.airlift.http.client.HttpClient;
+import pl.net.was.authentication.AuthenticatingHttpClient;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
 
@@ -40,10 +44,19 @@ public class OpenApiModule
 
         binder.bind(OpenApiSpec.class).in(SINGLETON);
         binder.bind(OpenApiServers.class).in(SINGLETON);
-        httpClientBinder(binder)
-                .bindHttpClient("openApi", ForOpenApi.class)
-                .withFilter(Authentication.class);
+        binder.bind(Authentication.class).in(SINGLETON);
+        httpClientBinder(binder).bindHttpClient("openApi", ForUnauthenticatedOpenApi.class);
 
         httpClientBinder(binder).bindHttpClient("openApiAuthentication", OpenApiAuthenticationClient.class);
+    }
+
+    // the wrapped client is bound by the HTTP client binder, which closes it when the connector shuts down
+    @SuppressWarnings("CloseableProvides")
+    @Provides
+    @Singleton
+    @ForOpenApi
+    public static HttpClient createHttpClient(@ForUnauthenticatedOpenApi HttpClient httpClient, Authentication authentication)
+    {
+        return new AuthenticatingHttpClient(httpClient, authentication);
     }
 }
