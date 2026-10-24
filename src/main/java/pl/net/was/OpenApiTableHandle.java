@@ -45,6 +45,7 @@ public class OpenApiTableHandle
         implements ConnectorTableHandle
 {
     private static final int INSTANCE_SIZE = SizeOf.instanceSize(OpenApiTableHandle.class);
+    private static final int SORT_ITEM_INSTANCE_SIZE = SizeOf.instanceSize(SortItem.class);
 
     private final SchemaTableName schemaTableName;
     private final List<HttpPath> selectPaths;
@@ -261,7 +262,7 @@ public class OpenApiTableHandle
                 + SizeOf.estimatedSizeOf(deletePaths, HttpPath::getRetainedSizeInBytes)
                 + constraint.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
                 + SizeOf.sizeOf(limit)
-                + SizeOf.sizeOf(sortItem, item -> SizeOf.estimatedSizeOf(item.getName()))
+                + SizeOf.sizeOf(sortItem, item -> SORT_ITEM_INSTANCE_SIZE + SizeOf.estimatedSizeOf(item.getName()))
                 + rowFilter.getRetainedSizeInBytes(column -> ((OpenApiColumnHandle) column).getRetainedSizeInBytes())
                 + SizeOf.estimatedSizeOf(specHash);
     }
