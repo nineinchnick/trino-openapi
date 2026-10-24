@@ -286,6 +286,13 @@ Error responses, including exceeded rate limits, are never stored in the
 [HTTP cache](#http-cache), and they don't remove a cached response, so a retry
 can revalidate it.
 
+Waiting before a retry, up to `retry-max-delay`, which is 1 minute by default,
+and waiting for `max-requests-per-second`, blocks the thread that sends the
+request, which is usually a Trino driver thread. Driver threads are shared by
+all queries running on a node, so when many splits wait at the same time, other
+queries, also ones not using this connector, can run slower, or wait for a free
+thread.
+
 ## HTTP cache
 
 To avoid sending the same requests again, set `http-cache.directory`, and the
