@@ -848,6 +848,10 @@ public class OpenApiClient
         if (value instanceof BigDecimal decimalValue) {
             return decimalValue.toPlainString();
         }
+        // Double.toString() and Float.toString() use the scientific notation for large and small values, but not for NaN and infinity
+        if ((value instanceof Double || value instanceof Float) && value.toString().contains("E")) {
+            return new BigDecimal(value.toString()).stripTrailingZeros().toPlainString();
+        }
         return value.toString();
     }
 
