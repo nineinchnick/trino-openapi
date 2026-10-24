@@ -205,19 +205,20 @@ public class OpenApiSpec
     public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
     {
         this(parse(requireNonNull(config, "config is null"), requireNonNull(httpClient, "httpClient is null")),
-                config.getTrimmedPathPrefixes());
+                new TableMappingOptions(config.getTrimmedPathPrefixes()));
     }
 
-    private OpenApiSpec(ParsedSpec parsedSpec, List<String> trimmedPathPrefixes)
+    private OpenApiSpec(ParsedSpec parsedSpec, TableMappingOptions tableMappingOptions)
     {
-        this(parsedSpec.openApi(), parsedSpec.hash(), trimmedPathPrefixes);
+        this(parsedSpec.openApi(), parsedSpec.hash(), tableMappingOptions);
     }
 
-    OpenApiSpec(OpenAPI openApi, String specHash, List<String> trimmedPathPrefixes)
+    OpenApiSpec(OpenAPI openApi, String specHash, TableMappingOptions tableMappingOptions)
     {
         this.openApi = requireNonNull(openApi, "openApi is null");
         this.specHash = requireNonNull(specHash, "specHash is null");
-        this.trimmedPathPrefixes = ImmutableList.copyOf(requireNonNull(trimmedPathPrefixes, "trimmedPathPrefixes is null"));
+        requireNonNull(tableMappingOptions, "tableMappingOptions is null");
+        this.trimmedPathPrefixes = tableMappingOptions.trimmedPathPrefixes();
         Map<String, String> documentExtension = getDocumentExtension(openApi);
         this.rateLimitHeaders = getRateLimitHeaders(documentExtension);
         // errors are usually reported the same way by all operations of an API
