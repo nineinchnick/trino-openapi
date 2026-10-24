@@ -36,7 +36,8 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * Retries requests that failed with errors that are likely to be transient,
- * but only when repeating the request has the same effect as making it once.
+ * but only when repeating the request has the same effect as making it once,
+ * or when the server didn't process it.
  */
 final class RetryPolicy
 {
@@ -77,10 +78,11 @@ final class RetryPolicy
     /**
      * Calls the request until it succeeds, it fails with an error that is not transient, or the retries are exhausted.
      * Failures are converted with the failure mapper, which also gets the number of attempts.
+     * Reads, like searches using POST, are retried like idempotent requests.
      */
-    <T> T execute(Request request, Supplier<T> call, FailureMapper failureMapper)
+    <T> T execute(Request request, boolean read, Supplier<T> call, FailureMapper failureMapper)
     {
-        boolean idempotent = IDEMPOTENT_METHODS.contains(request.getMethod());
+        boolean repeatable = IDEMPOTENT_METHODS.contains(request.getMethod()) || (read && request.getMethod().equals("POST"));
         int attempts = 0;
         while (true) {
             attempts++;
@@ -89,7 +91,7 @@ final class RetryPolicy
             }
             catch (HttpRequestFailure failure) {
                 int retry = attempts - 1;
-                if (!idempotent || retry >= maxRetries || !isTransient(failure) || Thread.currentThread().isInterrupted()) {
+                if ((!repeatable && !isTooManyRequests(failure)) || retry >= maxRetries || !isTransient(failure) || Thread.currentThread().isInterrupted()) {
                     throw failureMapper.map(failure, attempts, Optional.empty());
                 }
                 Optional<Duration> retryAfter = getRetryAfter(failure);
@@ -143,6 +145,12 @@ final class RetryPolicy
             case HttpRequestFailure.ErrorResponse error -> TRANSIENT_STATUS_CODES.contains(error.getStatusCode())
                     || (error.getStatusCode() == FORBIDDEN && (error.getRetryAfter().isPresent() || getRateLimitReset(error).isPresent()));
         };
+    }
+
+    // the server rejects a request with 429 before processing it, so repeating it can't apply it twice
+    private static boolean isTooManyRequests(HttpRequestFailure failure)
+    {
+        return failure instanceof HttpRequestFailure.ErrorResponse error && error.getStatusCode() == TOO_MANY_REQUESTS;
     }
 
     private static boolean isNetworkError(Throwable throwable)
