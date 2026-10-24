@@ -170,12 +170,7 @@ public class OpenApiClient
                         Clock.systemUTC()))
                 .orElse(httpClient));
         this.openApiSpec = openApiSpec;
-        if (config.getMaxRequestsPerSecond() != Double.MAX_VALUE) {
-            rateLimiter = RateLimiter.create(config.getMaxRequestsPerSecond());
-        }
-        else {
-            rateLimiter = null;
-        }
+        this.rateLimiter = config.getMaxRequestsPerSecond().map(RateLimiter::create).orElse(null);
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
     }
 

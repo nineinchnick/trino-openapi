@@ -23,6 +23,7 @@ import io.airlift.units.Duration;
 import io.airlift.units.MinDataSize;
 import io.airlift.units.MinDuration;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import pl.net.was.authentication.AuthenticationScheme;
@@ -61,8 +62,8 @@ public class OpenApiConfig
     private URI tokenUrl;
     private boolean allowInsecureHttp;
 
-    private double maxRequestsPerSecond = Double.MAX_VALUE;
-    private double maxSplitsPerSecond = Double.MAX_VALUE;
+    private Optional<Double> maxRequestsPerSecond = Optional.empty();
+    private Optional<Double> maxSplitsPerSecond = Optional.empty();
 
     private int maxRetries = 3;
     private Duration retryInitialDelay = new Duration(1, SECONDS);
@@ -302,27 +303,31 @@ public class OpenApiConfig
         return uri != null && "http".equalsIgnoreCase(uri.getScheme());
     }
 
-    public double getMaxRequestsPerSecond()
+    @NotNull
+    public Optional<@DecimalMin(value = "0", inclusive = false, message = "must be greater than 0") Double> getMaxRequestsPerSecond()
     {
         return maxRequestsPerSecond;
     }
 
     @Config("max-requests-per-second")
-    public OpenApiConfig setMaxRequestsPerSecond(double maxRequestsPerSecond)
+    @ConfigDescription("Maximum number of HTTP requests per second from a single node; unlimited if not set")
+    public OpenApiConfig setMaxRequestsPerSecond(Double maxRequestsPerSecond)
     {
-        this.maxRequestsPerSecond = maxRequestsPerSecond;
+        this.maxRequestsPerSecond = Optional.ofNullable(maxRequestsPerSecond);
         return this;
     }
 
-    public double getMaxSplitsPerSecond()
+    @NotNull
+    public Optional<@DecimalMin(value = "0", inclusive = false, message = "must be greater than 0") Double> getMaxSplitsPerSecond()
     {
         return maxSplitsPerSecond;
     }
 
     @Config("max-splits-per-second")
-    public OpenApiConfig setMaxSplitsPerSecond(double maxSplitsPerSecond)
+    @ConfigDescription("Maximum number of splits per second generated for a query; unlimited if not set")
+    public OpenApiConfig setMaxSplitsPerSecond(Double maxSplitsPerSecond)
     {
-        this.maxSplitsPerSecond = maxSplitsPerSecond;
+        this.maxSplitsPerSecond = Optional.ofNullable(maxSplitsPerSecond);
         return this;
     }
 

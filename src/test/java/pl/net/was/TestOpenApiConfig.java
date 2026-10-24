@@ -65,8 +65,8 @@ class TestOpenApiConfig
                 .setClientSecret(null)
                 .setTokenUrl(null)
                 .setAllowInsecureHttp(false)
-                .setMaxRequestsPerSecond(Double.MAX_VALUE)
-                .setMaxSplitsPerSecond(Double.MAX_VALUE)
+                .setMaxRequestsPerSecond(null)
+                .setMaxSplitsPerSecond(null)
                 .setMaxRetries(3)
                 .setRetryInitialDelay(new Duration(1, SECONDS))
                 .setRetryMaxDelay(new Duration(1, MINUTES))
@@ -96,7 +96,7 @@ class TestOpenApiConfig
                 .put("authentication.token-url", "https://auth.example.com/token")
                 .put("authentication.allow-insecure-http", "true")
                 .put("max-requests-per-second", "10")
-                .put("max-splits-per-second", "5")
+                .put("max-splits-per-second", "0.5")
                 .put("max-retries", "5")
                 .put("retry-initial-delay", "100ms")
                 .put("retry-max-delay", "30s")
@@ -122,8 +122,8 @@ class TestOpenApiConfig
                 .setClientSecret("client-secret")
                 .setTokenUrl(URI.create("https://auth.example.com/token"))
                 .setAllowInsecureHttp(true)
-                .setMaxRequestsPerSecond(10)
-                .setMaxSplitsPerSecond(5)
+                .setMaxRequestsPerSecond(10.0)
+                .setMaxSplitsPerSecond(0.5)
                 .setMaxRetries(5)
                 .setRetryInitialDelay(new Duration(100, MILLISECONDS))
                 .setRetryMaxDelay(new Duration(30, SECONDS))
@@ -242,6 +242,23 @@ class TestOpenApiConfig
                 .setApiKeys("a=1,b=2")
                 .isApiKeysValid())
                 .isFalse();
+    }
+
+    @Test
+    void testRateLimitsMustBePositive()
+    {
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("max-requests-per-second", "0")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("Invalid configuration property max-requests-per-second: must be greater than 0");
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("max-splits-per-second", "-1")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("Invalid configuration property max-splits-per-second: must be greater than 0");
     }
 
     private static void assertFailsValidation(Map<String, String> properties)
