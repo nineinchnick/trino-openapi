@@ -471,11 +471,16 @@ public class OpenApiSpec
 
     public Optional<String> getOperationId(HttpPath httpPath)
     {
-        return Optional.ofNullable(openApi.getPaths())
-                .map(paths -> paths.get(httpPath.path()))
-                .map(pathItem -> pathItem.readOperationsMap().get(httpPath.method()))
+        return getOperation(httpPath)
                 .map(Operation::getOperationId)
                 .filter(operationId -> !operationId.isBlank());
+    }
+
+    private Optional<Operation> getOperation(HttpPath httpPath)
+    {
+        return Optional.ofNullable(openApi.getPaths())
+                .map(paths -> paths.get(httpPath.path()))
+                .map(pathItem -> pathItem.readOperationsMap().get(httpPath.method()));
     }
 
     private List<OpenApiColumn> getColumns(PathItem pathItem, String path)
