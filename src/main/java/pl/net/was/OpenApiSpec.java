@@ -546,8 +546,41 @@ public class OpenApiSpec
 
     private static boolean hasOpsWithJson(String path, PathItem pathItem)
     {
-        return pathItem.readOperationsMap().entrySet().stream()
-                .anyMatch(entry -> hasJsonResponse(new HttpPath(entry.getKey(), path), entry.getValue()));
+        Map<PathItem.HttpMethod, Operation> operations = pathItem.readOperationsMap();
+        if (operations.entrySet().stream().anyMatch(entry -> hasJsonResponse(new HttpPath(entry.getKey(), path), entry.getValue()))) {
+            return true;
+        }
+        operations.forEach((method, op) -> log.debug("Ignoring %s %s, because %s", method, path, describeUnmappedResponse(op)));
+        return false;
+    }
+
+    private static String describeUnmappedResponse(Operation op)
+    {
+        if (TRUE.equals(op.getDeprecated())) {
+            return "it is deprecated";
+        }
+        Map<String, ApiResponse> responses = requireNonNullElse(op.getResponses(), ImmutableMap.of());
+        List<String> successStatuses = responses.keySet().stream()
+                .filter(OpenApiSpec::isSuccessStatus)
+                .sorted()
+                .toList();
+        if (successStatuses.isEmpty()) {
+            return "it declares no successful response, only: " + String.join(", ", responses.keySet());
+        }
+        List<String> mediaTypes = successStatuses.stream()
+                .map(responses::get)
+                .map(ApiResponse::getContent)
+                .filter(Objects::nonNull)
+                .flatMap(content -> content.keySet().stream())
+                .distinct()
+                .toList();
+        if (mediaTypes.isEmpty()) {
+            return "its successful responses have no content";
+        }
+        if (mediaTypes.stream().noneMatch(mediaType -> getJsonMediaTypeRank(mediaType).isPresent())) {
+            return "its successful responses have no JSON media type, only: " + String.join(", ", mediaTypes);
+        }
+        return "only reads are mapped from responses other than 200, and it declares: " + String.join(", ", successStatuses);
     }
 
     private static boolean hasJsonResponse(HttpPath httpPath, Operation op)
