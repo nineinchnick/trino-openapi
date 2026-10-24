@@ -65,7 +65,6 @@ import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
-import static java.util.Collections.emptyIterator;
 import static java.util.function.UnaryOperator.identity;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
@@ -74,8 +73,6 @@ import static pl.net.was.OpenApiSpec.ROW_ID;
 public class OpenApiMetadata
         implements ConnectorMetadata
 {
-    public static final String SCHEMA_NAME = "default";
-
     private final OpenApiSpec spec;
     private final int domainExpansionLimit;
 
@@ -89,7 +86,9 @@ public class OpenApiMetadata
     @Override
     public List<String> listSchemaNames(ConnectorSession connectorSession)
     {
-        return List.of(SCHEMA_NAME);
+        return spec.getSchemaNames().stream()
+                .sorted()
+                .toList();
     }
 
     @Override
@@ -103,7 +102,7 @@ public class OpenApiMetadata
             throw new TrinoException(StandardErrorCode.NOT_SUPPORTED, "This connector does not support versioned tables");
         }
         // the engine decides what a missing table means for the statement, so it must not fail here
-        if (!schemaTableName.getSchemaName().equals(SCHEMA_NAME) || !spec.getTables().containsKey(schemaTableName.getTableName())) {
+        if (!spec.getSchemaTableNames().contains(schemaTableName)) {
             return null;
         }
         return spec.getTableHandle(schemaTableName);
@@ -131,10 +130,8 @@ public class OpenApiMetadata
     @Override
     public List<SchemaTableName> listTables(ConnectorSession session, Optional<String> schemaName)
     {
-        return spec.getTables()
-                .keySet()
-                .stream()
-                .map(table -> new SchemaTableName(SCHEMA_NAME, table))
+        return spec.getSchemaTableNames().stream()
+                .filter(table -> schemaName.isEmpty() || table.getSchemaName().equals(schemaName.get()))
                 .collect(toList());
     }
 
@@ -178,11 +175,9 @@ public class OpenApiMetadata
             Optional<String> schemaName,
             UnaryOperator<Set<SchemaTableName>> relationFilter)
     {
-        if (schemaName.isPresent() && !schemaName.get().equals(SCHEMA_NAME)) {
-            return emptyIterator();
-        }
-        Map<SchemaTableName, List<OpenApiColumn>> tables = spec.getTables().entrySet().stream()
-                .collect(toImmutableMap(entry -> new SchemaTableName(SCHEMA_NAME, entry.getKey()), Map.Entry::getValue));
+        Map<SchemaTableName, List<OpenApiColumn>> tables = spec.getSchemaTableNames().stream()
+                .filter(table -> schemaName.isEmpty() || table.getSchemaName().equals(schemaName.get()))
+                .collect(toImmutableMap(identity(), table -> spec.getTables().get(table.getTableName())));
         return relationFilter.apply(tables.keySet()).stream()
                 .map(table -> RelationColumnsMetadata.forTable(
                         table,
