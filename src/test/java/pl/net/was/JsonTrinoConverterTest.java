@@ -40,8 +40,11 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.MapBlockBuilder;
+import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.RowBlockBuilder;
+import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.connector.InMemoryRecordSet;
 import io.trino.spi.connector.RecordCursor;
 import io.trino.spi.type.ArrayType;
@@ -363,7 +366,7 @@ class JsonTrinoConverterTest
         assertThat(JsonTrinoConverter.convert(block, 2, REAL, schema.getItems(), objectMapper)).isEqualTo(Float.NaN);
         assertThat(JsonTrinoConverter.convert(block, 3, REAL, schema.getItems(), objectMapper)).isEqualTo(Float.POSITIVE_INFINITY);
         assertThat(JsonTrinoConverter.convert(block, 4, REAL, schema.getItems(), objectMapper)).isNull();
-        assertThat(JsonTrinoConverter.convert(block, 0, type, schema, objectMapper))
+        assertThat(JsonTrinoConverter.convert(writeNativeValue(type, block), 0, type, schema, objectMapper))
                 .isEqualTo(objectMapper.createArrayNode()
                         .add(1.5f)
                         .add(-2.25f)
@@ -438,6 +441,33 @@ class JsonTrinoConverterTest
         assertThat(objectMapper.writeValueAsString(row)).isEqualTo("{\"real_value\":-0.5,\"decimal_value\":1234567890.12345678,\"missing\":null}");
         assertThat(objectMapper.writeValueAsString(array)).isEqualTo("[1234567890.12345678,0.00000001,null]");
         assertThat(objectMapper.writeValueAsString(map)).isEqualTo("{\"real\":2.5,\"missing\":null}");
+    }
+
+    @Test
+    void shouldConvertArraysOfAnyBlockEncoding()
+            throws JsonProcessingException
+    {
+        var arrayType = new ArrayType(VARCHAR);
+        var arraySchema = new ArraySchema().items(new StringSchema());
+        var rowType = RowType.from(List.of(RowType.field("tags", arrayType)));
+        var rowSchema = new ObjectSchema().addProperty("tags", arraySchema);
+        ArrayBlockBuilder arrayBlockBuilder = arrayType.createBlockBuilder(null, 2);
+        arrayBlockBuilder.buildEntry(elementBuilder -> {
+            VARCHAR.writeString(elementBuilder, "a");
+            VARCHAR.writeString(elementBuilder, "b");
+        });
+        arrayBlockBuilder.buildEntry(elementBuilder -> VARCHAR.writeString(elementBuilder, "c"));
+        Block arrays = arrayBlockBuilder.build();
+        // constants, like in UPDATE t SET tags = ARRAY['a', 'b'], are run-length encoded
+        Block runLengthEncoded = RunLengthEncodedBlock.create(arrays.getSingleValueBlock(0), 3);
+        Block dictionary = DictionaryBlock.create(2, arrays, new int[] {1, 0});
+        Block rows = RowBlock.fromFieldBlocks(2, new Block[] {dictionary});
+        var objectMapper = new ObjectMapper();
+
+        assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convert(arrays, 1, arrayType, arraySchema, objectMapper))).isEqualTo("[\"c\"]");
+        assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convert(runLengthEncoded, 2, arrayType, arraySchema, objectMapper))).isEqualTo("[\"a\",\"b\"]");
+        assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convert(dictionary, 0, arrayType, arraySchema, objectMapper))).isEqualTo("[\"c\"]");
+        assertThat(objectMapper.writeValueAsString(JsonTrinoConverter.convert(rows, 1, rowType, rowSchema, objectMapper))).isEqualTo("{\"tags\":[\"a\",\"b\"]}");
     }
 
     @Test

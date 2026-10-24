@@ -307,6 +307,20 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void insertAndUpdateConstantArrays()
+    {
+        // constants of queries reading many rows are run-length encoded
+        assertUpdate("INSERT INTO fastapi.default.labels (label_id, name, tags) SELECT id, 'label ' || CAST(id AS VARCHAR), ARRAY['x'] FROM (VALUES 1, 2) t(id)", 2);
+        assertQuery(
+                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels",
+                "VALUES (1, 'label 1', 'x'), (2, 'label 2', 'x')");
+        assertUpdate("UPDATE fastapi.default.labels SET tags = ARRAY['a', 'b'] WHERE label_id = 1", 1);
+        assertQuery(
+                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels",
+                "VALUES (1, 'label 1', 'a,b'), (2, 'label 2', 'x')");
+    }
+
+    @Test
     public void deleteUsingPost()
     {
         // the POST operation marked for DELETE requires the URL in the request body
