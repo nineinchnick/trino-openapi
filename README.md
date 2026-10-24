@@ -469,6 +469,10 @@ numbers with more than 28 integer digits fail the query, because the API sent a
 value that doesn't match its specification. Numbers with more than 10 fractional
 digits are rounded half up.
 
+JSON values of a different type than the column, like an array in a `MAP` or
+`ROW` column, fail the query too. Numbers and booleans can be sent as JSON
+strings, like `"12.50"` or `"true"`, and booleans as `0` and `1`.
+
 ## Union types
 
 * When the response, or its array items, is a `oneOf`, `anyOf`, or `allOf`,

@@ -55,6 +55,7 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 
 import static com.google.common.base.Verify.verify;
@@ -78,6 +79,8 @@ public class JsonTrinoConverter
     public static final String MERGED_UNION_EXTENSION = "x-trino-merged-union";
 
     private static final int MAX_BIGINT_DIGITS = 19;
+    // decimal numbers, and the special values that Float.toString() and Double.toString() return
+    private static final Pattern FLOATING_POINT_NUMBER = Pattern.compile("\\s*[+-]?(NaN|Infinity|(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?)\\s*");
 
     private JsonTrinoConverter() {}
 
@@ -106,14 +109,14 @@ public class JsonTrinoConverter
             return toInteger(jsonNode, type);
         }
         if (type instanceof RealType) {
-            return jsonNode.isTextual() ? parseText(jsonNode, type, Float::valueOf) : jsonNode.floatValue();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, text -> Float.valueOf(requireFloatingPoint(text))) : requireNumber(jsonNode, type).floatValue();
         }
         if (type instanceof DoubleType) {
-            return jsonNode.isTextual() ? parseText(jsonNode, type, Double::valueOf) : jsonNode.doubleValue();
+            return jsonNode.isTextual() ? parseText(jsonNode, type, text -> Double.valueOf(requireFloatingPoint(text))) : requireNumber(jsonNode, type).doubleValue();
         }
         if (type instanceof DecimalType decimalType) {
             // some APIs send decimals as JSON strings, so clients that parse numbers as doubles don't lose precision
-            BigDecimal value = jsonNode.isTextual() ? parseText(jsonNode, type, BigDecimal::new) : jsonNode.decimalValue();
+            BigDecimal value = jsonNode.isTextual() ? parseText(jsonNode, type, BigDecimal::new) : requireNumber(jsonNode, type).decimalValue();
             return toUnscaledValue(value, decimalType);
         }
         if (type instanceof VarcharType) {
@@ -136,9 +139,12 @@ public class JsonTrinoConverter
             return DateTimeConverter.parseTimestamp(jsonNode.asText(), timestampType, schemaType);
         }
         if (type instanceof BooleanType) {
-            return jsonNode.asBoolean();
+            return toBoolean(jsonNode, type);
         }
         if (type instanceof MapType mapType) {
+            if (!jsonNode.isObject()) {
+                throw typeMismatch(jsonNode, type);
+            }
             return buildMap(jsonNode, mapType, schemaType);
         }
         if (type instanceof ArrayType arrayType) {
@@ -160,7 +166,7 @@ public class JsonTrinoConverter
 
     private static BigInteger toInteger(JsonNode jsonNode, Type type)
     {
-        BigInteger value = jsonNode.isTextual() ? parseText(jsonNode, type, BigInteger::new) : toIntegerExact(jsonNode, type);
+        BigInteger value = jsonNode.isTextual() ? parseText(jsonNode, type, BigInteger::new) : toIntegerExact(requireNumber(jsonNode, type), type);
         Type.Range range = type.getRange().orElseThrow();
         if (value.compareTo(BigInteger.valueOf((long) range.getMin())) < 0 || value.compareTo(BigInteger.valueOf((long) range.getMax())) > 0) {
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value doesn't fit in %s", type));
@@ -200,6 +206,46 @@ public class JsonTrinoConverter
             // neither the value, nor the parser's exception that quotes it, are included, because the value might be sensitive
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Cannot read a JSON string as %s", type));
         }
+    }
+
+    private static JsonNode requireNumber(JsonNode jsonNode, Type type)
+    {
+        if (!jsonNode.isNumber()) {
+            throw typeMismatch(jsonNode, type);
+        }
+        return jsonNode;
+    }
+
+    private static String requireFloatingPoint(String text)
+    {
+        // Float.valueOf() and Double.valueOf() also accept Java literals, like 1.5d or hexadecimal numbers
+        if (!FLOATING_POINT_NUMBER.matcher(text).matches()) {
+            throw new NumberFormatException();
+        }
+        return text;
+    }
+
+    private static Boolean toBoolean(JsonNode jsonNode, Type type)
+    {
+        if (jsonNode.isBoolean()) {
+            return jsonNode.booleanValue();
+        }
+        // some APIs send booleans as JSON strings, or as 0 and 1
+        if (jsonNode.isTextual()) {
+            return switch (jsonNode.textValue().trim()) {
+                case "true" -> true;
+                case "false" -> false;
+                default -> throw typeMismatch(jsonNode, type);
+            };
+        }
+        if (!jsonNode.isIntegralNumber()) {
+            throw typeMismatch(jsonNode, type);
+        }
+        BigInteger value = jsonNode.bigIntegerValue();
+        if (!value.equals(BigInteger.ZERO) && !value.equals(BigInteger.ONE)) {
+            throw typeMismatch(jsonNode, type);
+        }
+        return value.equals(BigInteger.ONE);
     }
 
     private static TrinoException typeMismatch(JsonNode jsonNode, Type type)
@@ -268,6 +314,9 @@ public class JsonTrinoConverter
         if (node == null || node instanceof NullNode) {
             blockBuilder.appendNull();
             return;
+        }
+        if (!node.isObject()) {
+            throw typeMismatch(node, rowType);
         }
         RowBlockBuilder rowBuilder = (RowBlockBuilder) blockBuilder;
         rowBuilder.buildEntry(fieldBuilders -> {

@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BigIntegerNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.DecimalNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.IntNode;
@@ -28,6 +29,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.NumberSchema;
@@ -60,6 +62,7 @@ import java.util.List;
 import java.util.Locale;
 
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DecimalType.createDecimalType;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
@@ -688,6 +691,103 @@ class JsonTrinoConverterTest
         assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("secret"), type, new ArraySchema().items(new StringSchema())))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Cannot read a JSON STRING as array(varchar)");
+    }
+
+    @Test
+    void shouldConvertBooleans()
+    {
+        var schema = new BooleanSchema();
+
+        assertThat(JsonTrinoConverter.convert(BooleanNode.TRUE, BOOLEAN, schema)).isEqualTo(true);
+        assertThat(JsonTrinoConverter.convert(BooleanNode.FALSE, BOOLEAN, schema)).isEqualTo(false);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("true"), BOOLEAN, schema)).isEqualTo(true);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("false"), BOOLEAN, schema)).isEqualTo(false);
+        assertThat(JsonTrinoConverter.convert(IntNode.valueOf(1), BOOLEAN, schema)).isEqualTo(true);
+        assertThat(JsonTrinoConverter.convert(IntNode.valueOf(0), BOOLEAN, schema)).isEqualTo(false);
+    }
+
+    @Test
+    void shouldRejectBooleansOfOtherJsonTypes()
+    {
+        var schema = new BooleanSchema();
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("yes"), BOOLEAN, schema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON STRING as boolean");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(new ObjectMapper().createObjectNode(), BOOLEAN, schema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON OBJECT as boolean");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(IntNode.valueOf(2), BOOLEAN, schema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON NUMBER as boolean");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(DoubleNode.valueOf(1.0), BOOLEAN, schema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON NUMBER as boolean");
+    }
+
+    @Test
+    void shouldRejectNumbersOfOtherJsonTypes()
+    {
+        var objectMapper = new ObjectMapper();
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(BooleanNode.TRUE, INTEGER, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON BOOLEAN as integer");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(objectMapper.createObjectNode(), BIGINT, new IntegerSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON OBJECT as bigint");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(BooleanNode.TRUE, REAL, new NumberSchema().format("float")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON BOOLEAN as real");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(objectMapper.createArrayNode(), DOUBLE, new NumberSchema().format("double")))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON ARRAY as double");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(BooleanNode.FALSE, createDecimalType(38, 10), new NumberSchema()))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON BOOLEAN as decimal(38,10)");
+    }
+
+    @Test
+    void shouldRejectFloatingPointStringsWithJavaSyntax()
+    {
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("1e3"), DOUBLE, new NumberSchema().format("double")))
+                .isEqualTo(1000.0);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("-Infinity"), REAL, new NumberSchema().format("float")))
+                .isEqualTo(Float.NEGATIVE_INFINITY);
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf(".5"), REAL, new NumberSchema().format("float")))
+                .isEqualTo(0.5f);
+        assertThat(List.of("1.5d", "1.5f", "0x1p3", "1.5 1"))
+                .allSatisfy(text -> {
+                    assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf(text), DOUBLE, new NumberSchema().format("double")))
+                            .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                            .hasMessage("Cannot read a JSON string as double");
+                    assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf(text), REAL, new NumberSchema().format("float")))
+                            .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                            .hasMessage("Cannot read a JSON string as real");
+                });
+    }
+
+    @Test
+    void shouldRejectNonObjectsForMapAndRowColumns()
+    {
+        var objectMapper = new ObjectMapper();
+        var mapType = new MapType(VARCHAR, BIGINT, new TypeOperators());
+        var mapSchema = new MapSchema().additionalProperties(new IntegerSchema());
+        var rowType = RowType.from(List.of(RowType.field("a", VARCHAR)));
+        var rowSchema = new ObjectSchema().addProperty("a", new StringSchema());
+
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(objectMapper.createArrayNode().add(1), mapType, mapSchema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON ARRAY as map(varchar, bigint)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("x"), mapType, mapSchema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON STRING as map(varchar, bigint)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(TextNode.valueOf("x"), rowType, rowSchema))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON STRING as row(\"a\" varchar)");
+        assertThatThrownBy(() -> JsonTrinoConverter.convert(objectMapper.createArrayNode().add(1), new ArrayType(rowType), new ArraySchema().items(rowSchema)))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Cannot read a JSON NUMBER as row(\"a\" varchar)");
     }
 
     @Test
