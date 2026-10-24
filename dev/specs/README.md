@@ -53,7 +53,11 @@ The upstream spec describes pagination in `x-pagination` extensions, which the
 patch replaces with `x-trino`, so the connector reads rows from `resultsPath`.
 Datadog numbers pages from 0, unless `pageStart` is set, and the connector
 numbers pages from 1, so the patch keeps `pageParam` only where `pageStart`
-is 1. Paginated `POST` operations are searches, so the patch marks them with
+is 1. The patch keeps `cursorParam` where it's a parameter, like
+`page[cursor]`, and replaces `cursorPath` with `nextCursorPath`, the same field
+as a JSON pointer. It leaves out cursors in nested fields of the request body,
+like `body.page.cursor`, which the connector can't send. Paginated `POST`
+operations are searches, so the patch marks them with
 `sqlOperation: select`. `yq` changes the formatting of some values, like quoting and emoji
 escapes, without changing them.
 

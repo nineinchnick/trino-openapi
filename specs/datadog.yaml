@@ -146891,7 +146891,7 @@ paths:
           - audit_logs_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/audit/events/search:
@@ -146962,8 +146962,6 @@ paths:
         permissions:
           - audit_logs_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -152405,7 +152403,7 @@ paths:
           - ci_visibility_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/ci/pipelines/events/search:
@@ -152477,8 +152475,6 @@ paths:
         permissions:
           - ci_visibility_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -152954,7 +152950,7 @@ paths:
           - test_optimization_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/ci/tests/events/search:
@@ -153031,8 +153027,6 @@ paths:
           - ci_visibility_read
           - test_optimization_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -154594,7 +154588,7 @@ paths:
         permissions: []
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.pagination.next_cursor
+        nextCursorPath: $response.body#/meta/pagination/next_cursor
         limitParam: page[size]
         resultsPath: data
   /api/v2/containers:
@@ -154691,7 +154685,7 @@ paths:
         permissions: []
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.pagination.next_cursor
+        nextCursorPath: $response.body#/meta/pagination/next_cursor
         limitParam: page[size]
         resultsPath: data
   /api/v2/cost/account_filters/{cloud_account_id}:
@@ -163775,7 +163769,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.next_cursor
+        nextCursorPath: $response.body#/meta/page/next_cursor
         limitParam: page[size]
         resultsPath: data
   /api/v2/deployment_gates/evaluations/rules:
@@ -163984,7 +163978,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.next_cursor
+        nextCursorPath: $response.body#/meta/page/next_cursor
         limitParam: page[size]
         resultsPath: data
   /api/v2/deployment_gates/{gate_id}/rules:
@@ -166141,7 +166135,7 @@ paths:
           - events_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
     post:
@@ -166360,8 +166354,6 @@ paths:
         permissions:
           - events_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -174600,7 +174592,7 @@ paths:
           - user_access_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.next_cursor
+        nextCursorPath: $response.body#/meta/page/next_cursor
         limitParam: page[limit]
         resultsPath: data
   /api/v2/governance/config:
@@ -189907,7 +189899,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         cursorParam: cursor
-        cursorPath: data.attributes.next_cursor
+        nextCursorPath: $response.body#/data/attributes/next_cursor
         limitParam: limit
         resultsPath: data.attributes.events
   /api/v2/llm-obs/v1/annotation-queues/{queue_id}/annotations:
@@ -197472,7 +197464,7 @@ paths:
           - logs_read_data
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/logs/events/search:
@@ -197552,8 +197544,6 @@ paths:
         permissions:
           - logs_read_data
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -197946,7 +197936,7 @@ paths:
           - metrics_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.pagination.next_cursor
+        nextCursorPath: $response.body#/meta/pagination/next_cursor
         limitParam: page[size]
         resultsPath: data
   /api/v2/metrics/config/bulk-tags:
@@ -208613,7 +208603,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.cursor
+        nextCursorPath: $response.body#/meta/page/cursor
         limitParam: page[limit]
         resultsPath: data
   /api/v2/posture_management/findings/{finding_id}:
@@ -209134,7 +209124,7 @@ paths:
         permissions: []
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/prodlytics:
@@ -217075,7 +217065,7 @@ paths:
           - rum_apps_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/rum/events/search:
@@ -217141,8 +217131,6 @@ paths:
         permissions:
           - rum_apps_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -220687,7 +220675,7 @@ paths:
           - appsec_vm_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/security/findings/assignee:
@@ -223880,8 +223868,6 @@ paths:
           - security_monitoring_findings_read
           - appsec_vm_read
       x-trino:
-        cursorParam: body.data.attributes.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.data.attributes.page.limit
         resultsPath: data
         sqlOperation: select
@@ -230492,7 +230478,7 @@ paths:
           - security_monitoring_signals_read
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/security_monitoring/signals/bulk/assignee:
@@ -230766,8 +230752,6 @@ paths:
         permissions:
           - security_monitoring_signals_read
       x-trino:
-        cursorParam: body.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.page.limit
         resultsPath: data
         sqlOperation: select
@@ -235111,7 +235095,7 @@ paths:
       tags: ["Spans"]
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.after
+        nextCursorPath: $response.body#/meta/page/after
         limitParam: page[limit]
         resultsPath: data
   /api/v2/spans/events/search:
@@ -235183,8 +235167,6 @@ paths:
       tags: ["Spans"]
       x-codegen-request-body-name: body
       x-trino:
-        cursorParam: body.data.attributes.page.cursor
-        cursorPath: meta.page.after
         limitParam: body.data.attributes.page.limit
         resultsPath: data
         sqlOperation: select
@@ -244886,8 +244868,6 @@ paths:
         permissions:
           - test_optimization_read
       x-trino:
-        cursorParam: body.data.attributes.page.cursor
-        cursorPath: meta.pagination.next_page
         limitParam: body.data.attributes.page.limit
         resultsPath: data
         sqlOperation: select
@@ -245924,7 +245904,7 @@ paths:
         If you have any feedback, contact [Datadog support](https://docs.datadoghq.com/help/).
       x-trino:
         cursorParam: page[cursor]
-        cursorPath: meta.page.next_cursor
+        nextCursorPath: $response.body#/meta/page/next_cursor
         limitParam: page[limit]
         resultsPath: data
     post:

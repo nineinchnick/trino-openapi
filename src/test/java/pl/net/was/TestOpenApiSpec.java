@@ -1348,8 +1348,8 @@ class TestOpenApiSpec
         HttpPath auditPath = new HttpPath(PathItem.HttpMethod.GET, "/api/v2/audit/events");
         Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "api_v2_audit_events")).get(auditPath))
                 .isNotNull()
-                .extracting(Pagination::limitParam)
-                .isEqualTo(Optional.of("page[limit]"));
+                .extracting(Pagination::limitParam, Pagination::cursorParam, Pagination::nextCursorPath)
+                .containsExactly(Optional.of("page[limit]"), Optional.of("page[cursor]"), Optional.of(new ResponsePath.Body(JsonPointer.compile("/meta/page/after"))));
         Assertions.assertThat(spec.getTables().get("api_v2_audit_events"))
                 .extracting(OpenApiColumn::getName)
                 .contains("id", "type", "attributes")
@@ -2733,6 +2733,74 @@ class TestOpenApiSpec
         Assertions.assertThat(parseSpec(specContents.replace("probeLimit: 0", "probeLimit: none")).getPaginations(schemaTableName(SCHEMA_NAME, "items")).values())
                 .extracting(Pagination::probeLimit)
                 .containsExactly(Optional.of(ProbeLimit.NONE));
+    }
+
+    @Test
+    public void testCursorPaginationExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: cursor
+                        schema:
+                          type: string
+                      x-trino:
+                        cursorParam: cursor
+                        nextCursorPath: $response.body#/next_cursor
+                        resultsPath: $response.body#/results
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  next_cursor:
+                                    type: string
+                                  results:
+                                    type: array
+                                    items:
+                                      type: object
+                                      properties:
+                                        name:
+                                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "items")))
+                .containsExactly(Map.entry(
+                        new HttpPath(PathItem.HttpMethod.GET, "/items"),
+                        Pagination.builder()
+                                .setCursorParam(Optional.of("cursor"))
+                                .setNextCursorPath(Optional.of(new ResponsePath.Body(JsonPointer.compile("/next_cursor"))))
+                                .build()));
+        // the cursor is a parameter, so it's hidden, like the page number
+        Assertions.assertThat(spec.getTables().get("items"))
+                .filteredOn(column -> column.getName().equals("cursor"))
+                .extracting(column -> column.getMetadata().isHidden())
+                .containsExactly(true);
+        Assertions.assertThat(parseSpec(specContents.replace("type: string\n      x-trino", "type: integer\n      x-trino")).getPaginations(schemaTableName(SCHEMA_NAME, "items")).values())
+                .extracting(Pagination::cursorParam)
+                .containsExactly(Optional.of("cursor"));
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("nextCursorPath: $response.body#/next_cursor", "")))
+                .hasMessage("nextCursorPath is required with cursorParam");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "")))
+                .hasMessage("cursorParam is required with nextCursorPath");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "cursorParam: after")))
+                .hasMessage("Invalid value of cursorParam of GET /items: after, the operation has no such parameter");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("type: string\n      x-trino", "type: boolean\n      x-trino")))
+                .hasMessage("Invalid value of cursorParam of GET /items: cursor, the parameter must be a string or an integer, not boolean");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "cursorParam: cursor\n        pageParam: cursor")))
+                .hasMessage("Invalid x-trino extension of GET /items: cursorParam can't be used with pageParam");
     }
 
     @Test
