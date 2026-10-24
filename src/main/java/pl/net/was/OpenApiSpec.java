@@ -35,10 +35,13 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.ComposedSchema;
+import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.parameters.RequestBody;
+import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.parser.OpenAPIV3Parser;
@@ -544,9 +547,7 @@ public class OpenApiSpec
     private static boolean hasJsonResponse(Operation op)
     {
         return op != null && (op.getDeprecated() == null || !op.getDeprecated()) &&
-                op.getResponses().get(HTTP_OK) != null &&
-                op.getResponses().get(HTTP_OK).getContent() != null &&
-                op.getResponses().get(HTTP_OK).getContent().get(MIME_JSON) != null;
+                getResponseContent(op).isPresent();
     }
 
     public Map<String, List<OpenApiColumn>> getTables()
@@ -1073,31 +1074,36 @@ public class OpenApiSpec
 
     private static Schema<?> getResponseSchema(Operation op)
     {
-        if (op.getResponses() == null
-                || op.getResponses().get(HTTP_OK) == null
-                || op.getResponses().get(HTTP_OK).getContent() == null
-                || op.getResponses().get(HTTP_OK).getContent().get(MIME_JSON) == null) {
-            return null;
-        }
-        return op.getResponses()
-                .get(HTTP_OK)
-                .getContent()
-                .get(MIME_JSON)
-                .getSchema();
+        return getResponseContent(op)
+                .flatMap(OpenApiSpec::getJsonSchema)
+                .orElse(null);
     }
 
     private static Schema<?> getRequestSchema(Operation op)
     {
-        if (op.getRequestBody() == null
-                || op.getRequestBody().getContent() == null
-                || op.getRequestBody().getContent().get(MIME_JSON) == null
-                || op.getRequestBody().getContent().get(MIME_JSON).getSchema() == null) {
-            return null;
-        }
-        return op.getRequestBody()
-                .getContent()
-                .get(MIME_JSON)
-                .getSchema();
+        return Optional.ofNullable(op.getRequestBody())
+                .map(RequestBody::getContent)
+                .flatMap(OpenApiSpec::getJsonSchema)
+                .orElse(null);
+    }
+
+    private static Optional<Content> getResponseContent(Operation op)
+    {
+        return Optional.ofNullable(op.getResponses())
+                .map(responses -> responses.get(HTTP_OK))
+                .map(ApiResponse::getContent)
+                .filter(content -> getJsonMediaType(content).isPresent());
+    }
+
+    private static Optional<Schema<?>> getJsonSchema(Content content)
+    {
+        return getJsonMediaType(content)
+                .map(mediaType -> content.get(mediaType).getSchema());
+    }
+
+    private static Optional<String> getJsonMediaType(Content content)
+    {
+        return content.containsKey(MIME_JSON) ? Optional.of(MIME_JSON) : Optional.empty();
     }
 
     private static Map<String, String> getMapOfStrings(Object object)
