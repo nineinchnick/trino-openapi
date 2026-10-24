@@ -14,6 +14,7 @@
 package pl.net.was;
 
 import io.airlift.http.client.testing.TestingHttpClient;
+import pl.net.was.authentication.CatalogCredentials;
 
 public final class TestingOpenApiSpec
 {
@@ -22,7 +23,7 @@ public final class TestingOpenApiSpec
     // specs of most tests are files, which are read without the HTTP client
     public static OpenApiSpec createSpec(OpenApiConfig config)
     {
-        return new OpenApiSpec(config, new TestingHttpClient(request -> {
+        return new OpenApiSpec(config, new CatalogCredentials(config), new TestingHttpClient(request -> {
             throw new AssertionError("Unexpected request to " + request.getUri());
         }));
     }

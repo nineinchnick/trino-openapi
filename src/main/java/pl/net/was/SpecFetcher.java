@@ -21,7 +21,6 @@ import io.airlift.http.client.ResponseHandler;
 import io.trino.spi.TrinoException;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.CatalogCredentials;
-import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,33 +49,39 @@ final class SpecFetcher
     // same as the parser sends when it loads a URL
     private static final String ACCEPT_VALUE = "application/json, application/yaml, */*";
 
-    private SpecFetcher() {}
+    private final HttpClient httpClient;
+    private final RetryPolicy retryPolicy;
+    private final Optional<CatalogCredentials> catalogCredentials;
 
-    static String fetch(OpenApiConfig config, URI location, HttpClient httpClient)
+    SpecFetcher(HttpClient httpClient, RetryOptions retryOptions, Optional<CatalogCredentials> catalogCredentials)
     {
-        requireNonNull(config, "config is null");
+        this.httpClient = requireNonNull(httpClient, "httpClient is null");
+        this.retryPolicy = new RetryPolicy(retryOptions, Optional.empty());
+        this.catalogCredentials = requireNonNull(catalogCredentials, "catalogCredentials is null");
+    }
+
+    String fetch(URI location)
+    {
         requireNonNull(location, "location is null");
-        requireNonNull(httpClient, "httpClient is null");
-        Request request = createRequest(config, location);
-        RetryOptions retryOptions = new RetryOptions(config.getMaxRetries(), config.getRetryInitialDelay().toJavaTime(), config.getRetryMaxDelay().toJavaTime());
-        return new RetryPolicy(retryOptions, Optional.empty()).execute(
+        Request request = createRequest(location);
+        return retryPolicy.execute(
                 request,
                 true,
                 () -> httpClient.execute(request, new SpecResponseHandler()),
                 (failure, attempts, notRetriedReason) -> toTrinoException(location, failure, attempts, notRetriedReason));
     }
 
-    private static Request createRequest(OpenApiConfig config, URI location)
+    private Request createRequest(URI location)
     {
         Request.Builder builder = prepareGet()
                 .setUri(location)
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
                 .addHeader(ACCEPT, ACCEPT_VALUE);
-        if (config.getSpecLocationAuthentication() != SpecLocationAuthentication.CATALOG) {
+        if (catalogCredentials.isEmpty()) {
             return builder.build();
         }
         // the HTTP client would send the credentials to any host the server redirects to
-        return Authentication.addDefaultCredentials(new CatalogCredentials(config), builder.setFollowRedirects(false).build(), "GET " + withoutQuery(location));
+        return Authentication.addDefaultCredentials(catalogCredentials.get(), builder.setFollowRedirects(false).build(), "GET " + withoutQuery(location));
     }
 
     private static TrinoException toTrinoException(URI location, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)

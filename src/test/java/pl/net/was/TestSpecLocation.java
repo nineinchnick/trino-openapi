@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import pl.net.was.authentication.AuthenticationType;
+import pl.net.was.authentication.CatalogCredentials;
 import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.io.IOException;
@@ -164,7 +165,7 @@ class TestSpecLocation
         documents.put("/specs/openapi.yaml", SPEC.formatted("schemas/item.yaml"));
         documents.put("/specs/schemas/item.yaml", ITEM_SCHEMA);
 
-        OpenApiSpec spec = new OpenApiSpec(newConfig(serverUri + "/specs/openapi.yaml"), httpClient);
+        OpenApiSpec spec = newSpec(newConfig(serverUri + "/specs/openapi.yaml"));
 
         assertThat(spec.getTables().get("items"))
                 .extracting(OpenApiColumn::getName)
@@ -180,7 +181,7 @@ class TestSpecLocation
         failures.add(503);
         failures.add(502);
 
-        OpenApiSpec spec = new OpenApiSpec(newConfig(serverUri + "/openapi.yaml"), httpClient);
+        OpenApiSpec spec = newSpec(newConfig(serverUri + "/openapi.yaml"));
 
         assertThat(spec.getTables()).containsOnlyKeys("items");
         assertThat(requests).containsExactly(URI.create("/openapi.yaml"), URI.create("/openapi.yaml"), URI.create("/openapi.yaml"), URI.create("/item.yaml"));
@@ -194,7 +195,7 @@ class TestSpecLocation
         failures.add(503);
 
         // the query string can contain credentials, so it's not included in the error
-        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml?token=secret"), httpClient))
+        assertThatThrownBy(() -> newSpec(newConfig(serverUri + "/openapi.yaml?token=secret")))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Failed to fetch the OpenAPI spec from %s/openapi.yaml with HTTP 503 after 3 attempts", serverUri);
         assertThat(requests).hasSize(3);
@@ -203,7 +204,7 @@ class TestSpecLocation
     @Test
     void testMissingSpec()
     {
-        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml"), httpClient))
+        assertThatThrownBy(() -> newSpec(newConfig(serverUri + "/openapi.yaml")))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Failed to fetch the OpenAPI spec from %s/openapi.yaml with HTTP 404", serverUri);
         assertThat(requests).hasSize(1);
@@ -215,7 +216,7 @@ class TestSpecLocation
         // Jetty fails 401 responses without a WWW-Authenticate header, which many servers send, as protocol violations
         failures.add(401);
 
-        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml"), httpClient))
+        assertThatThrownBy(() -> newSpec(newConfig(serverUri + "/openapi.yaml")))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Failed to fetch the OpenAPI spec from %s/openapi.yaml with HTTP 401", serverUri);
         assertThat(requests).hasSize(1);
@@ -230,7 +231,7 @@ class TestSpecLocation
             unreachableUri = URI.create("http://127.0.0.1:" + socket.getLocalPort() + "/openapi.yaml");
         }
 
-        assertThatThrownBy(() -> new OpenApiSpec(newConfig(unreachableUri.toString()), httpClient))
+        assertThatThrownBy(() -> newSpec(newConfig(unreachableUri.toString())))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_CONNECTION_ERROR.toErrorCode()))
                 .hasMessageStartingWith("Failed to fetch the OpenAPI spec from %s after 3 attempts: ", unreachableUri);
     }
@@ -250,7 +251,7 @@ class TestSpecLocation
                         - name: id
                 """);
 
-        assertThatThrownBy(() -> new OpenApiSpec(newConfig(serverUri + "/openapi.yaml?token=secret"), httpClient))
+        assertThatThrownBy(() -> newSpec(newConfig(serverUri + "/openapi.yaml?token=secret")))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_SPEC.toErrorCode()))
                 .hasMessage(
                         """
@@ -267,14 +268,14 @@ class TestSpecLocation
         documents.put("/openapi.yaml", SPEC.formatted("item.yaml"));
         documents.put("/item.yaml", ITEM_SCHEMA);
         OpenApiConfig config = newConfig(serverUri + "/openapi.yaml");
-        OpenApiSpec coordinatorSpec = new OpenApiSpec(config, httpClient);
+        OpenApiSpec coordinatorSpec = newSpec(config);
         OpenApiTableHandle table = coordinatorSpec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"));
 
         coordinatorSpec.checkSameSpec(table);
-        new OpenApiSpec(config, httpClient).checkSameSpec(table);
+        newSpec(config).checkSameSpec(table);
 
         documents.put("/openapi.yaml", SPEC.formatted("item.yaml").replace("version: '1'", "version: '2'"));
-        OpenApiSpec workerSpec = new OpenApiSpec(config, httpClient);
+        OpenApiSpec workerSpec = newSpec(config);
 
         assertThatThrownBy(() -> workerSpec.checkSameSpec(table))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_SPEC_MISMATCH.toErrorCode()))
@@ -294,12 +295,12 @@ class TestSpecLocation
                 .setPassword("secret")
                 .setAllowInsecureHttp(true);
 
-        assertThatThrownBy(() -> new OpenApiSpec(config, httpClient))
+        assertThatThrownBy(() -> newSpec(config))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Failed to fetch the OpenAPI spec from %s/openapi.yaml with HTTP 401", serverUri);
         assertThat(receivedCredentials).isEmpty();
 
-        OpenApiSpec spec = new OpenApiSpec(config.setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG), httpClient);
+        OpenApiSpec spec = newSpec(config.setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG));
 
         assertThat(spec.getTables()).containsOnlyKeys("items");
         assertThat(receivedCredentials).containsExactly(entry("/openapi.yaml", BASIC_CREDENTIALS));
@@ -318,7 +319,7 @@ class TestSpecLocation
                 .setApiKeyValue("secret")
                 .setAllowInsecureHttp(true);
 
-        assertThat(new OpenApiSpec(config, httpClient).getTables()).containsOnlyKeys("items");
+        assertThat(newSpec(config).getTables()).containsOnlyKeys("items");
         assertThat(receivedCredentials).containsExactly(entry("/openapi.yaml", "secret"));
     }
 
@@ -336,7 +337,7 @@ class TestSpecLocation
                 .setPassword("secret")
                 .setAllowInsecureHttp(true);
 
-        assertThat(new OpenApiSpec(config, httpClient).getTables()).containsOnlyKeys("items");
+        assertThat(newSpec(config).getTables()).containsOnlyKeys("items");
         assertThat(requests).containsExactly(URI.create("/openapi.yaml"), URI.create("/item.yaml"));
         assertThat(receivedCredentials).containsExactly(entry("/openapi.yaml", BASIC_CREDENTIALS));
     }
@@ -354,9 +355,9 @@ class TestSpecLocation
                 .setPassword("secret")
                 .setAllowInsecureHttp(true);
 
-        assertThat(new OpenApiSpec(config, httpClient).getTables()).containsOnlyKeys("items");
+        assertThat(newSpec(config).getTables()).containsOnlyKeys("items");
 
-        assertThatThrownBy(() -> new OpenApiSpec(config.setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG), httpClient))
+        assertThatThrownBy(() -> newSpec(config.setSpecLocationAuthentication(SpecLocationAuthentication.CATALOG)))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
                 .hasMessage("Failed to fetch the OpenAPI spec from %s/latest.yaml with HTTP 302, redirecting to %s/openapi.yaml, but redirects are not followed, so credentials are not sent to other hosts", serverUri, otherHostUri);
         assertThat(receivedCredentials).containsExactly(entry("/latest.yaml", BASIC_CREDENTIALS));
@@ -372,10 +373,15 @@ class TestSpecLocation
                 .setUsername("user")
                 .setAllowInsecureHttp(true);
 
-        assertThatThrownBy(() -> new OpenApiSpec(config, httpClient))
+        assertThatThrownBy(() -> newSpec(config))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_CATALOG_PROPERTY.toErrorCode()))
                 .hasMessage("Cannot authenticate the GET %s/openapi.yaml request, because the http authentication type requires the authentication.password configuration property", serverUri);
         assertThat(requests).isEmpty();
+    }
+
+    private OpenApiSpec newSpec(OpenApiConfig config)
+    {
+        return new OpenApiSpec(config, new CatalogCredentials(config), httpClient);
     }
 
     private static OpenApiConfig newConfig(String specLocation)

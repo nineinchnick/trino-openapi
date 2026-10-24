@@ -412,7 +412,7 @@ class TestOpenApiServers
 
     private OpenApiServers newServers(OpenApiConfig config)
     {
-        return new OpenApiServers(config, new OpenApiSpec(config, httpClient));
+        return new OpenApiServers(config, new OpenApiSpec(config, new CatalogCredentials(config), httpClient));
     }
 
     private OpenApiConfig newConfig(String spec)
@@ -426,7 +426,7 @@ class TestOpenApiServers
 
     private List<List<?>> getRows(OpenApiConfig config, String tableName)
     {
-        OpenApiSpec spec = new OpenApiSpec(config, httpClient);
+        OpenApiSpec spec = new OpenApiSpec(config, new CatalogCredentials(config), httpClient);
         OpenApiServers servers = new OpenApiServers(config, spec);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, new Authentication(new CatalogCredentials(config), spec, servers, httpClient), new CatalogCredentials(config), new ExtraCredentialProvider(config), spec, servers);
         return ImmutableList.copyOf(client.getRows(SESSION, new OpenApiSplit(spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName))), false));
