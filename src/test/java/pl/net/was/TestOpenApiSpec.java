@@ -2262,6 +2262,94 @@ class TestOpenApiSpec
                         .toList());
     }
 
+    @Test
+    public void testOpenApi31Documents()
+    {
+        String specContents =
+                """
+                openapi: 3.1.0
+                jsonSchemaDialect: https://spec.openapis.org/oas/3.1/dialect/base
+                info:
+                  title: test
+                  version: 1.0
+                webhooks:
+                  newEvent:
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              $ref: '#/components/schemas/Event'
+                      responses:
+                        "200":
+                          description: OK
+                paths:
+                  /events:
+                    $ref: '#/components/pathItems/Events'
+                components:
+                  pathItems:
+                    Events:
+                      get:
+                        responses:
+                          "200":
+                            description: Events
+                            content:
+                              application/json:
+                                schema:
+                                  type: array
+                                  items:
+                                    $ref: '#/components/schemas/Event'
+                  schemas:
+                    Event:
+                      type: object
+                      $defs:
+                        Point:
+                          type: object
+                          properties:
+                            x:
+                              type: integer
+                      properties:
+                        value:
+                          type: [integer, string]
+                        note:
+                          type: [integer, string, "null"]
+                        point:
+                          $ref: '#/components/schemas/Event/$defs/Point'
+                        actor:
+                          $ref: '#/components/schemas/Actor'
+                          description: Who sent the event
+                        image:
+                          type: string
+                          contentMediaType: image/png
+                          contentEncoding: base64
+                          examples: [aGk=]
+                    Actor:
+                      type: object
+                      properties:
+                        login:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        // webhooks are requests sent by the API, so they don't have tables
+        Assertions.assertThat(spec.getTables()).containsOnlyKeys("events");
+        List<OpenApiColumn> columns = spec.getTables().get("events");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), column -> column.getMetadata().getComment().orElse(null))
+                .containsExactly(
+                        // several types are a union, which holds the raw JSON value
+                        Assertions.tuple("value", VARCHAR, true, null),
+                        Assertions.tuple("note", VARCHAR, true, null),
+                        Assertions.tuple("point", RowType.from(List.of(RowType.field("x", BIGINT))), true, null),
+                        // keywords next to a reference are kept
+                        Assertions.tuple("actor", RowType.from(List.of(RowType.field("login", VARCHAR))), true, "Who sent the event"),
+                        Assertions.tuple("image", VARCHAR, true, null));
+        Assertions.assertThat(columns)
+                .filteredOn(column -> JsonTrinoConverter.isJsonText(column.getSourceType()))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("value", "note");
+    }
+
     private static String nullableTypesSpec(String version, String nullableInteger, String nullableObject)
     {
         // all properties are required, so only the nullable ones map to nullable columns
