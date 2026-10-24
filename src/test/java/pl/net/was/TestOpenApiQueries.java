@@ -1088,6 +1088,9 @@ public class TestOpenApiQueries
     public void topNWithoutSortParametersRequestsAllPages()
     {
         // not declared in sortValues
+        assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items ORDER BY id LIMIT 1", 2, "Portal Gun"))
+                .doesNotContain("sort=");
+        // the server might sort text in a different collation
         assertThat(assertCountedItems("SELECT name FROM fastapi.default.counted_items ORDER BY name LIMIT 1", 2, "Plumbus"))
                 .doesNotContain("sort=");
         // the server might place nulls differently than the query

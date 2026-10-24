@@ -839,6 +839,8 @@ class TestOpenApiSpec
                         .as("%s sorted by %s", httpPath, sortValue.getValue().asText())
                         .anySatisfy(column -> {
                             Assertions.assertThat(column.getSourceName()).isEqualTo(sortValue.getKey());
+                            // TopN is pushed down without an opt-in only for types the server can't order differently than Trino
+                            Assertions.assertThat(column.getType()).isEqualTo(TIMESTAMP_MILLIS);
                             // the field can also be a parameter of operations used for other statements, like INSERT
                             Assertions.assertThat(column.getRequiresPredicate()).doesNotContainKey(httpPath);
                             Assertions.assertThat(column.getOptionalPredicate()).doesNotContainKey(httpPath);
