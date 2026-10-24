@@ -38,11 +38,16 @@ jobs:
           echo "::remove-matcher owner=java::"
 
       - name: Build with Maven
+        run: ./mvnw -B package
+
+      # every test calling a live API is skipped without its credentials, like the Jira secrets in pull requests from forks
+      - name: Test with live APIs
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JIRA_SITE: ${{ secrets.JIRA_SITE }}
           JIRA_USER: ${{ secrets.JIRA_USER }}
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
-        run: ./mvnw -B package
+        run: ./mvnw -B test -Dlive-api-tests -Dair.check.skip-all=true
 
       # tests run the plugin on the same classpath as Trino, so also check that it works in a Trino server,
       # using the automatic token, which is also available in pull requests from forks
