@@ -159,10 +159,10 @@ public final class RangePushdown
         Object value = span.getLowBoundedValue();
         OptionalInt sentComparison = compareSentValue(parameter.get(), value);
         // a lower bound that loses precision when sent must not become greater
-        if (sentComparison.isEmpty() || sentComparison.getAsInt() > 0) {
+        if (sentComparison.isEmpty() || sentComparison.orElseThrow() > 0) {
             return Optional.empty();
         }
-        return Optional.of(new SentBound(parameter.get(), value, sentComparison.getAsInt() == 0 && span.isLowInclusive() == bound.inclusive()));
+        return Optional.of(new SentBound(parameter.get(), value, sentComparison.orElseThrow() == 0 && span.isLowInclusive() == bound.inclusive()));
     }
 
     private static Optional<SentBound> getUpperBound(Collection<OpenApiColumn> columns, HttpPath httpPath, Map<ColumnHandle, Domain> domains, RangeFilter.Bound bound, Range span)
@@ -176,10 +176,10 @@ public final class RangePushdown
         }
         Object value = span.getHighBoundedValue();
         OptionalInt sentComparison = compareSentValue(parameter.get(), value);
-        if (sentComparison.isEmpty() || sentComparison.getAsInt() < 0) {
+        if (sentComparison.isEmpty() || sentComparison.orElseThrow() < 0) {
             return Optional.empty();
         }
-        return Optional.of(new SentBound(parameter.get(), value, sentComparison.getAsInt() == 0 && span.isHighInclusive() == bound.inclusive()));
+        return Optional.of(new SentBound(parameter.get(), value, sentComparison.orElseThrow() == 0 && span.isHighInclusive() == bound.inclusive()));
     }
 
     private static Optional<OpenApiColumn> getParameter(Collection<OpenApiColumn> columns, HttpPath httpPath, Map<ColumnHandle, Domain> domains, String name)

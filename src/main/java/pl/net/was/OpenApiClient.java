@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
-import com.google.common.io.CharStreams;
+import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.inject.Inject;
 import io.airlift.http.client.BodyGenerator;
@@ -171,7 +171,9 @@ public class OpenApiClient
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
         if (pageColumn.isEmpty()) {
-            return Iterables.filter(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows(), rowFilter::test);
+            return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath)).rows())
+                    .filter(rowFilter)
+                    .toList();
         }
         Optional<OpenApiTableHandle> sortedTable = table.getSortItem().flatMap(sortItem -> getSortedTable(table, httpPath, sortItem));
         OpenApiTableHandle pagedTable = sortedTable.orElse(table);
@@ -309,11 +311,11 @@ public class OpenApiClient
         // the number of pages can be calculated from the total number of results of a smaller page only if the page size is known,
         // and the total number of pages would be calculated for the smaller page
         if (probeLimit.limit().isPresent() && limitColumn.isPresent() && pageSize.isPresent() && !JsonPointer.empty().equals(pagination.totalResultsPointer())) {
-            OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().getAsInt());
+            OpenApiTableHandle probeTable = withLimit(withPage(table, pageColumn, 1), limitColumn.get(), probeLimit.limit().orElseThrow());
             ResultsPage probe = getPage(probeTable, httpPath, pathWithParams.getValue(), revalidateCachedResponses);
-            serverPageSize = pageSize.getAsLong();
+            serverPageSize = pageSize.orElseThrow();
             pageCount = probe.totalResults().isPresent() && serverPageSize > 0
-                    ? OptionalLong.of(ceilDiv(probe.totalResults().getAsLong(), serverPageSize))
+                    ? OptionalLong.of(ceilDiv(probe.totalResults().orElseThrow(), serverPageSize))
                     : OptionalLong.empty();
         }
         else {
@@ -326,11 +328,11 @@ public class OpenApiClient
             return List.of(new OpenApiSplit(table, 2, 1));
         }
         long lastPage = pagination.maxPages().isPresent()
-                ? min(pageCount.getAsLong(), pagination.maxPages().getAsInt())
-                : pageCount.getAsLong();
+                ? min(pageCount.orElseThrow(), pagination.maxPages().orElseThrow())
+                : pageCount.orElseThrow();
         // pages starting past the maximum number of results are never requested
         if (pagination.maxResults().isPresent() && serverPageSize > 0) {
-            lastPage = min(lastPage, ceilDiv(pagination.maxResults().getAsLong(), serverPageSize));
+            lastPage = min(lastPage, ceilDiv(pagination.maxResults().orElseThrow(), serverPageSize));
         }
         return LongStream.rangeClosed(2, lastPage)
                 .mapToObj(page -> new OpenApiSplit(withPage(table, pageColumn, page)))
@@ -343,12 +345,12 @@ public class OpenApiClient
         if (firstPage.hasMore().isPresent() && !firstPage.hasMore().get()) {
             return OptionalLong.of(1);
         }
-        if (pageSize.isPresent() && firstPageSize < pageSize.getAsLong()) {
+        if (pageSize.isPresent() && firstPageSize < pageSize.orElseThrow()) {
             return OptionalLong.of(1);
         }
         OptionalLong pageCountFromResults = OptionalLong.empty();
         if (firstPage.totalResults().isPresent()) {
-            long totalResults = firstPage.totalResults().getAsLong();
+            long totalResults = firstPage.totalResults().orElseThrow();
             // the first page is full, unless it's the last one, so its size is the page size the server uses
             long serverPageSize = pageSize.orElse(firstPageSize);
             if (totalResults <= firstPageSize) {
@@ -1067,7 +1069,7 @@ public class OpenApiClient
     private static String readBody(Response response)
     {
         try {
-            return CharStreams.toString(new InputStreamReader(response.getInputStream(), UTF_8));
+            return new InputStreamReader(response.getInputStream(), UTF_8).readAllAsString();
         }
         catch (IOException e) {
             throw new HttpRequestFailure.TransportError(e);
@@ -1246,12 +1248,12 @@ public class OpenApiClient
                 }
                 // splits reading every few pages can start past the last page,
                 // and servers might return the last page for every page number past it
-                if (isPastLastPage(resultsPage, fetchedPage, lastPageSize.getAsLong(), maxResults)) {
+                if (isPastLastPage(resultsPage, fetchedPage, lastPageSize.orElseThrow(), maxResults)) {
                     isLastPage = true;
                     rows = emptyIterator();
                     return;
                 }
-                if (isPastLastPage(resultsPage, page, lastPageSize.getAsLong(), maxResults)) {
+                if (isPastLastPage(resultsPage, page, lastPageSize.orElseThrow(), maxResults)) {
                     isLastPage = true;
                 }
                 // stop on the last page, even if it's not empty, because servers might return the last page for every page number past it
@@ -1260,13 +1262,13 @@ public class OpenApiClient
                 if (pageResults == 0) {
                     isLastPage = true;
                 }
-                if (pageSize.isPresent() && pageResults < pageSize.getAsLong()) {
+                if (pageSize.isPresent() && pageResults < pageSize.orElseThrow()) {
                     isLastPage = true;
                 }
                 if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {
                     isLastPage = true;
                 }
-                if (maxPages.isPresent() && page > maxPages.getAsInt()) {
+                if (maxPages.isPresent() && page > maxPages.orElseThrow()) {
                     isLastPage = true;
                 }
                 rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);
@@ -1276,13 +1278,13 @@ public class OpenApiClient
 
     private static boolean isPastLastPage(ResultsPage resultsPage, int page, long pageSize, long maxResults)
     {
-        if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().getAsLong()) {
+        if (resultsPage.totalPages().isPresent() && page > resultsPage.totalPages().orElseThrow()) {
             return true;
         }
         if (pageSize <= 0) {
             return false;
         }
         long firstResult = (page - 1) * pageSize;
-        return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().getAsLong());
+        return firstResult >= maxResults || (resultsPage.totalResults().isPresent() && firstResult >= resultsPage.totalResults().orElseThrow());
     }
 }
