@@ -967,6 +967,12 @@ def echo_last_post() -> Echo:
     return last_posted_echo
 
 
+@router.get("/retired_items")
+def list_retired_items() -> list[Item]:
+    # like a path that a proxy, or a server using a different prefix, doesn't know
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
 @router.get("/error")
 def error() -> Item:
     raise UnicornException(name="Inevitable error")
@@ -990,6 +996,9 @@ def custom_openapi():
     )
     openapi_schema["paths"]["/error"]["get"]["x-trino"] = {
         "errorPath": "$response.body#/message"
+    }
+    openapi_schema["paths"]["/retired_items"]["get"]["x-trino"] = {
+        "errorPath": "$response.body#/detail"
     }
     openapi_schema["paths"]["/item_categories"]["get"]["x-trino"] = {
         "resultsPath": "$response.body#/results/0/categories"
