@@ -113,11 +113,13 @@ class Label(BaseModel):
     id: int
     name: str
     tags: list[str] = []
+    value: str | int | None = None
 
 
 class LabelBody(BaseModel):
     name: str
     tags: list[str] = []
+    value: str | int | None = None
 
 
 class Bookmark(BaseModel):
@@ -1138,6 +1140,9 @@ def custom_openapi():
     # pydantic describes optional values as unions with null, which are mapped to VARCHAR
     for schema in ["Note", "NotePatch"]:
         openapi_schema["components"]["schemas"][schema]["properties"]["priority"] = {"type": ["integer", "null"]}
+    # a union without a null alternative, which pydantic adds to optional values
+    for schema in ["Label", "LabelBody"]:
+        openapi_schema["components"]["schemas"][schema]["properties"]["value"] = {"oneOf": [{"type": "string"}, {"type": "integer"}]}
     # FastAPI can't parse delimited arrays, so declare them only in the spec
     delimited_ids = openapi_schema["paths"]["/items_by_delimited_ids"]["get"]["parameters"][0]
     delimited_ids["schema"] = {"type": "array", "items": {"type": "integer"}}

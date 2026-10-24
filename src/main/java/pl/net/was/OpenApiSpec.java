@@ -104,7 +104,7 @@ public class OpenApiSpec
     public static final String HTTP_OK = "200";
     public static final String MIME_JSON = "application/json";
 
-    private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new StringSchema());
+    private static final TypeTuple FALLBACK_TYPE = new TypeTuple(VARCHAR, new Schema<>().extensions(ImmutableMap.of(JsonTrinoConverter.JSON_TEXT_EXTENSION, true)));
 
     private static final String SPEC_EXTENSION = "x-trino";
     private static final String LEGACY_SPEC_EXTENSION = "x-pagination";
@@ -1499,7 +1499,9 @@ public class OpenApiSpec
             // unknown and unsupported types will be returned as strings, which at least can be parsed with json functions
             return Optional.of(FALLBACK_TYPE);
         }
-        return convertType(referenced.get()).map(convertedType -> new TypeTuple(convertedType.type(), referenced.get()));
+        return convertType(referenced.get()).map(convertedType -> JsonTrinoConverter.isJsonText(convertedType.schema())
+                ? convertedType
+                : new TypeTuple(convertedType.type(), referenced.get()));
     }
 
     private Optional<Schema<?>> getComponentSchema(String name)

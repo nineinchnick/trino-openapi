@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -509,6 +510,23 @@ class JsonTrinoConverterTest
         Object row = JsonTrinoConverter.convert(rowBlockBuilder.build(), 0, rowType, rowSchema, objectMapper);
 
         assertThat(objectMapper.writeValueAsString(row)).isEqualTo("{\"name\":\"answer\",\"value\":{\"number\":42}}");
+    }
+
+    @Test
+    void shouldConvertUnionAndUnknownValuesToJsonText()
+            throws JsonProcessingException
+    {
+        var objectMapper = new ObjectMapper();
+        Schema<?> union = new Schema<>().oneOf(List.of(new StringSchema(), new IntegerSchema()));
+        Schema<?> unknown = new Schema<>().extensions(Map.of(JsonTrinoConverter.JSON_TEXT_EXTENSION, true));
+
+        for (Schema<?> schema : List.of(union, unknown)) {
+            assertThat(JsonTrinoConverter.convert(TextNode.valueOf("ci"), VARCHAR, schema)).isEqualTo("\"ci\"");
+            assertThat(JsonTrinoConverter.convert(IntNode.valueOf(7), VARCHAR, schema)).isEqualTo("7");
+            assertThat(JsonTrinoConverter.convert(BooleanNode.TRUE, VARCHAR, schema)).isEqualTo("true");
+            assertThat(JsonTrinoConverter.convert(objectMapper.readTree("{\"a\": [1]}"), VARCHAR, schema)).isEqualTo("{\"a\":[1]}");
+        }
+        assertThat(JsonTrinoConverter.convert(TextNode.valueOf("ci"), VARCHAR, new StringSchema())).isEqualTo("ci");
     }
 
     @Test

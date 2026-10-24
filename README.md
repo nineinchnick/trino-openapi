@@ -530,6 +530,20 @@ strings, like `"12.50"` or `"true"`, and booleans as `0` and `1`.
   union, becomes a `VARCHAR` with the raw JSON value, which can be processed with
   [JSON functions](https://trino.io/docs/current/functions/json.html).
 
+`VARCHAR` columns of unions, and of schemas that can't be mapped to a Trino
+type, hold JSON text. Strings are quoted, so for `oneOf: [string, integer]`, the
+string `"ci"` is read as `'"ci"'`, and the number `7` as `'7'`. Values written to
+such columns in request bodies must be valid JSON, and are sent as the parsed
+value, so `'7'` is sent as a number, and `'"7"'` as a string. Other values, like
+`'ci'`, fail the query.
+
+> [!IMPORTANT]
+> Before version 2.2, strings in these columns were read without quotes, and
+> values were sent in request bodies without checking that they're valid JSON.
+> Queries that compare such columns with plain strings, like `value = 'ci'`,
+> must use quoted strings, like `value = '"ci"'`, or JSON functions, like
+> `json_extract_scalar(value, '$') = 'ci'`.
+
 ## Request serialization
 
 Parameters are sent as the specification declares, including the `style`,
@@ -955,7 +969,8 @@ how they're made.
   ([#219](https://github.com/nineinchnick/trino-openapi/issues/219)), and objects
   with dynamic keys ([#172](https://github.com/nineinchnick/trino-openapi/issues/172)),
   are not mapped to rows. Some unions, like `anyOf` with a `null` alternative,
-  are mapped to `VARCHAR` ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
+  are mapped to `VARCHAR` holding JSON, with quoted strings
+  ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
 * Timestamps are always `TIMESTAMP(3)`.
 * An OAuth token rejected by the server is not refreshed before it expires, and
   the OAuth flow can't be chosen explicitly

@@ -127,7 +127,8 @@ public class TestOpenApiQueries
     @Test
     public void compressedResponses()
     {
-        assertQuery("SELECT accept_encoding FROM fastapi.default.request_encoding", "VALUES 'gzip'");
+        // pydantic describes optional values as unions with null, which are VARCHAR columns holding JSON, see https://github.com/nineinchnick/trino-openapi/issues/52
+        assertQuery("SELECT accept_encoding FROM fastapi.default.request_encoding", "VALUES '\"gzip\"'");
         // the FastAPI server compresses responses bigger than 100 bytes
         assertQuery("SELECT count(*) FROM fastapi.default.items_by_ids WHERE item_ids = ARRAY[1, 2]", "VALUES 2");
     }
@@ -312,12 +313,32 @@ public class TestOpenApiQueries
         // constants of queries reading many rows are run-length encoded
         assertUpdate("INSERT INTO fastapi.default.labels (label_id, name, tags) SELECT id, 'label ' || CAST(id AS VARCHAR), ARRAY['x'] FROM (VALUES 1, 2) t(id)", 2);
         assertQuery(
-                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels",
+                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels WHERE id IN (1, 2)",
                 "VALUES (1, 'label 1', 'x'), (2, 'label 2', 'x')");
         assertUpdate("UPDATE fastapi.default.labels SET tags = ARRAY['a', 'b'] WHERE label_id = 1", 1);
         assertQuery(
-                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels",
+                "SELECT id, name, array_join(tags, ',') FROM fastapi.default.labels WHERE id IN (1, 2)",
                 "VALUES (1, 'label 1', 'a,b'), (2, 'label 2', 'x')");
+    }
+
+    @Test
+    public void insertAndUpdateUnionValues()
+    {
+        // values of unions are JSON, so strings are quoted, and can be told apart from numbers
+        assertUpdate("INSERT INTO fastapi.default.labels (label_id, name, value) VALUES (3, 'string', '\"ci\"'), (4, 'number', '7'), (5, 'numeric string', '\"7\"')", 3);
+        assertQuery(
+                "SELECT id, value, json_extract_scalar(value, '$') FROM fastapi.default.labels WHERE id IN (3, 4, 5)",
+                "VALUES (3, '\"ci\"', 'ci'), (4, '7', '7'), (5, '\"7\"', '7')");
+        // a PUT sends all columns, so the values read from the table are sent back
+        for (int labelId : List.of(3, 4, 5)) {
+            assertUpdate("UPDATE fastapi.default.labels SET name = name || '!' WHERE label_id = %d".formatted(labelId), 1);
+        }
+        assertQuery(
+                "SELECT id, name, value FROM fastapi.default.labels WHERE id IN (3, 4, 5)",
+                "VALUES (3, 'string!', '\"ci\"'), (4, 'number!', '7'), (5, 'numeric string!', '\"7\"')");
+        assertQueryFails(
+                "INSERT INTO fastapi.default.labels (label_id, name, value) VALUES (6, 'text', 'ci')",
+                "Value of column value is not valid JSON");
     }
 
     @Test
@@ -499,16 +520,25 @@ public class TestOpenApiQueries
     @Test
     public void selectNestedObjectUnion()
     {
-        // the id is defined as a string and an integer, so it's raw JSON
+        // the id is defined as a string and an integer, so it's JSON, with quoted strings
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name, actor.id, actor.bot_name, actor.email FROM fastapi.default.events").getMaterializedRows();
         assertThat(rows).extracting(MaterializedRow::getFields).containsExactly(
-                Arrays.asList("build", "ci", "CI", null),
+                Arrays.asList("build", "\"ci\"", "CI", null),
                 Arrays.asList("review", "7", null, "jane@example.com"));
 
+        // the server rejects a number as the id of a bot, and a string as the id of a person
+        assertQuery(
+                "SELECT actor.id, actor.bot_name FROM fastapi.default.echo_event " +
+                        "WHERE name = 'build' AND actor = CAST(ROW('\"ci\"', 'CI', NULL) AS ROW(id VARCHAR, bot_name VARCHAR, email VARCHAR))",
+                "VALUES ('\"ci\"', 'CI')");
         assertQuery(
                 "SELECT actor.id, actor.email FROM fastapi.default.echo_event " +
                         "WHERE name = 'review' AND actor = CAST(ROW('7', NULL, 'jane@example.com') AS ROW(id VARCHAR, bot_name VARCHAR, email VARCHAR))",
                 "VALUES ('7', 'jane@example.com')");
+        assertQueryFails(
+                "SELECT actor.id FROM fastapi.default.echo_event " +
+                        "WHERE name = 'build' AND actor = CAST(ROW('ci', 'CI', NULL) AS ROW(id VARCHAR, bot_name VARCHAR, email VARCHAR))",
+                "Value of column actor is not valid JSON");
     }
 
     @Test
