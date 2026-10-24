@@ -803,6 +803,18 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void narrowerPredicateOnPushedDownColumn()
+    {
+        assertExplain(
+                "EXPLAIN " + filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id IN (1, 2)", "author", "comment_id = 1"),
+                Pattern.quote("constraint={comment_id=[ SortedRangeSet[type=bigint, ranges=1, {[1]}] ]}]"));
+        assertQuery(
+                filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id IN (1, 2)", "author", "comment_id = 1"),
+                "VALUES ('First', 1)");
+        assertQueryReturnsEmptyResult(filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id IN (1, 2)", "author", "comment_id = 3"));
+    }
+
+    @Test
     public void sendIntersectionOfPredicatesPushedDownAgain()
     {
         // every value of the intersection is read in a separate split, so only its values count toward max-filter-combinations
