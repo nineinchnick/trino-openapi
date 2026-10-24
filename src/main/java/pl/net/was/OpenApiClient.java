@@ -902,11 +902,13 @@ public class OpenApiClient
     private HttpClient getHttpClient(UserCredentials credentials)
     {
         HttpClient sizeLimitingClient = new SizeLimitingHttpClient(new AuthenticatingHttpClient(httpClient, authentication, credentials), maxResponseSize);
+        // reading the body of a 401 response without a challenge fails below the size limit, but Jetty already limits the body it buffers in the failure to 16 KiB
+        HttpClient unchallengedHttpClient = new UnchallengedResponseHttpClient(sizeLimitingClient);
         // the cache is wrapped by decompression, so it stores compressed responses
         return new DecompressingHttpClient(
                 httpCache
-                        .<HttpClient>map(cache -> new CachingHttpClient(sizeLimitingClient, getHttpCachePartition(cache, credentials), Clock.systemUTC()))
-                        .orElse(sizeLimitingClient),
+                        .<HttpClient>map(cache -> new CachingHttpClient(unchallengedHttpClient, getHttpCachePartition(cache, credentials), Clock.systemUTC()))
+                        .orElse(unchallengedHttpClient),
                 maxResponseSize);
     }
 

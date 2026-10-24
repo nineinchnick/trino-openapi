@@ -33,6 +33,7 @@ import io.trino.spi.TrinoException;
 import pl.net.was.OpenApiConfig;
 import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
+import pl.net.was.UnchallengedResponseHttpClient;
 import pl.net.was.authentication.UserCredentials.UsernamePassword;
 
 import java.net.URI;
@@ -106,7 +107,7 @@ public class Authentication
         this.securitySchemas = spec.getSecuritySchemas();
         this.config = config;
 
-        this.httpClient = new NonRedirectingHttpClient(httpClient);
+        this.httpClient = new NonRedirectingHttpClient(new UnchallengedResponseHttpClient(httpClient));
         this.clientId = config.getClientId();
         this.clientSecret = config.getClientSecret();
         this.serverUris = servers.getUris();
