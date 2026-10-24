@@ -123,7 +123,7 @@ Trino version it's built for.
 
 | Property                             | Container environment variable      | Default              | Description                                                                                                     |
 | ------------------------------------ | ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
+| `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |                      | URL or file path of the OpenAPI specification, in JSON or YAML; see [Specification](#specification)             |
 | `base-uri`                           | `OPENAPI_BASE_URI`                  |                      | Base URL of the API, used instead of the servers declared in the specification; see [Servers](#servers)         |
 | `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`               | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`               |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`              | Scheme for the `http` type: `basic` or `bearer`                                                                 |
@@ -149,6 +149,20 @@ Trino version it's built for.
 | `http-cache.max-entry-size`          | `OPENAPI_HTTP_CACHE_MAX_ENTRY_SIZE` | `10MB`               | Maximum size of a single cached response; larger responses are not cached                                       |
 | `split-strategy`                     | `OPENAPI_SPLIT_STRATEGY`            | `off`                | How to read pages in separate splits: `probe`, `stride`, or `off`; see [Pagination](#pagination)                |
 | `probe-limit`                        | `OPENAPI_PROBE_LIMIT`               | `none`               | Page size of the first page requested by the `probe` split strategy, or `none` to use the regular page size     |
+
+## Specification
+
+Every Trino node loads the specification from `spec-location` when the catalog
+starts, because workers need it too, to map responses to columns and to follow
+pagination. Every node must be able to reach `spec-location`, and a node that
+can't load it fails to start the catalog.
+
+When a URL serves a changed specification, nodes that load it later, like a
+restarted worker, map tables differently than the other nodes. In production,
+use a local copy of the specification, deployed to every node with the catalog
+properties, or a URL that always serves the same version of it, like one with a
+version number or a commit in its path. To use a changed specification, update
+it on every node and restart Trino.
 
 ## Servers
 
@@ -1111,9 +1125,8 @@ how they're made.
 # Limitations
 
 * Every Trino node reads the specification when the catalog starts, so every
-  node must be able to reach `spec-location`, and get the same specification
-  ([#294](https://github.com/nineinchnick/trino-openapi/issues/294)). To use a
-  changed specification, restart Trino.
+  node must be able to reach `spec-location`, and get the same specification,
+  see [Specification](#specification).
 * The specification is loaded without authentication
   ([#155](https://github.com/nineinchnick/trino-openapi/issues/155)).
 * All tables are in a single `default` schema
