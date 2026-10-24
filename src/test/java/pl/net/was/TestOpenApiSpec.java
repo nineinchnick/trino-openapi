@@ -19,6 +19,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.base.Suppliers;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
@@ -49,6 +50,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.MoreCollectors.onlyElement;
@@ -72,6 +74,9 @@ import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestOpenApiSpec
 {
+    // the spec is big, so it's loaded once for all tests
+    private static final Supplier<OpenApiSpec> DATADOG_SPEC = Suppliers.memoize(() -> createSpec(new OpenApiConfig().setSpecLocation("specs/datadog.yaml")));
+
     private final Schema<?> intSchema = newSchema("integer");
     private final Schema<?> numberSchema = newSchema("number");
     private final Schema<?> stringSchema = newSchema("string");
@@ -1253,7 +1258,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogUnionTables()
     {
-        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
+        OpenApiSpec spec = DATADOG_SPEC.get();
 
         // rules are a oneOf of standard and signal rules, which define queries as arrays of different objects;
         // request bodies don't include the default rule ID, so they're a different type
@@ -1345,7 +1350,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogPaginatedTables()
     {
-        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
+        OpenApiSpec spec = DATADOG_SPEC.get();
 
         // dev/specs/datadog.patch.json renames x-pagination to x-trino, so rows are read from the results path, like data
         HttpPath auditPath = new HttpPath(PathItem.HttpMethod.GET, "/api/v2/audit/events");
@@ -1378,7 +1383,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogTables()
     {
-        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
+        OpenApiSpec spec = DATADOG_SPEC.get();
         Map<String, List<OpenApiColumn>> tables = spec.getTables();
 
         Set<String> expected = Set.of(
@@ -3837,7 +3842,7 @@ class TestOpenApiSpec
         OpenApiSpec spec = createSpec(config);
 
         Assertions.assertThat(spec.getTables().keySet())
-                .hasSize(loadSpecFile("specs/datadog.yaml").getTables().size())
+                .hasSize(DATADOG_SPEC.get().getTables().size())
                 .contains("events", "team", "metrics", "query_timeseries")
                 .noneMatch(table -> table.startsWith("api_v1_") || table.startsWith("api_v2_"));
         // requests still use the whole path
@@ -5840,7 +5845,7 @@ class TestOpenApiSpec
     @Test
     public void getDatadogTablesWithMediaTypeParameters()
     {
-        OpenApiSpec spec = loadSpecFile("specs/datadog.yaml");
+        OpenApiSpec spec = DATADOG_SPEC.get();
 
         // usage and cost endpoints declare application/json;datetime-format=rfc3339
         Assertions.assertThat(spec.getTables()).containsKeys(
