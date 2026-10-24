@@ -438,6 +438,25 @@ class JsonTrinoConverterTest
     }
 
     @Test
+    void shouldConvertNullElementsOfArraysOfRowsToNulls()
+            throws JsonProcessingException
+    {
+        var rowType = RowType.from(List.of(RowType.field("a", VARCHAR)));
+        var type = new ArrayType(rowType);
+        var schema = new ArraySchema().items(new ObjectSchema().addProperty("a", new StringSchema()));
+        JsonNode values = new ObjectMapper().readTree("[null, {\"a\": \"x\"}, {\"a\": null}]");
+
+        Block block = (Block) JsonTrinoConverter.convert(values, type, schema);
+
+        assertThat(block.getPositionCount()).isEqualTo(3);
+        assertThat(block.isNull(0)).isTrue();
+        assertThat(block.isNull(1)).isFalse();
+        assertThat(rowType.getObjectValue(block, 1)).isEqualTo(List.of("x"));
+        assertThat(block.isNull(2)).isFalse();
+        assertThat(rowType.getObjectValue(block, 2)).isEqualTo(Collections.singletonList(null));
+    }
+
+    @Test
     void shouldConvertUnionFieldsInRowsToRawJson()
             throws JsonProcessingException
     {
