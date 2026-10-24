@@ -1854,10 +1854,7 @@ public class OpenApiSpec
         if (!type.equals("object")) {
             return false;
         }
-        Object additionalProperties = schema.getAdditionalProperties();
-        if (additionalProperties instanceof Schema<?> booleanSchema && booleanSchema.getBooleanSchemaValue() != null) {
-            additionalProperties = booleanSchema.getBooleanSchemaValue();
-        }
+        Object additionalProperties = getAdditionalProperties(schema);
         // objects with additional properties are maps, not rows
         return additionalProperties == null || FALSE.equals(additionalProperties);
     }
@@ -1897,11 +1894,7 @@ public class OpenApiSpec
 
     private Optional<TypeTuple> convertObject(Schema<?> object)
     {
-        Object additionalProperties = object.getAdditionalProperties();
-        // OpenAPI 3.1 parses boolean schemas, like `additionalProperties: true`, into schemas holding only that boolean value
-        if (additionalProperties instanceof Schema<?> booleanSchema && booleanSchema.getBooleanSchemaValue() != null) {
-            additionalProperties = booleanSchema.getBooleanSchemaValue();
-        }
+        Object additionalProperties = getAdditionalProperties(object);
         if (additionalProperties instanceof Schema<?> valueSchema) {
             return convertMap(object, valueSchema);
         }
@@ -1910,6 +1903,16 @@ public class OpenApiSpec
             return Optional.of(FALLBACK_TYPE);
         }
         return convertRow(object);
+    }
+
+    private static Object getAdditionalProperties(Schema<?> object)
+    {
+        Object additionalProperties = object.getAdditionalProperties();
+        // OpenAPI 3.1 parses boolean schemas, like `additionalProperties: true`, into schemas holding only that boolean value
+        if (additionalProperties instanceof Schema<?> booleanSchema && booleanSchema.getBooleanSchemaValue() != null) {
+            return booleanSchema.getBooleanSchemaValue();
+        }
+        return additionalProperties;
     }
 
     private Optional<TypeTuple> convertMap(Schema<?> map, Schema<?> valueSchema)
