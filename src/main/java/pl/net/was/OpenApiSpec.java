@@ -64,6 +64,8 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.VarcharType;
+import pl.net.was.authentication.CatalogCredentials;
+import pl.net.was.authentication.SpecLocationAuthentication;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -204,9 +206,12 @@ public class OpenApiSpec
     private final boolean schemaFromTags;
 
     @Inject
-    public OpenApiSpec(OpenApiConfig config, @ForOpenApiSpec HttpClient httpClient)
+    public OpenApiSpec(OpenApiConfig config, CatalogCredentials catalogCredentials, @ForOpenApiSpec HttpClient httpClient)
     {
-        this(parse(requireNonNull(config, "config is null"), new UnchallengedResponseHttpClient(httpClient)),
+        this(parse(requireNonNull(config, "config is null").getSpecLocation(), new SpecFetcher(
+                        new UnchallengedResponseHttpClient(httpClient),
+                        new RetryOptions(config.getMaxRetries(), config.getRetryInitialDelay().toJavaTime(), config.getRetryMaxDelay().toJavaTime()),
+                        config.getSpecLocationAuthentication() == SpecLocationAuthentication.CATALOG ? Optional.of(catalogCredentials) : Optional.empty())),
                 new TableMappingOptions(config.getTrimmedPathPrefixes(), config.isSchemaFromTags()));
     }
 
@@ -576,7 +581,7 @@ public class OpenApiSpec
         return key.replaceAll("/\\{[^\\}]+\\}", "");
     }
 
-    private static ParsedSpec parse(OpenApiConfig config, HttpClient httpClient)
+    private static ParsedSpec parse(String specLocation, SpecFetcher specFetcher)
     {
         // specs of large APIs, like Datadog, exceed the default limit of 3 MB for YAML documents,
         // which protects against untrusted input, but the spec location is set by the catalog administrator.
@@ -585,11 +590,10 @@ public class OpenApiSpec
         ParseOptions parseOptions = new ParseOptions();
         parseOptions.setResolveFully(true);
         PreprocessingParser parser = new PreprocessingParser();
-        String specLocation = config.getSpecLocation();
         Optional<URI> specUri = OpenApiServers.getSpecUri(specLocation);
         // references to other documents are still loaded by the parser, relative to the spec location, and without credentials
         SwaggerParseResult result = specUri
-                .map(uri -> parser.readContents(SpecFetcher.fetch(config, uri, httpClient), null, parseOptions, specLocation))
+                .map(uri -> parser.readContents(specFetcher.fetch(uri), null, parseOptions, specLocation))
                 .orElseGet(() -> parser.readLocation(specLocation, null, parseOptions));
         OpenAPI openAPI = result.getOpenAPI();
 
