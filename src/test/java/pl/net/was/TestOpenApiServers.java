@@ -33,12 +33,16 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNullElse;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
 
@@ -63,6 +67,7 @@ class TestOpenApiServers
 
     private final Queue<URI> forecastRequests = new ConcurrentLinkedQueue<>();
     private final Queue<URI> archiveRequests = new ConcurrentLinkedQueue<>();
+    private final Map<String, String> specs = new ConcurrentHashMap<>();
     private HttpServer forecastServer;
     private HttpServer archiveServer;
     private URI forecastUri;
@@ -96,6 +101,7 @@ class TestOpenApiServers
     {
         forecastRequests.clear();
         archiveRequests.clear();
+        specs.clear();
     }
 
     @Test
@@ -195,6 +201,123 @@ class TestOpenApiServers
         assertThat(archiveRequests).containsExactly(URI.create("/v1/forecast"));
     }
 
+    @Test
+    void testRelativeServers()
+    {
+        specs.put("/specs/openapi.yaml",
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                servers:
+                  - url: /v1
+                paths:
+                  /root:
+                    get:
+                %1$s
+                  /relative:
+                    servers:
+                      - url: api
+                    get:
+                %1$s
+                  /authority:
+                    servers:
+                      - url: //%2$s/v2
+                    get:
+                %1$s
+                """.formatted(OK_RESPONSES, archiveUri.getRawAuthority()));
+        OpenApiConfig config = new OpenApiConfig()
+                .setSpecLocation(forecastUri + "/specs/openapi.yaml")
+                .setMaxRetries(0);
+
+        assertThat(getRows(config, "root")).isEmpty();
+        assertThat(getRows(config, "relative")).isEmpty();
+        assertThat(getRows(config, "authority")).isEmpty();
+        assertThat(forecastRequests).containsExactly(URI.create("/v1/root"), URI.create("/specs/api/relative"));
+        assertThat(archiveRequests).containsExactly(URI.create("/v2/authority"));
+    }
+
+    @Test
+    void testRelativeServerOfSpecFile()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                servers:
+                  - url: /v1
+                paths:
+                  /forecast:
+                    get:
+                %s
+                """.formatted(OK_RESPONSES));
+
+        assertThatThrownBy(() -> getRows(config, "forecast"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Server URL /v1 of GET /forecast is relative, but spec-location is not a URL, so set base-uri");
+        assertThat(getRows(config.setBaseUri(forecastUri), "forecast")).isEmpty();
+        assertThat(forecastRequests).containsExactly(URI.create("/forecast"));
+    }
+
+    @Test
+    void testServerVariables()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                servers:
+                  - url: '{scheme}://127.0.0.1:{port}/{version}'
+                    variables:
+                      scheme:
+                        default: http
+                        enum:
+                          - http
+                          - https
+                      port:
+                        default: '%s'
+                      version:
+                        default: v1
+                paths:
+                  /forecast:
+                    get:
+                %s
+                """.formatted(forecastServer.getAddress().getPort(), OK_RESPONSES));
+
+        assertThat(getRows(config, "forecast")).isEmpty();
+        assertThat(forecastRequests).containsExactly(URI.create("/v1/forecast"));
+    }
+
+    @Test
+    void testServerVariableWithoutDefault()
+            throws IOException
+    {
+        OpenApiConfig config = newConfig(
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                servers:
+                  - url: 'https://{region}.example.com'
+                paths:
+                  /forecast:
+                    get:
+                %s
+                """.formatted(OK_RESPONSES));
+
+        assertThatThrownBy(() -> getRows(config, "forecast"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Server URL https://{region}.example.com of GET /forecast uses the variable region, which doesn't have a default value, so set base-uri");
+    }
+
     private OpenApiConfig newConfig(String spec)
             throws IOException
     {
@@ -211,14 +334,17 @@ class TestOpenApiServers
         return ImmutableList.copyOf(client.getRows(spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName)), 1, 1, false));
     }
 
-    private static HttpServer startServer(Queue<URI> requests)
+    private HttpServer startServer(Queue<URI> requests)
             throws IOException
     {
         HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", exchange -> {
-            requests.add(exchange.getRequestURI());
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            byte[] bytes = "[]".getBytes(UTF_8);
+            String spec = specs.get(exchange.getRequestURI().getPath());
+            if (spec == null) {
+                requests.add(exchange.getRequestURI());
+            }
+            exchange.getResponseHeaders().add("Content-Type", spec == null ? "application/json" : "application/yaml");
+            byte[] bytes = requireNonNullElse(spec, "[]").getBytes(UTF_8);
             exchange.sendResponseHeaders(200, bytes.length);
             try (OutputStream output = exchange.getResponseBody()) {
                 output.write(bytes);

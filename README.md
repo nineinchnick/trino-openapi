@@ -157,6 +157,10 @@ specification, in that order, like the OpenAPI specification defines. Other
 servers of the same level are ignored, because they're usually alternatives,
 like a sandbox, so to use one of them, set `base-uri`.
 
+Relative server URLs, like `/v1`, are relative to `spec-location`, so they can
+only be used when `spec-location` is a URL. Server variables, like
+`https://{region}.example.com`, are replaced with their default values.
+
 Set `base-uri` if the specification doesn't declare any servers, or to send
 requests of all operations to another server, like a proxy. It's used instead
 of every declared server.
