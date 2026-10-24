@@ -1350,6 +1350,9 @@ class TestOpenApiSpec
                 .isNotNull()
                 .extracting(Pagination::limitParam, Pagination::cursorParam, Pagination::nextCursorPath)
                 .containsExactly(Optional.of("page[limit]"), Optional.of("page[cursor]"), Optional.of(new ResponsePath.Body(JsonPointer.compile("/meta/page/after"))));
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "api_v2_catalog_entity")).get(new HttpPath(PathItem.HttpMethod.GET, "/api/v2/catalog/entity")))
+                .extracting(Pagination::limitParam, Pagination::offsetParam)
+                .containsExactly(Optional.of("page[limit]"), Optional.of("page[offset]"));
         Assertions.assertThat(spec.getTables().get("api_v2_audit_events"))
                 .extracting(OpenApiColumn::getName)
                 .contains("id", "type", "attributes")
@@ -2801,6 +2804,62 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of cursorParam of GET /items: cursor, the parameter must be a string or an integer, not boolean");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("cursorParam: cursor", "cursorParam: cursor\n        pageParam: cursor")))
                 .hasMessage("Invalid x-trino extension of GET /items: cursorParam can't be used with pageParam");
+    }
+
+    @Test
+    public void testOffsetPaginationExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /items:
+                    get:
+                      parameters:
+                      - in: query
+                        name: offset
+                        schema:
+                          type: integer
+                      - in: query
+                        name: limit
+                        schema:
+                          type: integer
+                      x-trino:
+                        offsetParam: offset
+                        limitParam: limit
+                      responses:
+                        "200":
+                          description: Items
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        Assertions.assertThat(spec.getPaginations(schemaTableName(SCHEMA_NAME, "items")))
+                .containsExactly(Map.entry(
+                        new HttpPath(PathItem.HttpMethod.GET, "/items"),
+                        Pagination.builder()
+                                .setOffsetParam(Optional.of("offset"))
+                                .setLimitParam(Optional.of("limit"))
+                                .build()));
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("offsetParam: offset", "offsetParam: skip")))
+                .hasMessage("Invalid value of offsetParam of GET /items: skip, the operation has no such parameter");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("type: integer\n      - in: query", "type: string\n      - in: query")))
+                .hasMessage("Invalid value of offsetParam of GET /items: offset, the parameter must be an integer, not varchar");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("offsetParam: offset", "offsetParam: offset\n        pageParam: limit")))
+                .hasMessage("Invalid x-trino extension of GET /items: offsetParam can't be used with pageParam");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("offsetParam: offset", "offsetParam: offset\n        nextPageLinkHeader: true")))
+                .hasMessage("offsetParam can't be used with cursorParam or nextPageLinkHeader");
     }
 
     @Test

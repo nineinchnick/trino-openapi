@@ -470,6 +470,10 @@ class TestOpenApiClientRequests
                     "- name: cursor\n          in: query\n          schema:\n            type: string\n")
             .replace("pageParam: page\n", "cursorParam: cursor\n        nextCursorPath: $response.body#/next\n");
 
+    private static final String OFFSET_SPEC = PAGED_SPEC
+            .replace("- name: page\n", "- name: offset\n")
+            .replace("pageParam: page\n", "offsetParam: offset\n");
+
     private static final String HEADER_CURSOR_SPEC = CURSOR_SPEC.replace("$response.body#/next", "$response.header#X-Next-Cursor");
 
     private static final String HEADER_TOTAL_SPEC = PAGED_SPEC.replace("$response.body#/total", "$response.header#X-Total-Count");
@@ -1411,6 +1415,30 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Value of nextCursorPath /next in the response to GET %s/paged is a JSON OBJECT, not a string or a whole number", baseUri)
                 .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
+    }
+
+    @Test
+    void testOffsetPagination()
+            throws IOException
+    {
+        // the server returns fewer results than on the first page, so the offset is the number of results already read
+        responses.add(respond(200, "{\"results\":[{\"id\":1},{\"id\":2}]}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":3}]}"));
+        responses.add(respond(200, "{\"results\":[]}"));
+
+        assertThat(getRows(newConfig(OFFSET_SPEC), "paged", null)).hasSize(3);
+        assertThat(requestUris).containsExactly(URI.create("/paged?offset=0"), URI.create("/paged?offset=2"), URI.create("/paged?offset=3"));
+    }
+
+    @Test
+    void testOffsetPaginationEndsWithTotal()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"total\":\"2\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"total\":\"2\"}"));
+
+        assertThat(getRows(newConfig(OFFSET_SPEC), "paged", null)).hasSize(2);
+        assertThat(requestUris).containsExactly(URI.create("/paged?offset=0"), URI.create("/paged?offset=1"));
     }
 
     @Test
