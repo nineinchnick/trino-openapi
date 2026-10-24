@@ -27,6 +27,7 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Sets.difference;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestOpenApiConnectorFactory
 {
@@ -56,6 +57,18 @@ class TestOpenApiConnectorFactory
             thread.join(Duration.ofSeconds(10));
         }
         assertThat(connectorThreads).noneMatch(Thread::isAlive);
+    }
+
+    @Test
+    void testSpecWithoutServersRequiresBaseUri()
+    {
+        URL spec = requireNonNull(getClass().getClassLoader().getResource("echo.yml"));
+
+        assertThatThrownBy(() -> new OpenApiConnectorFactory().create(
+                "test",
+                Map.of("spec-location", spec.getFile()),
+                new TestingConnectorContext()))
+                .hasMessageContaining("The spec doesn't declare any servers, so set base-uri");
     }
 
     private static Set<Thread> httpClientThreads()

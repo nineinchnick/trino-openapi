@@ -163,7 +163,8 @@ only be used when `spec-location` is a URL. Server variables, like
 
 Set `base-uri` if the specification doesn't declare any servers, or to send
 requests of all operations to another server, like a proxy. It's used instead
-of every declared server.
+of every declared server. Without it, the catalog fails to start if any
+operation mapped to a table doesn't have a server.
 
 ## Authentication
 
