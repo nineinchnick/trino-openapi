@@ -672,8 +672,9 @@ paths:
 | `descendingValue`   | Value of `directionParam` for the descending order; required with `sortParam`                                                                       |
 | `parameterDefaults` | Values of parameters sent when the query doesn't filter on them, see [Parameter defaults](#parameter-defaults)                                      |
 
-The schema at `resultsPath` must be an array, with a row for every item, or an
-object, which is a single row. Loading the spec fails otherwise.
+The schema at `resultsPath` must be an array, with a row for every item, an
+object, which is a single row, or a union of them. Loading the spec fails
+otherwise.
 
 If you can't change the API to include the extension in its specification, save
 the specification locally and edit it.

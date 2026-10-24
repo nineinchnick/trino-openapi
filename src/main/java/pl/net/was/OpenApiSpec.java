@@ -1155,17 +1155,20 @@ public class OpenApiSpec
             resultsPointer = resultsPointer.tail();
         }
         // a scalar would only fail when reading the response, so it fails when loading the spec instead
-        checkArgument(canProduceRows(schema), "Invalid value of %s of %s: %s, it must point to an array or an object", PAGINATION_RESULTS_PATH, httpPath, resultsPath);
+        checkArgument(canProduceRows(schema), "Invalid value of %s of %s: %s, it must point to an array, an object, or a union of them", PAGINATION_RESULTS_PATH, httpPath, resultsPath);
         return schema;
     }
 
     private static boolean canProduceRows(Schema<?> schema)
     {
+        if (JsonTrinoConverter.isUnion(schema)) {
+            return getNonNullAlternatives(schema).stream().allMatch(OpenApiSpec::canProduceRows);
+        }
         if (isArray(schema)) {
             return true;
         }
         String type = getTypeName(schema);
-        // schemas without a type, like unions, can still describe objects
+        // schemas without a type can still describe objects
         return type == null || type.equals("object");
     }
 

@@ -4444,14 +4444,14 @@ class TestOpenApiSpec
     {
         Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec("type: string")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array or an object");
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
         Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec(
                         """
                         type: integer
                         nullable: true
                         """)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array or an object");
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
     }
 
     @Test
@@ -4477,6 +4477,38 @@ class TestOpenApiSpec
                         """)).getTables().get("items"))
                 .extracting(OpenApiColumn::getName)
                 .contains("name");
+    }
+
+    @Test
+    public void testResultsPathToUnion()
+    {
+        Assertions.assertThat(parseSpec(resultsPathSpec(
+                        """
+                        oneOf:
+                        - type: object
+                          properties:
+                            name:
+                              type: string
+                        - type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                        """)).getTables().get("items"))
+                .extracting(OpenApiColumn::getName)
+                .contains("name", "id");
+        Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec(
+                        """
+                        oneOf:
+                        - type: object
+                          properties:
+                            name:
+                              type: string
+                        - type: string
+                        """)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array, an object, or a union of them");
     }
 
     @Test
