@@ -34,6 +34,7 @@ import java.net.SocketException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
@@ -334,6 +335,39 @@ class TestCachingHttpClient
         client.execute(get(ITEMS), BODY);
         assertThat(serverRequests).hasSize(2);
         assertThat(cache.sizeInBytes()).isZero();
+    }
+
+    @Test
+    void testOnlyStaleTemporaryFilesAreRemoved()
+            throws IOException
+    {
+        // left by a write that didn't finish
+        Path staleFile = Files.writeString(cacheDirectory.resolve("stale.tmp"), "partial");
+        Files.setLastModifiedTime(staleFile, FileTime.from(Instant.now().minus(Duration.ofHours(2))));
+        // written by another process sharing the directory
+        Path writtenFile = Files.writeString(cacheDirectory.resolve("written.tmp"), "partial");
+
+        new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        assertThat(staleFile).doesNotExist();
+        assertThat(writtenFile).exists();
+    }
+
+    @Test
+    void testProcessesCanShareDirectory()
+    {
+        HttpCache firstCache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        HttpCache secondCache = new HttpCache(cacheDirectory, DataSize.of(1, MEGABYTE), DataSize.of(1, MEGABYTE));
+        Function<Request, Response> server = _ -> response(HttpStatus.OK, "first", CACHE_CONTROL, "max-age=60");
+        CachingHttpClient firstClient = client(firstCache, server);
+        CachingHttpClient secondClient = client(secondCache, server);
+
+        firstClient.execute(get(ITEMS), BODY);
+        secondClient.execute(get(ITEMS), BODY);
+        assertThat(firstClient.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        assertThat(secondClient.execute(get(ITEMS), BODY)).isEqualTo("200 first");
+        assertThat(serverRequests).hasSize(2);
+        // limits and invalidation apply only to responses stored by the same process
+        assertThat(firstCache.sizeInBytes()).isEqualTo(secondCache.sizeInBytes()).isPositive();
     }
 
     @Test
