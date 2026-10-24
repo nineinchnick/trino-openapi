@@ -1294,6 +1294,11 @@ public class OpenApiSpec
                 // elements of arrays of different objects can match any of them, so they're merged into rows the same way
                 return convertArray(mergeObjectArrayUnion(property));
             }
+            Optional<Schema<?>> nullableAlternative = getNullableAlternative(property);
+            if (nullableAlternative.isPresent()) {
+                // a union of a single type and null, like the ones generated for optional fields by Pydantic, holds values of that type
+                return convertType(nullableAlternative.get());
+            }
             // TODO oneOf types can be incompatible (object and an array), so it would require generating separate fields for every type
             return Optional.of(new TypeTuple(VARCHAR, property));
         }
@@ -1347,6 +1352,16 @@ public class OpenApiSpec
         List<Schema> alternatives = getNonNullAlternatives(union);
         return !alternatives.isEmpty() && alternatives.stream()
                 .allMatch(alternative -> isArray(alternative) && alternative.getItems() != null && isObjectAlternative(alternative.getItems()));
+    }
+
+    private static Optional<Schema<?>> getNullableAlternative(Schema<?> union)
+    {
+        List<Schema> alternatives = getAlternatives(union);
+        List<Schema> nonNullAlternatives = getNonNullAlternatives(union);
+        if (nonNullAlternatives.size() != 1 || alternatives.size() == nonNullAlternatives.size()) {
+            return Optional.empty();
+        }
+        return Optional.of(nonNullAlternatives.getFirst());
     }
 
     private static List<Schema> getNonNullAlternatives(Schema<?> union)

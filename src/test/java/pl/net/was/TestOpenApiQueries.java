@@ -127,8 +127,7 @@ public class TestOpenApiQueries
     @Test
     public void compressedResponses()
     {
-        // pydantic describes optional values as unions with null, which are VARCHAR columns holding JSON, see https://github.com/nineinchnick/trino-openapi/issues/52
-        assertQuery("SELECT accept_encoding FROM fastapi.default.request_encoding", "VALUES '\"gzip\"'");
+        assertQuery("SELECT accept_encoding FROM fastapi.default.request_encoding", "VALUES 'gzip'");
         // the FastAPI server compresses responses bigger than 100 bytes
         assertQuery("SELECT count(*) FROM fastapi.default.items_by_ids WHERE item_ids = ARRAY[1, 2]", "VALUES 2");
     }
