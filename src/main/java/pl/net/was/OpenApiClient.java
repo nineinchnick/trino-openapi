@@ -1134,7 +1134,7 @@ public class OpenApiClient
                 }
                 String parameterName = column.getSourceName();
                 // request parameters are usually not included in the response, so copy them from predicates
-                if (isPredicate(column, httpPath, null) && !(column.getName().equals(column.getSourceName()) && resultNode.has(parameterName))) {
+                if (isPredicate(column, httpPath, null) && (column.isRequestOnly() || !resultNode.has(parameterName))) {
                     recordBuilder.add(recordParams.getOrDefault(parameterName, null));
                     continue;
                 }

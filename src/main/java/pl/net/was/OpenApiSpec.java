@@ -1035,6 +1035,7 @@ public class OpenApiSpec
                 .setIsNullable(isNullable(schema, isNullable))
                 .setIsHidden(isHidden)
                 .setIsPageNumber(isPageNumber)
+                .setIsRequestOnly(true)
                 .setComment(schema.getDescription())
                 .build());
     }
@@ -1511,6 +1512,7 @@ public class OpenApiSpec
                 .values().stream()
                 .map(sameColumns -> OpenApiColumn.builderFrom(sameColumns.get(0))
                         .setIsNullable(sameColumns.stream().anyMatch(column -> column.getMetadata().isNullable()))
+                        .setIsRequestOnly(sameColumns.stream().allMatch(OpenApiColumn::isRequestOnly))
                         .setResponseRequiredPaths(sameColumns.stream()
                                 .flatMap(column -> column.getResponseRequiredPaths().stream())
                                 .collect(toImmutableSet()))
