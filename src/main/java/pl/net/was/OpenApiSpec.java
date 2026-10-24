@@ -105,6 +105,7 @@ import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -157,6 +158,8 @@ public class OpenApiSpec
     private static final String PARAMETER_FIELD = "field";
     private static final Set<String> DOCUMENT_EXTENSION_PROPERTIES = ImmutableSet.of(ERROR_PATH, RATE_LIMIT_RESET_HEADER, RATE_LIMIT_RESET_FORMAT, RATE_LIMIT_REMAINING_HEADER);
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
+    private static final Set<String> PLAIN_TYPES = ImmutableSet.of("string", "integer", "number", "boolean", "int", "float");
+    private static final String PLAIN_VALUE_COLUMN = "value";
     private static final Pattern SUCCESS_STATUS_PATTERN = Pattern.compile("2(\\d\\d|XX)", Pattern.CASE_INSENSITIVE);
 
     // should only be used to manually resolving references
@@ -779,6 +782,9 @@ public class OpenApiSpec
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
+            getPlainValuesSchema(resultsSchema)
+                    .flatMap(valueSchema -> getPlainValueColumn(new HttpPath(method, path), valueSchema, result, getRequestNames(parameters, op)))
+                    .ifPresent(result::add);
         }
         schema = getRequestSchema(op);
         if (schema != null) {
@@ -1309,6 +1315,27 @@ public class OpenApiSpec
         return schema;
     }
 
+    private static Optional<Schema<?>> getPlainValuesSchema(Schema<?> results)
+    {
+        if (JsonTrinoConverter.isUnion(results)) {
+            // like an optional list of strings
+            return getNullableAlternative(results).flatMap(OpenApiSpec::getPlainValuesSchema);
+        }
+        if (!isArray(results) || results.getItems() == null || !isPlainValue(results.getItems())) {
+            return Optional.empty();
+        }
+        return Optional.of(results.getItems());
+    }
+
+    private static boolean isPlainValue(Schema<?> schema)
+    {
+        if (JsonTrinoConverter.isUnion(schema)) {
+            List<Schema> alternatives = getNonNullAlternatives(schema);
+            return !alternatives.isEmpty() && alternatives.stream().allMatch(OpenApiSpec::isPlainValue);
+        }
+        return PLAIN_TYPES.contains(getTypeName(schema));
+    }
+
     private static boolean canProduceRows(Schema<?> schema)
     {
         if (JsonTrinoConverter.isUnion(schema)) {
@@ -1416,6 +1443,29 @@ public class OpenApiSpec
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
                 .build());
+    }
+
+    private Optional<OpenApiColumn> getPlainValueColumn(HttpPath httpPath, Schema<?> valueSchema, List<OpenApiColumn> otherColumns, Set<String> requestNames)
+    {
+        // fields next to the results, and request parameters and body fields, named like this column keep their names,
+        // because they come from the API, and this name doesn't; a request parameter would also be merged with this column
+        Set<String> usedNames = Stream.concat(otherColumns.stream().map(OpenApiColumn::getName), requestNames.stream())
+                .collect(toCollection(HashSet::new));
+        String name = usedNames.contains(PLAIN_VALUE_COLUMN) ? getUnusedName(PLAIN_VALUE_COLUMN, usedNames) : PLAIN_VALUE_COLUMN;
+        return getResultColumn(httpPath, name, valueSchema, false, false)
+                .map(column -> OpenApiColumn.builderFrom(column)
+                        .setPlainValuePaths(Set.of(httpPath))
+                        .build());
+    }
+
+    private static Set<String> getRequestNames(List<Parameter> parameters, Operation op)
+    {
+        Schema<?> requestSchema = getRequestSchema(op);
+        return Stream.concat(
+                        parameters.stream().map(Parameter::getName),
+                        requestSchema == null ? Stream.of() : getSchemaProperties(requestSchema).keySet().stream())
+                .map(OpenApiSpec::getIdentifier)
+                .collect(toImmutableSet());
     }
 
     private Optional<OpenApiColumn> getPredicateColumn(
@@ -1961,6 +2011,9 @@ public class OpenApiSpec
                                 .collect(toImmutableSet()))
                         .setEnvelopePaths(sameColumns.stream()
                                 .flatMap(column -> column.getEnvelopePaths().stream())
+                                .collect(toImmutableSet()))
+                        .setPlainValuePaths(sameColumns.stream()
+                                .flatMap(column -> column.getPlainValuePaths().stream())
                                 .collect(toImmutableSet()))
                         .setRequiresPredicate(sameColumns.stream()
                                 .map(OpenApiColumn::getRequiresPredicate)
