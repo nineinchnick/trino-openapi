@@ -18,12 +18,16 @@ import com.google.common.collect.ImmutableSet;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.swagger.v3.oas.models.PathItem;
+import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.ArrayBlockBuilder;
+import io.trino.spi.block.Block;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +77,31 @@ class TestOpenApiClient
 
         assertThat(serializeMap(spec, "echo_union_value", Domain.singleValue(column.getType(), utf8Slice("{\"number\":42}")), column).toString())
                 .isEqualTo("{\"value\":{\"number\":42}}");
+    }
+
+    @Test
+    void shouldSerializeArraysInAllOfInRequestBodies()
+    {
+        OpenApiSpec spec = loadSpec("echo.yml");
+        OpenApiColumn column = getColumn(spec, "echo_numbers", "tags");
+        ArrayType arrayType = (ArrayType) column.getType();
+        ArrayBlockBuilder blockBuilder = arrayType.createBlockBuilder(null, 1);
+        blockBuilder.buildEntry(elementBuilder -> {
+            VARCHAR.writeString(elementBuilder, "a");
+            VARCHAR.writeString(elementBuilder, "b");
+        });
+        Block tags = blockBuilder.build();
+        OpenApiClient client = new OpenApiClient(new OpenApiConfig(), new CatalogName("test"), new TestingHttpClient(_ -> {
+            throw new UnsupportedOperationException();
+        }), spec);
+        OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "echo_numbers"));
+
+        // rows written by INSERT and UPDATE
+        assertThat(client.serializePage(new OpenApiOutputTableHandle(table, List.of(column.getHandle()), Map.of()), new HttpPath(PathItem.HttpMethod.POST, "/echo_numbers"), new Page(tags), 0).toString())
+                .isEqualTo("{\"tags\":[\"a\",\"b\"]}");
+        // filters of operations reading rows using a request body
+        assertThat(serializeMap(spec, "echo_numbers", Domain.singleValue(arrayType, arrayType.getObject(tags, 0)), column).toString())
+                .isEqualTo("{\"tags\":[\"a\",\"b\"]}");
     }
 
     @Test

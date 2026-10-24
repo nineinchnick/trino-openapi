@@ -17,6 +17,7 @@ package pl.net.was;
 import com.google.common.collect.ImmutableMap;
 import io.trino.Session;
 import io.trino.operator.OperatorStats;
+import io.trino.spi.type.ArrayType;
 import io.trino.sql.planner.plan.FilterNode;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
@@ -511,6 +512,15 @@ public class TestOpenApiQueries
         assertQuery(
                 "SELECT value FROM echo.default.echo_union_value WHERE value = '{\"number\":42}'",
                 "VALUES '{\"number\":42}'");
+    }
+
+    @Test
+    public void selectWithArrayInAllOfInRequestBody()
+    {
+        // the server returns the request body, so a JSON string sent instead of an array can't be read back
+        MaterializedResult result = getQueryRunner().execute("SELECT tags FROM echo.default.echo_numbers WHERE tags = ARRAY['a', 'b']");
+        assertThat(result.getTypes()).containsExactly(new ArrayType(VARCHAR));
+        assertThat(result.getOnlyColumnAsSet()).containsExactly(List.of("a", "b"));
     }
 
     @Test
