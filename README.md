@@ -717,6 +717,8 @@ paths:
 | `totalResultsPath`  | JSON pointer to the total number of results, a number or a string with a number                                                                     |
 | `totalPagesPath`    | JSON pointer to the total number of pages, a number or a string with a number                                                                       |
 | `hasMorePath`       | JSON pointer to a boolean that is `false` on the last page                                                                                          |
+| `cursorParam`       | Parameter with the cursor of the next page; enables [cursor pagination](#cursor-pagination)                                                         |
+| `nextCursorPath`    | JSON pointer to the cursor of the next page in the response; required with `cursorParam`                                                            |
 | `maxPages`          | Maximum number of pages to request                                                                                                                  |
 | `maxResults`        | Maximum number of results to read; pages past it are not requested                                                                                  |
 | `splitStrategy`     | How to read pages in separate splits, overriding the `split-strategy` catalog property                                                              |
@@ -808,6 +810,41 @@ Don't set it for a server that returns `apple`, `Banana`, `cherry`, sorting
 them ignoring case, because `ORDER BY login LIMIT 1` would return `apple`
 instead of `Banana`. Every operation declaring the field in `sortValues` must
 set `binaryOrder` for it.
+
+### Cursor pagination
+
+Some APIs return a cursor, or a token, with every page, and the request for the
+next page must send it. When `cursorParam` and `nextCursorPath` are set, and the
+query doesn't filter on the cursor parameter, the connector requests the first
+page without a cursor, and every next page with the cursor from the previous
+one, until one of these happens:
+
+* the next cursor is missing, `null`, or an empty string;
+* the next cursor was already sent, because some servers return the same cursor
+  with the last page, and requesting it again would never end;
+* the boolean value at `hasMorePath` is `false`;
+* the number of results reaches the value at `totalResultsPath`, or the number
+  of pages reaches the value at `totalPagesPath`;
+* `maxPages` pages were requested;
+* the number of results reaches `maxResults`, or the query's `LIMIT`, like with
+  page numbers.
+
+An empty page doesn't end cursor pagination, because some servers return empty
+pages with a cursor to the next one, for example when they filter results after
+reading them. A short page doesn't end it either, because only the cursor tells
+if more pages follow. A query that filters on the cursor parameter reads only
+the page of that cursor.
+
+```yaml
+x-trino:
+  cursorParam: "cursor"
+  nextCursorPath: "$response.body#/meta/next_cursor"
+  resultsPath: "$response.body#/data"
+```
+
+The cursor parameter must be a string or an integer, and it can be sent in the
+query, a header, a cookie, or the request body. A page is requested either by
+its number or by a cursor, so `cursorParam` can't be set with `pageParam`.
 
 ### Reading pages concurrently
 
@@ -1123,7 +1160,7 @@ how they're made.
   a single number, boolean, `DATE`, or `TIMESTAMP` column declared in
   `sortValues` that every response includes, or another column with
   `binaryOrder` set.
-* Only page number pagination is supported, not offset or cursor pagination
+* Only page number and cursor pagination are supported, not offset pagination
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another, unless a
   [split strategy](#reading-pages-concurrently) is set.

@@ -464,6 +464,12 @@ class TestOpenApiClientRequests
                     errorPath: $response.body#/message
             """);
 
+    private static final String CURSOR_SPEC = PAGED_SPEC
+            .replace(
+                    "- name: page\n          in: query\n          schema:\n            type: integer\n",
+                    "- name: cursor\n          in: query\n          schema:\n            type: string\n")
+            .replace("pageParam: page\n", "cursorParam: cursor\n        nextCursorPath: $response.body#/next\n");
+
     private static final String PAGED_PATH_PARAMETER_SPEC = PAGED_SPEC
             .replace("  /paged:\n", "  /{tenant}/paged:\n")
             .replace(
@@ -1350,6 +1356,53 @@ class TestOpenApiClientRequests
         assertThatThrownBy(() -> getRows(newConfig(DYNAMIC_KEYS_SPEC), "snippets", null))
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
                 .hasMessage("Response to GET %s/snippets contains a JSON STRING where an object was expected", baseUri);
+    }
+
+    @Test
+    void testCursorPagination()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"a b\"}"));
+        // an empty page with a cursor doesn't end pagination
+        responses.add(respond(200, "{\"results\":[],\"next\":\"c\"}"));
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":null}"));
+
+        assertThat(getRows(newConfig(CURSOR_SPEC), "paged", null))
+                .map(row -> String.valueOf(row.get(1)))
+                .containsExactly("1", "2");
+        assertThat(requestUris).containsExactly(URI.create("/paged"), URI.create("/paged?cursor=a%20b"), URI.create("/paged?cursor=c"));
+    }
+
+    @Test
+    void testEmptyCursorEndsPagination()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":\"\"}"));
+
+        assertThat(getRows(newConfig(CURSOR_SPEC), "paged", null)).hasSize(1);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testCursorFilterRequestsOnlyThatPage()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":2}],\"next\":\"c\"}"));
+
+        assertThat(getRows(newConfig(CURSOR_SPEC), "paged", "cursor", "b")).hasSize(1);
+        assertThat(requestUris).containsExactly(URI.create("/paged?cursor=b"));
+    }
+
+    @Test
+    void testCursorThatIsNotAScalarIsExternalError()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"results\":[{\"id\":1}],\"next\":{\"token\":\"internal-details\"}}"));
+
+        assertThatThrownBy(() -> getRows(newConfig(CURSOR_SPEC), "paged", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Value of nextCursorPath /next in the response to GET %s/paged is a JSON OBJECT, not a string or a whole number", baseUri)
+                .satisfies(e -> assertThat(getStackTraceAsString(e)).doesNotContain("internal-details"));
     }
 
     @Test

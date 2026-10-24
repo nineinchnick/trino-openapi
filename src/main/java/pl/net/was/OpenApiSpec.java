@@ -59,6 +59,7 @@ import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
+import io.trino.spi.type.VarcharType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -129,6 +130,8 @@ public class OpenApiSpec
     private static final String PAGINATION_LIMIT_PARAM = "limitParam";
     private static final String PAGINATION_TOTAL_PAGES_PATH = "totalPagesPath";
     private static final String PAGINATION_HAS_MORE_PATH = "hasMorePath";
+    private static final String PAGINATION_CURSOR_PARAM = "cursorParam";
+    private static final String PAGINATION_NEXT_CURSOR_PATH = "nextCursorPath";
     private static final String PAGINATION_MAX_PAGES = "maxPages";
     private static final String PAGINATION_MAX_RESULTS = "maxResults";
     private static final String PAGINATION_SPLIT_STRATEGY = "splitStrategy";
@@ -901,6 +904,8 @@ public class OpenApiSpec
         HttpPath httpPath = new HttpPath(method, path);
         Object rawExtension = op.getExtensions() == null ? null : op.getExtensions().get(SPEC_EXTENSION);
         List<OpenApiColumn> columns = setParameterDefaults(result, getParameterDefaults(rawExtension), httpPath, specExtension.get(PAGINATION_PAGE_PARAM));
+        // the legacy extension is Datadog's, which names nested fields of the request body, like body.page.cursor, in cursorParam
+        validateCursorParam(columns, getMapOfStrings(rawExtension), httpPath);
         Map<String, RangeFilter> rangeFilters = getRangeFilters(rawExtension);
         if (rangeFilters.isEmpty()) {
             return columns.stream();
@@ -910,6 +915,27 @@ public class OpenApiSpec
                 .map(column -> rangeFilters.containsKey(column.getSourceName()) && !isParameter(column)
                         ? OpenApiColumn.builderFrom(column).setRangeFilters(Map.of(httpPath, rangeFilters.get(column.getSourceName()))).build()
                         : column);
+    }
+
+    private static void validateCursorParam(List<OpenApiColumn> columns, Map<String, String> specExtension, HttpPath httpPath)
+    {
+        String cursorParam = specExtension.get(PAGINATION_CURSOR_PARAM);
+        if (cursorParam == null) {
+            return;
+        }
+        Optional<OpenApiColumn> cursorColumn = columns.stream()
+                .filter(column -> cursorParam.equals(column.getSourceName()))
+                .filter(column -> column.getRequiresPredicate().containsKey(httpPath) || column.getOptionalPredicate().containsKey(httpPath))
+                .findFirst();
+        checkArgument(cursorColumn.isPresent(), "Invalid value of %s of %s: %s, the operation has no such parameter", PAGINATION_CURSOR_PARAM, httpPath, cursorParam);
+        Type type = cursorColumn.get().getType();
+        checkArgument(
+                type instanceof VarcharType || type.equals(BIGINT) || type.equals(INTEGER),
+                "Invalid value of %s of %s: %s, the parameter must be a string or an integer, not %s",
+                PAGINATION_CURSOR_PARAM,
+                httpPath,
+                cursorParam,
+                type);
     }
 
     private static Optional<String> getParameterField(Parameter parameter, HttpPath httpPath)
@@ -1668,11 +1694,14 @@ public class OpenApiSpec
                         entry -> {
                             Object rawExtension = entry.getValue().getExtensions().get(SPEC_EXTENSION);
                             Map<String, String> specExtension = getMapOfStrings(rawExtension);
+                            validatePageParam(specExtension, new HttpPath(entry.getKey(), path));
                             return Pagination.builder()
                                     .setLimitParam(Optional.ofNullable(specExtension.get(PAGINATION_LIMIT_PARAM)))
                                     .setTotalResultsPath(responsePath(specExtension, PAGINATION_TOTAL_RESULTS_PATH))
                                     .setTotalPagesPath(responsePath(specExtension, PAGINATION_TOTAL_PAGES_PATH))
                                     .setHasMorePath(responsePath(specExtension, PAGINATION_HAS_MORE_PATH))
+                                    .setCursorParam(Optional.ofNullable(specExtension.get(PAGINATION_CURSOR_PARAM)))
+                                    .setNextCursorPath(responsePath(specExtension, PAGINATION_NEXT_CURSOR_PATH))
                                     .setMaxPages(getOptionalInt(rawExtension, PAGINATION_MAX_PAGES))
                                     .setMaxResults(getMaxResults(rawExtension))
                                     .setSorting(getSorting(specExtension, rawExtension))
@@ -1681,6 +1710,15 @@ public class OpenApiSpec
                                     .setProbeLimit(getProbeLimit(rawExtension))
                                     .build();
                         }));
+    }
+
+    private static void validatePageParam(Map<String, String> specExtension, HttpPath httpPath)
+    {
+        if (!specExtension.containsKey(PAGINATION_PAGE_PARAM)) {
+            return;
+        }
+        // a page is requested either by its number or by the cursor from the previous page
+        checkArgument(!specExtension.containsKey(PAGINATION_CURSOR_PARAM), "Invalid %s extension of %s: %s can't be used with %s", SPEC_EXTENSION, httpPath, PAGINATION_CURSOR_PARAM, PAGINATION_PAGE_PARAM);
     }
 
     private static OptionalInt getOptionalInt(Object specExtension, String extensionName)

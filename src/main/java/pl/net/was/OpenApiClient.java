@@ -89,6 +89,7 @@ import java.time.Clock;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -182,8 +183,9 @@ public class OpenApiClient
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table, selectPaths, column -> getFilter(column, table.getConstraint()));
         HttpPath httpPath = pathWithParams.getKey();
         Optional<OpenApiColumn> pageColumn = getUnfilteredPageColumn(table, httpPath);
+        Optional<OpenApiColumn> cursorColumn = getUnfilteredCursorColumn(table, httpPath);
         Predicate<List<?>> rowFilter = getRowFilter(table);
-        if (pageColumn.isEmpty()) {
+        if (pageColumn.isEmpty() && cursorColumn.isEmpty()) {
             return Streams.stream(makeRequest(table, httpPath, pathWithParams.getValue(), getParameterValues(table, httpPath), revalidateCachedResponses, getBodyGenerator(table, httpPath), getResponseHandler(table, httpPath, isNotFoundEmpty(httpPath, pathWithParams.getValue()))).rows())
                     .filter(rowFilter)
                     .toList();
@@ -193,6 +195,19 @@ public class OpenApiClient
         // without the sort parameters, the first rows are not the top ones, so all pages must be read
         OptionalLong queryLimit = table.getSortItem().isPresent() && sortedTable.isEmpty() ? OptionalLong.empty() : table.getLimit();
         Pagination pagination = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none());
+        if (cursorColumn.isPresent()) {
+            return cursorIterator(
+                    cursor -> getPage(
+                            cursor.map(value -> withCursor(pagedTable, cursorColumn.get(), value)).orElse(pagedTable),
+                            httpPath,
+                            pathWithParams.getValue(),
+                            cursor.isEmpty(),
+                            revalidateCachedResponses),
+                    queryLimit.orElse(Long.MAX_VALUE),
+                    pagination.maxResults().orElse(Long.MAX_VALUE),
+                    pagination.maxPages(),
+                    rowFilter);
+        }
         return pageIterator(
                 page -> getPage(withPage(pagedTable, pageColumn.get(), page), httpPath, pathWithParams.getValue(), page == 1, revalidateCachedResponses),
                 firstPage - 1,
@@ -393,6 +408,38 @@ public class OpenApiClient
         TupleDomain<ColumnHandle> pageConstraint = TupleDomain.fromFixedValues(Map.of(
                 pageColumn.getHandle(), NullableValue.of(pageColumn.getType(), page)));
         return table.cloneWithConstraint(table.getConstraint().isNone() ? pageConstraint : table.getConstraint().intersect(pageConstraint));
+    }
+
+    private Optional<OpenApiColumn> getUnfilteredCursorColumn(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        Optional<String> cursorParam = openApiSpec.getPaginations(table.getSchemaTableName()).getOrDefault(httpPath, Pagination.none()).cursorParam();
+        if (cursorParam.isEmpty()) {
+            return Optional.empty();
+        }
+        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(column -> cursorParam.get().equals(column.getSourceName()) && isPredicate(column, httpPath, null))
+                .findFirst()
+                .filter(column -> getFilter(column, table.getConstraint()) == null);
+    }
+
+    private static OpenApiTableHandle withCursor(OpenApiTableHandle table, OpenApiColumn cursorColumn, String cursor)
+    {
+        TupleDomain<ColumnHandle> cursorConstraint = TupleDomain.fromFixedValues(Map.of(
+                cursorColumn.getHandle(), NullableValue.of(cursorColumn.getType(), toNativeCursor(cursorColumn, cursor))));
+        return table.cloneWithConstraint(table.getConstraint().isNone() ? cursorConstraint : table.getConstraint().intersect(cursorConstraint));
+    }
+
+    private static Object toNativeCursor(OpenApiColumn cursorColumn, String cursor)
+    {
+        if (cursorColumn.getType() instanceof VarcharType) {
+            return utf8Slice(cursor);
+        }
+        Long value = Longs.tryParse(cursor);
+        if (value == null) {
+            // the cursor is not included, because it might contain sensitive information
+            throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("The next cursor is not a whole number, but parameter %s is an integer", cursorColumn.getSourceName()));
+        }
+        return value;
     }
 
     private static OpenApiTableHandle withLimit(OpenApiTableHandle table, OpenApiColumn limitColumn, long limit)
@@ -1192,7 +1239,7 @@ public class OpenApiClient
         return node;
     }
 
-    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults, OptionalLong totalPages, Optional<Boolean> hasMore)
+    private record ResultsPage(Iterable<List<?>> rows, OptionalLong totalResults, OptionalLong totalPages, Optional<Boolean> hasMore, Optional<String> nextCursor)
     {
         // servers can return fewer results than the declared page size, so a short page ends pagination only without these
         boolean hasLastPageSignal()
@@ -1229,14 +1276,14 @@ public class OpenApiClient
         public ResultsPage handle(Request request, Response response)
         {
             if (notFoundIsEmpty && response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
-                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
+                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty(), Optional.empty());
             }
             // like writes, reads can respond with other success codes, like 201 Created to a search sent as a POST
             if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
                 throw HttpRequestFailure.ErrorResponse.read(response);
             }
             if (response.getStatusCode() == HttpStatus.NO_CONTENT.code()) {
-                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
+                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty(), Optional.empty());
             }
             String result = readBody(response);
             log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
@@ -1257,7 +1304,8 @@ public class OpenApiClient
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
                     getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPath()),
                     getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPath()),
-                    getBoolean(jsonNode, pagination.hasMorePath()));
+                    getBoolean(jsonNode, pagination.hasMorePath()),
+                    getCursor(request, jsonNode, pagination.nextCursorPath()));
         }
 
         // some servers respond with status 200 and an error instead of the results
@@ -1300,6 +1348,22 @@ public class OpenApiClient
             }
             // the value is not included, because the response might contain sensitive information
             throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of %s %s in the response to %s is not a whole number", propertyName, pointer, describe(request)));
+        }
+
+        private static Optional<String> getCursor(Request request, JsonNode jsonNode, Optional<ResponsePath> path)
+        {
+            if (!(path.orElse(null) instanceof ResponsePath.Body(JsonPointer pointer))) {
+                return Optional.empty();
+            }
+            JsonNode valueNode = jsonNode.at(pointer);
+            if (valueNode.isMissingNode() || valueNode.isNull()) {
+                return Optional.empty();
+            }
+            if (!valueNode.isTextual() && !valueNode.isIntegralNumber()) {
+                throw new TrinoException(OPENAPI_INVALID_RESPONSE, format("Value of nextCursorPath %s in the response to %s is a JSON %s, not a string or a whole number", pointer, describe(request), valueNode.getNodeType()));
+            }
+            // servers can send an empty cursor with the last page, instead of leaving it out
+            return Optional.of(valueNode.asText()).filter(cursor -> !cursor.isEmpty());
         }
 
         private static Optional<Boolean> getBoolean(JsonNode jsonNode, Optional<ResponsePath> path)
@@ -1610,6 +1674,71 @@ public class OpenApiClient
                     isLastPage = true;
                 }
                 if (maxPages.isPresent() && page > maxPages.orElseThrow()) {
+                    isLastPage = true;
+                }
+                rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);
+            }
+        };
+    }
+
+    private Iterable<List<?>> cursorIterator(
+            Function<Optional<String>, ResultsPage> getter,
+            long rowLimit,
+            long maxResults,
+            OptionalInt maxPages,
+            Predicate<List<?>> rowFilter)
+    {
+        return () -> new Iterator<>()
+        {
+            // results are counted before the row filter, because that's what the server counts
+            long resultSize;
+            long resultLimit = maxResults;
+            long rowCount;
+            int pageCount;
+            Optional<String> cursor = Optional.empty();
+            // servers can return the same cursor again with the last page, and requesting it again would never end pagination
+            final Set<String> requestedCursors = new HashSet<>();
+            boolean isLastPage;
+            Iterator<List<?>> rows;
+
+            @Override
+            public boolean hasNext()
+            {
+                // empty pages don't end pagination, because servers can return them with a cursor to the next page,
+                // like when they filter results after reading them from their storage
+                while (rows == null || !rows.hasNext()) {
+                    if (isLastPage || resultSize >= resultLimit || rowCount >= rowLimit) {
+                        return false;
+                    }
+                    fetchPage();
+                }
+                return true;
+            }
+
+            @Override
+            public List<?> next()
+            {
+                rowCount += 1;
+                return rows.next();
+            }
+
+            private void fetchPage()
+            {
+                ResultsPage resultsPage = getter.apply(cursor);
+                pageCount += 1;
+                resultsPage.totalResults().ifPresent(totalResults -> resultLimit = min(resultLimit, totalResults));
+                resultSize += Iterables.size(resultsPage.rows());
+                cursor = resultsPage.nextCursor();
+                if (cursor.isEmpty() || !requestedCursors.add(cursor.get())) {
+                    isLastPage = true;
+                }
+                if (resultsPage.hasMore().isPresent() && !resultsPage.hasMore().get()) {
+                    isLastPage = true;
+                }
+                if (resultsPage.totalPages().isPresent() && pageCount >= resultsPage.totalPages().orElseThrow()) {
+                    isLastPage = true;
+                }
+                if (maxPages.isPresent() && pageCount >= maxPages.orElseThrow()) {
                     isLastPage = true;
                 }
                 rows = Iterators.filter(resultsPage.rows().iterator(), rowFilter::test);
