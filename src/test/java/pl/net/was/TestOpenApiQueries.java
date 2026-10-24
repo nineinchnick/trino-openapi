@@ -83,7 +83,6 @@ public class TestOpenApiQueries
         petStoreProperties.putAll(Map.of(
                 "spec-location", petStoreServer.getSpecUrl(),
                 "base-uri", petStoreServer.getApiUrl(),
-                "authentication.type", "oauth",
                 "authentication.scheme", "basic",
                 "authentication.username", "user",
                 "authentication.password", "user",

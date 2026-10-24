@@ -127,7 +127,7 @@ Trino version it's built for.
 | ------------------------------------ | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
 | `spec-location`                      | `OPENAPI_SPEC_LOCATION`             |           | URL or file path of the OpenAPI specification, in JSON or YAML                                                  |
 | `base-uri`                           | `OPENAPI_BASE_URI`                  |           | Base URL of the API, often including the API version                                                            |
-| `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, `api_key`, or `oauth`      |
+| `authentication.type`                | `OPENAPI_AUTH_TYPE`                 | `none`    | Authentication used when the specification doesn't declare security: `none`, `http`, or `api_key`              |
 | `authentication.scheme`              | `OPENAPI_AUTH_SCHEME`               | `basic`   | Scheme for the `http` type: `basic` or `bearer`                                                                 |
 | `authentication.username`            | `OPENAPI_USERNAME`                  |           | Username for `http` basic authentication and the OAuth `password` flow                                          |
 | `authentication.password`            | `OPENAPI_PASSWORD`                  |           | Password for `http` basic authentication and the OAuth `password` flow                                          |
@@ -175,7 +175,9 @@ missing properties, if there's none.
 
 Operations with `security: []`, or specs with an empty top-level `security`
 list, are called without credentials. If the specification doesn't declare any
-security requirements, the connector uses `authentication.type`.
+security requirements, the connector uses `authentication.type`. It can't be
+`oauth`, because OAuth needs the token URL and flows of an `oauth2` security
+scheme declared in the specification, so the catalog fails to start with it.
 
 The specification decides where and how credentials are sent: which operations
 get them, whether an API key goes in a header or the query string, and where

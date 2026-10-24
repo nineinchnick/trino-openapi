@@ -84,7 +84,7 @@ class TestOpenApiConfig
         Map<String, String> properties = ImmutableMap.<String, String>builder()
                 .put("spec-location", "/etc/trino/spec.yaml")
                 .put("base-uri", "https://api.example.com/v1")
-                .put("authentication.type", "OAUTH")
+                .put("authentication.type", "API_KEY")
                 .put("authentication.scheme", "BEARER")
                 .put("authentication.username", "user")
                 .put("authentication.password", "password")
@@ -111,7 +111,7 @@ class TestOpenApiConfig
         OpenApiConfig expected = new OpenApiConfig()
                 .setSpecLocation("/etc/trino/spec.yaml")
                 .setBaseUri(URI.create("https://api.example.com/v1"))
-                .setAuthenticationType(AuthenticationType.OAUTH)
+                .setAuthenticationType(AuthenticationType.API_KEY)
                 .setAuthenticationScheme(AuthenticationScheme.BEARER)
                 .setUsername("user")
                 .setPassword("password")
@@ -242,6 +242,17 @@ class TestOpenApiConfig
                 .setApiKeys("a=1,b=2")
                 .isApiKeysValid())
                 .isFalse();
+    }
+
+    @Test
+    void testOAuthAuthenticationType()
+    {
+        assertThatThrownBy(() -> buildConfig(ImmutableMap.<String, String>builder()
+                .putAll(REQUIRED_PROPERTIES)
+                .put("authentication.type", "oauth")
+                .buildOrThrow()))
+                .isInstanceOf(ConfigurationException.class)
+                .hasMessageContaining("authentication.type cannot be oauth, because OAuth needs the token URL and flows of an oauth2 security scheme declared in the specification");
     }
 
     @Test
