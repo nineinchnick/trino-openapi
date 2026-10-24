@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -30,6 +31,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.nullToEmpty;
 import static io.airlift.units.Duration.succinctNanos;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -155,11 +157,24 @@ final class RetryPolicy
 
     private static boolean isNetworkError(Throwable throwable)
     {
+        List<Throwable> causes = Throwables.getCausalChain(throwable);
+        // a response over the maximum length would be just as long when it's requested again
+        if (causes.stream().anyMatch(RetryPolicy::isOverMaxLength)) {
+            return false;
+        }
         // an unknown host or an untrusted certificate is a configuration issue, and retrying it would only delay the failure
-        return Throwables.getCausalChain(throwable).stream()
+        return causes.stream()
                 .anyMatch(cause -> cause instanceof TimeoutException || (cause instanceof IOException
                         && !(cause instanceof UnknownHostException)
                         && !(cause instanceof SSLHandshakeException)));
+    }
+
+    // the Airlift HTTP client fails a body over its own limit with a plain IOException, without a more specific type,
+    // so it can only be told apart by its message
+    private static boolean isOverMaxLength(Throwable throwable)
+    {
+        return throwable instanceof ResponseTooLargeException
+                || (throwable instanceof IOException && nullToEmpty(throwable.getMessage()).contains("exceeded maximum length"));
     }
 
     private static Optional<Duration> getRetryAfter(HttpRequestFailure failure)
