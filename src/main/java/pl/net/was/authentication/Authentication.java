@@ -65,6 +65,8 @@ import static pl.net.was.authentication.ClientAuthenticationMethod.CLIENT_SECRET
 public class Authentication
         implements HttpRequestFilter
 {
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final Map<String, Map<PathItem.HttpMethod, List<SecurityRequirement>>> pathSecurityRequirements;
     private final Map<String, SecurityScheme> securitySchemas;
     private final List<SecurityRequirement> securityRequirements;
@@ -121,6 +123,32 @@ public class Authentication
         Request.Builder builder = withoutPathHeader(request);
         applyCredentials(builder, request, getCredentials(request));
         return builder.build();
+    }
+
+    /**
+     * Gets new tokens for the OAuth credentials of the request, if the authenticated request was sent with any of them.
+     * Returns true if the authenticated request should be sent again with the new tokens.
+     */
+    public boolean refreshRejectedTokens(Request request, Request authenticatedRequest)
+    {
+        List<String> sentTokens = authenticatedRequest.getHeaders().get(AUTHORIZATION).stream()
+                .filter(value -> value.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length()))
+                .map(value -> value.substring(BEARER_PREFIX.length()))
+                .toList();
+        boolean refreshed = false;
+        for (Credential credential : getCredentials(request)) {
+            if (!(credential instanceof OAuthCredential(TokenRequest tokenRequest))) {
+                continue;
+            }
+            BearerTokenProvider tokenProvider = tokenProviders.get(tokenRequest);
+            if (tokenProvider == null) {
+                continue;
+            }
+            for (String token : sentTokens) {
+                refreshed |= tokenProvider.refreshToken(token);
+            }
+        }
+        return refreshed;
     }
 
     private List<Credential> getCredentials(Request request)
@@ -362,7 +390,7 @@ public class Authentication
     private Request.Builder applyOAuth(Request.Builder builder, TokenRequest tokenRequest)
     {
         String token = tokenProviders.computeIfAbsent(tokenRequest, this::createTokenProvider).getToken();
-        return builder.addHeader(AUTHORIZATION, "Bearer " + token);
+        return builder.addHeader(AUTHORIZATION, BEARER_PREFIX + token);
     }
 
     private static String getAuthHeader(String scheme, String username, String password)

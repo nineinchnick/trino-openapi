@@ -183,8 +183,11 @@ uses them for every operation, with credentials from the catalog properties:
   are set, otherwise the `clientCredentials` flow, using
   `authentication.client-id` and `authentication.client-secret`. The token is
   requested with the scopes the security requirement lists, and reused for
-  operations requiring the same scopes until shortly before it expires. The
-  `authorizationCode` and `implicit` flows are not supported.
+  operations requiring the same scopes until shortly before it expires. When
+  the API rejects a token with `401 Unauthorized` and a `Bearer` challenge in
+  `WWW-Authenticate`, the connector gets a new token and sends the request once
+  more, which doesn't count as a retry. The `authorizationCode` and `implicit`
+  flows are not supported.
 
 The client ID and secret are sent in the body of the token request, as
 `client_id` and `client_secret`. Set `authentication.client-auth-method` to
@@ -1114,10 +1117,7 @@ how they're made.
   are mapped to `VARCHAR` holding JSON, with quoted strings
   ([#52](https://github.com/nineinchnick/trino-openapi/issues/52)).
 * Timestamps are always `TIMESTAMP(3)`.
-* An OAuth token rejected by the server is not refreshed before it expires, and
-  the OAuth flow can't be chosen explicitly
-  ([#248](https://github.com/nineinchnick/trino-openapi/issues/248),
-  [#10](https://github.com/nineinchnick/trino-openapi/issues/10)).
+* The OAuth flow can't be chosen explicitly.
 * Pagination metadata, like totals, is mapped to visible columns
   ([#137](https://github.com/nineinchnick/trino-openapi/issues/137)).
 

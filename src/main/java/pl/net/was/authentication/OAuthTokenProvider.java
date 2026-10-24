@@ -29,7 +29,7 @@ import static java.util.Objects.requireNonNull;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 
 /**
- * Gets access tokens by sending the same request to a token endpoint, and reuses them until shortly before they expire.
+ * Gets access tokens by sending the same request to a token endpoint, and reuses them until shortly before they expire, or until the API rejects them.
  */
 final class OAuthTokenProvider
         implements BearerTokenProvider
@@ -66,6 +66,26 @@ final class OAuthTokenProvider
             token = fetchToken();
             cachedToken = token;
             return token.token();
+        }
+    }
+
+    @Override
+    public boolean refreshToken(String rejectedToken)
+    {
+        requireNonNull(rejectedToken, "rejectedToken is null");
+        synchronized (refreshLock) {
+            TokenWithExpiry current = cachedToken;
+            // another request, rejected at the same time, already got a new token
+            if (current != null && !current.token().equals(rejectedToken) && !current.isExpiringSoon()) {
+                return true;
+            }
+            TokenWithExpiry refreshed = fetchToken();
+            if (refreshed.token().equals(rejectedToken)) {
+                cachedToken = null;
+                return false;
+            }
+            cachedToken = refreshed;
+            return true;
         }
     }
 
