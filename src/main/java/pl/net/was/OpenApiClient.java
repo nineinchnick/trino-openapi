@@ -1341,7 +1341,7 @@ public class OpenApiClient
             int rowIdField = -1;
             for (OpenApiColumn column : columns) {
                 if (column.getName().equals(ROW_ID)) {
-                    // TODO this is dangerous, make it configurable and required?
+                    // the row ID holds values of other columns, which are read later
                     rowIdField = recordBuilder.size();
                     recordBuilder.add(null);
                     continue;
