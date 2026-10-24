@@ -498,6 +498,7 @@ def list_clamped_sized_items(page: int = 1, size: int = 3) -> Results:
 
 
 @router.get("/capped_items")
+@router.get("/exclusive_capped_items")
 def list_capped_items(page: int = 1, size: int = 1) -> Results:
     # return at most one item per page, even when asked for more
     size = min(size, 1)
@@ -1193,6 +1194,10 @@ def custom_openapi():
     }
     capped_size = next(parameter for parameter in openapi_schema["paths"]["/capped_items"]["get"]["parameters"] if parameter["name"] == "size")
     capped_size["schema"]["maximum"] = 1
+    # OpenAPI 3.1 declares exclusive bounds as numbers, like Pydantic does for the lt constraint
+    openapi_schema["paths"]["/exclusive_capped_items"]["get"]["x-trino"] = openapi_schema["paths"]["/capped_items"]["get"]["x-trino"]
+    exclusive_capped_size = next(parameter for parameter in openapi_schema["paths"]["/exclusive_capped_items"]["get"]["parameters"] if parameter["name"] == "size")
+    exclusive_capped_size["schema"]["exclusiveMaximum"] = 2
     openapi_schema["paths"]["/has_more_items"]["get"]["x-trino"] = {
         "pageParam": "page",
         "resultsPath": "$response.body#/results",

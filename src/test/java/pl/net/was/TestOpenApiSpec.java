@@ -3236,6 +3236,56 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testParameterDefaultsWithExclusiveBounds()
+    {
+        String bounds31 = "exclusiveMinimum: 0, exclusiveMaximum: 101";
+        String bounds30 = "minimum: 0, exclusiveMinimum: true, maximum: 101, exclusiveMaximum: true";
+        for (String version : List.of("3.1.0", "3.0.3")) {
+            String bounds = version.equals("3.1.0") ? bounds31 : bounds30;
+            Assertions.assertThat(parseSpec(exclusiveBoundsSpec(version, bounds, 100)).getTables().get("items"))
+                    .filteredOn(column -> column.getName().equals("per_page"))
+                    .extracting(OpenApiColumn::getParameterDefaults)
+                    .containsExactly(Map.of(new HttpPath(PathItem.HttpMethod.GET, "/items"), 100L));
+            Assertions.assertThatThrownBy(() -> parseSpec(exclusiveBoundsSpec(version, bounds, 101)))
+                    .hasMessage("Invalid value of parameterDefaults: 101 for parameter per_page of GET /items is not less than its exclusive maximum 101");
+            Assertions.assertThatThrownBy(() -> parseSpec(exclusiveBoundsSpec(version, bounds, 0)))
+                    .hasMessage("Invalid value of parameterDefaults: 0 for parameter per_page of GET /items is not greater than its exclusive minimum 0");
+        }
+    }
+
+    private static String exclusiveBoundsSpec(String version, String bounds, int perPage)
+    {
+        return """
+               openapi: %s
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /items:
+                   get:
+                     parameters:
+                     - in: query
+                       name: per_page
+                       schema: {type: integer, %s}
+                     x-trino:
+                       parameterDefaults:
+                         per_page: %d
+                     responses:
+                       "200":
+                         description: Items
+                         content:
+                           application/json:
+                             schema:
+                               type: array
+                               items:
+                                 type: object
+                                 properties:
+                                   name:
+                                     type: string
+               """.formatted(version, bounds, perPage);
+    }
+
+    @Test
     public void testParameterFieldExtension()
     {
         String specContents =

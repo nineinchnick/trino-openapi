@@ -1015,11 +1015,12 @@ one of these happens:
 * a page has fewer results than the page size, when `limitParam` is set and its
   value is known, either from a query filter, from
   [`parameterDefaults`](#parameter-defaults), or from the parameter's default in
-  the spec. The page size is limited by the parameter's `maximum`, if declared,
-  because servers often return fewer results than requested when the number is
-  too high. Servers can also return fewer results than the declared page size,
-  so a short page ends pagination only when the response has no value at
-  `totalResultsPath`, `totalPagesPath`, or `hasMorePath`.
+  the spec. The page size is limited by the parameter's `maximum`, or
+  `exclusiveMaximum`, if declared, because servers often return fewer results
+  than requested when the number is too high. Servers can also return fewer
+  results than the declared page size, so a short page ends pagination only
+  when the response has no value at `totalResultsPath`, `totalPagesPath`, or
+  `hasMorePath`.
 
 Pagination never guesses from page contents. If none of these apply, for
 example when the server returns the last page for every page number past it and
@@ -1329,8 +1330,9 @@ SELECT number, title, state FROM github.default.repos_pulls WHERE owner = 'trino
 
 * The parameters must be optional query, header, or cookie parameters of the
   same operation, but not `pageParam`. Their schemas must be strings, integers,
-  or booleans, and the values must match their type, `enum`, `minimum`, and
-  `maximum`. Loading the spec fails otherwise.
+  or booleans, and the values must match their type, `enum`, `minimum`,
+  `maximum`, `exclusiveMinimum`, and `exclusiveMaximum`. Loading the spec fails
+  otherwise.
 * A filter on the parameter is sent instead of the default, including every
   value of an `IN` list and values of dynamic filters, and so is a bound of a
   [range filter](#range-filters). `ORDER BY` with `LIMIT` sends the sort
