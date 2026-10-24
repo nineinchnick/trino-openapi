@@ -4440,6 +4440,46 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testResultsPathToScalar()
+    {
+        Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec("type: string")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array or an object");
+        Assertions.assertThatThrownBy(() -> parseSpec(resultsPathSpec(
+                        """
+                        type: integer
+                        nullable: true
+                        """)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid value of resultsPath of GET /items: $response.body#/data/results, it must point to an array or an object");
+    }
+
+    @Test
+    public void testResultsPathToArrayOrObject()
+    {
+        Assertions.assertThat(parseSpec(resultsPathSpec(
+                        """
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                        """)).getTables().get("items"))
+                .extracting(OpenApiColumn::getName)
+                .contains("name");
+        Assertions.assertThat(parseSpec(resultsPathSpec(
+                        """
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                        """)).getTables().get("items"))
+                .extracting(OpenApiColumn::getName)
+                .contains("name");
+    }
+
+    @Test
     public void testNestedObjectUnions()
             throws JsonProcessingException
     {

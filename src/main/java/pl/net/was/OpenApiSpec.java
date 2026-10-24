@@ -1140,6 +1140,9 @@ public class OpenApiSpec
 
     private Schema<?> getResultsSchema(HttpPath httpPath, String resultsPath, Schema<?> schema, JsonPointer resultsPointer)
     {
+        if (resultsPointer.equals(JsonPointer.empty())) {
+            return schema;
+        }
         while (resultsPointer != JsonPointer.empty()) {
             if (resultsPointer.getMatchingIndex() != -1) {
                 // skip over arrays
@@ -1149,10 +1152,21 @@ public class OpenApiSpec
             String name = resultsPointer.getMatchingProperty();
             schema = getAlternativesProperties(schema).get(name);
             checkArgument(schema != null, "Invalid value of %s of %s: %s, the response has no field %s", PAGINATION_RESULTS_PATH, httpPath, resultsPath, name);
-            // TODO validate that the schema is an array?
             resultsPointer = resultsPointer.tail();
         }
+        // a scalar would only fail when reading the response, so it fails when loading the spec instead
+        checkArgument(canProduceRows(schema), "Invalid value of %s of %s: %s, it must point to an array or an object", PAGINATION_RESULTS_PATH, httpPath, resultsPath);
         return schema;
+    }
+
+    private static boolean canProduceRows(Schema<?> schema)
+    {
+        if (isArray(schema)) {
+            return true;
+        }
+        String type = getTypeName(schema);
+        // schemas without a type, like unions, can still describe objects
+        return type == null || type.equals("object");
     }
 
     private Map<String, Schema> getAlternativesProperties(Schema<?> schema)
