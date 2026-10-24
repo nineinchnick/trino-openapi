@@ -2960,6 +2960,182 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testParameterFieldExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /pets:
+                    get:
+                      parameters:
+                      - in: query
+                        name: status
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Pets
+                          content:
+                            application/json:
+                              schema:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Pet"
+                  /pets/{petId}:
+                    get:
+                      parameters:
+                      - in: path
+                        name: petId
+                        required: true
+                        schema:
+                          type: integer
+                        x-trino:
+                          field: id
+                      responses:
+                        "200":
+                          description: Pet
+                          content:
+                            application/json:
+                              schema:
+                                $ref: "#/components/schemas/Pet"
+                    delete:
+                      parameters:
+                      - in: path
+                        name: petId
+                        required: true
+                        schema:
+                          type: integer
+                        x-trino:
+                          field: id
+                      responses:
+                        "204":
+                          description: Deleted
+                components:
+                  schemas:
+                    Pet:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        HttpPath getPet = new HttpPath(PathItem.HttpMethod.GET, "/pets/{petId}");
+        HttpPath deletePet = new HttpPath(PathItem.HttpMethod.DELETE, "/pets/{petId}");
+        List<OpenApiColumn> columns = spec.getTables().get("pets");
+        Assertions.assertThat(columns)
+                .extracting(OpenApiColumn::getName)
+                .containsExactly(ROW_ID, "id", "name", "status");
+        OpenApiColumn idColumn = columns.stream()
+                .filter(column -> column.getName().equals("id"))
+                .collect(onlyElement());
+        Assertions.assertThat(idColumn.getType()).isEqualTo(BIGINT);
+        Assertions.assertThat(idColumn.isRequestOnly()).isFalse();
+        Assertions.assertThat(idColumn.getRequiresPredicate()).containsOnly(
+                Map.entry(getPet, ParameterLocation.PATH),
+                Map.entry(deletePet, ParameterLocation.PATH));
+        Assertions.assertThat(idColumn.getParameterName(getPet)).isEqualTo("petId");
+        Assertions.assertThat(idColumn.getParameterName(deletePet)).isEqualTo("petId");
+
+        // a link declared in the parameters of the path applies to all of its operations
+        String pathParametersSpec = specContents
+                .replace(
+                        """
+                            delete:
+                              parameters:
+                              - in: path
+                                name: petId
+                                required: true
+                                schema:
+                                  type: integer
+                                x-trino:
+                                  field: id
+                        """,
+                        """
+                            delete:
+                        """)
+                .replace(
+                        """
+                          /pets/{petId}:
+                            get:
+                              parameters:
+                        """,
+                        """
+                          /pets/{petId}:
+                            parameters:
+                        """)
+                .replace(
+                        """
+                                  field: id
+                              responses:
+                                "200":
+                                  description: Pet
+                        """,
+                        """
+                                  field: id
+                            get:
+                              responses:
+                                "200":
+                                  description: Pet
+                        """);
+        Assertions.assertThat(parseSpec(pathParametersSpec).getTables().get("pets"))
+                .filteredOn(column -> column.getName().equals("id"))
+                .extracting(OpenApiColumn::getRequiresPredicate)
+                .containsExactly(Map.of(getPet, ParameterLocation.PATH, deletePet, ParameterLocation.PATH));
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("field: id", "field: pet_id")))
+                .hasMessage("Invalid value of field in the x-trino extension of parameter petId of GET /pets/{petId}: pet_id is not a response field of table pets");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                id:
+                                  type: integer
+                        """,
+                        """
+                                id:
+                                  type: string
+                        """)))
+                .hasMessage("Invalid value of field in the x-trino extension of parameter petId of DELETE /pets/{petId}: the parameter has type bigint, but field id has type varchar");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                x-trino:
+                                  field: id
+                              responses:
+                                "204":
+                        """,
+                        """
+                              responses:
+                                "204":
+                        """)))
+                .hasMessage("Parameter petId of GET /pets/{petId} is linked to field id in the x-trino extension, but not in DELETE /pets/{petId}, so set the same field in all operations of the path, or in the parameters of the path");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                name: status
+                                schema:
+                                  type: string
+                        """,
+                        """
+                                name: status
+                                schema:
+                                  type: string
+                                x-trino:
+                                  field: name
+                        """)))
+                .hasMessage("Invalid value of field in the x-trino extension of parameter status of GET /pets: only path parameters can be linked to a response field");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("field: id", "fields: id")))
+                .hasMessage("Invalid property of the x-trino extension of parameter petId of GET /pets/{petId}: fields, must be: field");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("field: id", "field: ''")))
+                .hasMessage("Invalid value of field in the x-trino extension of parameter petId of GET /pets/{petId}: expected the name of a response field");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("x-trino:\n          field: id", "x-trino: id")))
+                .hasMessage("Invalid value of the x-trino extension of parameter petId of GET /pets/{petId}: expected an object");
+    }
+
+    @Test
     public void testRateLimitExtension()
     {
         String specContents =
