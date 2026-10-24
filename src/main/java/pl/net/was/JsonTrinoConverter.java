@@ -260,7 +260,7 @@ public class JsonTrinoConverter
 
     private static void writeRow(BlockBuilder blockBuilder, JsonNode node, RowType rowType, Schema<?> schemaType)
     {
-        if (node == null) {
+        if (node == null || node instanceof NullNode) {
             blockBuilder.appendNull();
             return;
         }
