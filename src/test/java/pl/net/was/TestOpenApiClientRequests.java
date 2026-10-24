@@ -120,7 +120,13 @@ class TestOpenApiClientRequests
                   x-trino:
                     sqlOperation: select
             %s
-            """.formatted(OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES);
+              /created:
+                post:
+                  operationId: createItems
+                  x-trino:
+                    sqlOperation: [select, insert]
+            %s
+            """.formatted(OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES, OK_RESPONSES);
 
     // like GitHub, which sends the reset time with every response, including ones that fail because of missing permissions
     private static final String RATE_LIMITED_SPEC = SPEC.replace("paths:\n",
@@ -386,13 +392,26 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testRetriesPostReads()
+            throws IOException
+    {
+        responses.add(respond(502, ""));
+        responses.add(respond(503, ""));
+        responses.add(respond(200, "[{\"id\":1}]"));
+
+        assertThat(getRows(newConfig(), "search", null)).hasSize(1);
+        assertThat(requestCount).hasValue(3);
+    }
+
+    @Test
     void testDoesNotRetryNonIdempotentRequests()
             throws IOException
     {
         responses.add(respond(502, ""));
 
-        assertThatThrownBy(() -> getRows(newConfig(), "search", null))
-                .hasMessage("Request POST %s/search for operation searchItems failed with HTTP 502", baseUri);
+        // the same operation also inserts rows, so repeating it can create duplicates
+        assertThatThrownBy(() -> getRows(newConfig(), "created", null))
+                .hasMessage("Request POST %s/created for operation createItems failed with HTTP 502", baseUri);
         assertThat(requestCount).hasValue(1);
 
         requestCount.set(0);
@@ -402,6 +421,22 @@ class TestOpenApiClientRequests
         assertThatThrownBy(() -> getRows(newConfig(), "patched", null))
                 .hasMessage("Request PATCH %s/patched for operation patchItems failed with HTTP 502", baseUri);
         assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testRetriesTooManyRequestsForAnyMethod()
+            throws IOException
+    {
+        responses.add(respond(429, ""));
+
+        assertThat(getRows(newConfig(), "created", null)).isEmpty();
+        assertThat(requestCount).hasValue(2);
+
+        requestCount.set(0);
+        responses.add(respond(429, ""));
+
+        assertThat(getRows(newConfig(), "patched", null)).isEmpty();
+        assertThat(requestCount).hasValue(2);
     }
 
     @Test

@@ -225,11 +225,13 @@ connection, or a response with one of these HTTP status codes:
   rate limit is exhausted, as declared in the spec, which some APIs, like
   GitHub, use for exceeded rate limits.
 
-Only requests that have the same effect when they're repeated are retried:
-`GET`, `HEAD`, `OPTIONS`, `PUT`, and `DELETE`. Requests using `POST`, like
-`INSERT` statements and searches, and `PATCH`, like most `UPDATE` statements,
-are never retried, because repeating them can create duplicates or apply a
-change twice.
+Requests that have the same effect when they're repeated are retried after any
+transient error: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, and `POST`
+operations used only for `SELECT`, like searches. Other requests using `POST`,
+like `INSERT` statements, and `PATCH`, like most `UPDATE` statements, are
+retried only after `429 Too Many Requests`, which means that the server didn't
+process them. After other errors, repeating them can create duplicates or apply
+a change twice.
 
 The delay before a retry starts at `retry-initial-delay` and doubles after
 every retry, up to `retry-max-delay`. The connector waits a random time between
@@ -965,10 +967,11 @@ how they're made.
   ([#96](https://github.com/nineinchnick/trino-openapi/issues/96)). Pages are
   requested one after another, unless a
   [split strategy](#reading-pages-concurrently) is set.
-* `POST` and `PATCH` requests are never [retried](#retries), because repeating
-  them can create duplicates or apply a change twice, so a temporary error in an
-  `INSERT`, an `UPDATE` that uses `PATCH`, or a search that uses `POST`, fails
-  the query.
+* `POST` and `PATCH` requests, other than `POST` operations used only for
+  `SELECT`, are [retried](#retries) only after `429 Too Many Requests`, because
+  repeating them can create duplicates or apply a change twice, so another
+  temporary error in an `INSERT`, or an `UPDATE` that uses `PATCH`, fails the
+  query.
 * Only JSON request and response bodies are supported, not form-encoded or
   multipart bodies ([#250](https://github.com/nineinchnick/trino-openapi/issues/250)).
 * Responses that are arrays of plain values

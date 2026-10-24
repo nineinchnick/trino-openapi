@@ -645,6 +645,7 @@ public class OpenApiClient
         log.debug(request.toString());
         return retryPolicy.execute(
                 request,
+                isRead(table, httpPath),
                 () -> {
                     // retries are requests too, and servers count them against their rate limits
                     if (rateLimiter != null) {
@@ -653,6 +654,15 @@ public class OpenApiClient
                     return httpClient.execute(request, responseHandler);
                 },
                 (failure, attempts, notRetriedReason) -> toTrinoException(table, httpPath, request, failure, attempts, notRetriedReason));
+    }
+
+    // an operation that is used only by SELECT doesn't change anything, so repeating it is safe, even if it uses POST
+    private static boolean isRead(OpenApiTableHandle table, HttpPath httpPath)
+    {
+        return table.getSelectPaths().contains(httpPath)
+                && !table.getInsertPaths().contains(httpPath)
+                && !table.getUpdatePaths().contains(httpPath)
+                && !table.getDeletePaths().contains(httpPath);
     }
 
     private TrinoException toTrinoException(OpenApiTableHandle table, HttpPath httpPath, Request request, HttpRequestFailure failure, int attempts, Optional<String> notRetriedReason)
