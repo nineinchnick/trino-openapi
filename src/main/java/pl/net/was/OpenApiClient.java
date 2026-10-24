@@ -623,9 +623,12 @@ public class OpenApiClient
                 // the HTTP client would send custom headers, like API keys, to any host a server redirects to
                 .setFollowRedirects(false)
                 .addHeader(USER_AGENT, USER_AGENT_VALUE)
-                .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                 .addHeader(ACCEPT, JSON_UTF_8.toString())
                 .addHeader(OPENAPI_PATH_HEADER, httpPath.path());
+        // some gateways and firewalls reject requests without a body that declare its type
+        if (bodyGenerator != null) {
+            builder.addHeader(CONTENT_TYPE, JSON_UTF_8.toString());
+        }
         getFilterColumnValues(table, httpPath, ParameterLocation.HEADER, valueProvider)
                 .forEach((column, value) -> builder.addHeader(
                         HeaderName.of(column.getSourceName()),

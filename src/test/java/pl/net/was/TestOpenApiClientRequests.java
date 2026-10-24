@@ -15,6 +15,7 @@ package pl.net.was;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
@@ -266,6 +267,7 @@ class TestOpenApiClientRequests
 
     private final Queue<HttpHandler> responses = new ConcurrentLinkedQueue<>();
     private final Queue<URI> requestUris = new ConcurrentLinkedQueue<>();
+    private final Queue<Headers> requestHeaders = new ConcurrentLinkedQueue<>();
     private final AtomicInteger requestCount = new AtomicInteger();
     private HttpServer server;
     private HttpClient httpClient;
@@ -282,6 +284,7 @@ class TestOpenApiClientRequests
         server.createContext("/", exchange -> {
             requestCount.incrementAndGet();
             requestUris.add(exchange.getRequestURI());
+            requestHeaders.add(exchange.getRequestHeaders());
             HttpHandler handler = responses.poll();
             if (handler == null) {
                 handler = respond(200, "[]");
@@ -305,6 +308,7 @@ class TestOpenApiClientRequests
     {
         responses.clear();
         requestUris.clear();
+        requestHeaders.clear();
         requestCount.set(0);
     }
 
@@ -350,6 +354,19 @@ class TestOpenApiClientRequests
                 .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(INVALID_ROW_FILTER.toErrorCode()))
                 .hasMessage("Path parameter tenant can't be empty");
         assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void testSendsContentTypeOnlyWithBody()
+            throws IOException
+    {
+        assertThat(getRows(newConfig(), "items", null)).isEmpty();
+        assertThat(getRows(newConfig(), "search", null)).isEmpty();
+        responses.add(respond(204, ""));
+        deleteRow(newConfig(DELETE_SPEC), "1");
+        assertThat(requestHeaders)
+                .map(headers -> headers.getFirst("Content-Type"))
+                .containsExactly(null, "application/json; charset=utf-8", null);
     }
 
     @Test
