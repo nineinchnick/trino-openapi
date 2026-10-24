@@ -171,7 +171,7 @@ public class TestOpenApiQueries
                 "VALUES 'default', 'information_schema'");
         assertQuery(
                 "SHOW TABLES FROM petstore.default",
-                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_inventory', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
+                "VALUES 'pet_find_by_status', 'pet_find_by_tags', 'store_order', 'pet', 'user', 'user_create_with_list', 'user_login', 'pet_upload_image'");
     }
 
     @Test
@@ -182,7 +182,6 @@ public class TestOpenApiQueries
                 .isEqualTo(computeActual("SELECT table_schema, column_name FROM petstore.information_schema.columns WHERE table_schema = 'default' AND table_name = 'store_order'"));
         assertThat(computeActual("SELECT DISTINCT table_schema FROM petstore.information_schema.columns WHERE table_name = 'store_order'").getOnlyColumnAsSet())
                 .containsExactly("default");
-        // all petstore tables except store_inventory, which has no columns
         assertQuery(
                 "SELECT count(DISTINCT table_name) FROM petstore.information_schema.columns WHERE table_schema = 'default'",
                 "VALUES 8");
@@ -197,7 +196,7 @@ public class TestOpenApiQueries
                 "VALUES 'default', 'information_schema'");
         assertQuery(
                 "SELECT table_name, table_type FROM petstore.information_schema.tables WHERE table_schema = 'default'",
-                "VALUES ('pet_find_by_status', 'BASE TABLE'), ('pet_find_by_tags', 'BASE TABLE'), ('store_inventory', 'BASE TABLE'), ('store_order', 'BASE TABLE'), ('pet', 'BASE TABLE'), " +
+                "VALUES ('pet_find_by_status', 'BASE TABLE'), ('pet_find_by_tags', 'BASE TABLE'), ('store_order', 'BASE TABLE'), ('pet', 'BASE TABLE'), " +
                         "('user', 'BASE TABLE'), ('user_create_with_list', 'BASE TABLE'), ('user_login', 'BASE TABLE'), ('pet_upload_image', 'BASE TABLE')");
     }
 

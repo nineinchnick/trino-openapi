@@ -276,8 +276,11 @@ public class OpenApiSpec
                         handles.put(tableName, tableHandle(tableName, tablePaths));
                     });
         }
-        this.handles = handles.buildOrThrow();
-        Map<String, List<OpenApiColumn>> mergedTables = tables.buildOrThrow();
+        Map<String, OpenApiTableHandle> allHandles = handles.buildOrThrow();
+        Map<String, List<OpenApiColumn>> mergedTables = withoutEmptyTables(tables.buildOrThrow(), allHandles);
+        this.handles = allHandles.entrySet().stream()
+                .filter(entry -> mergedTables.containsKey(entry.getKey()))
+                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
         mergedTables.forEach(OpenApiSpec::validateParameterFields);
         this.tables = mergedTables.entrySet().stream()
                 .collect(toImmutableMap(Map.Entry::getKey, entry -> addRowIdColumn(
@@ -317,6 +320,25 @@ public class OpenApiSpec
                 .map(Components::getSecuritySchemes)
                 .orElse(ImmutableMap.of());
         this.securityRequirements = openApi.getSecurity();
+    }
+
+    private static Map<String, List<OpenApiColumn>> withoutEmptyTables(Map<String, List<OpenApiColumn>> tables, Map<String, OpenApiTableHandle> handles)
+    {
+        // such tables can't be queried, and listing them only makes SELECT fail
+        tables.forEach((tableName, columns) -> {
+            if (!columns.isEmpty()) {
+                return;
+            }
+            OpenApiTableHandle handle = handles.get(tableName);
+            List<HttpPath> paths = Stream.of(handle.getSelectPaths(), handle.getInsertPaths(), handle.getUpdatePaths(), handle.getDeletePaths())
+                    .flatMap(List::stream)
+                    .distinct()
+                    .toList();
+            log.debug("Ignoring table %s of %s, because none of their responses, parameters, or request bodies can be mapped to columns", tableName, pathsToString(paths));
+        });
+        return tables.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
+                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private static Map<String, String> getDocumentExtension(OpenAPI openApi)
