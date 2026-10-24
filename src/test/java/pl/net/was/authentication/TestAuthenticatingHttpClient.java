@@ -14,9 +14,11 @@
 package pl.net.was.authentication;
 
 import com.google.common.collect.ImmutableListMultimap;
+import com.sun.net.httpserver.HttpServer;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
 import io.airlift.http.client.StringResponseHandler.StringResponse;
+import io.airlift.http.client.jetty.JettyHttpClient;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.airlift.http.client.testing.TestingResponse;
 import io.airlift.units.DataSize;
@@ -25,10 +27,13 @@ import org.junit.jupiter.api.io.TempDir;
 import pl.net.was.OpenApiConfig;
 import pl.net.was.OpenApiServers;
 import pl.net.was.OpenApiSpec;
+import pl.net.was.UnchallengedResponseHttpClient;
 import pl.net.was.cache.CachingHttpClient;
 import pl.net.was.cache.HttpCache;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -146,6 +151,40 @@ class TestAuthenticatingHttpClient
     }
 
     @Test
+    void testRejectionWithoutChallengeIsNotRefreshed()
+            throws Exception
+    {
+        // Jetty fails 401 responses without a WWW-Authenticate header, which many APIs send, as protocol violations
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/", exchange -> {
+            sentAuthorizations.add(exchange.getRequestHeaders().getFirst(AUTHORIZATION.toString()));
+            exchange.sendResponseHeaders(401, -1);
+            exchange.close();
+        });
+        server.start();
+        URI serverUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+        OpenApiConfig config = new OpenApiConfig()
+                .setSpecLocation(Files.writeString(tempDir.resolve("spec.yaml"), SPEC).toString())
+                .setBaseUri(serverUri)
+                .setAllowInsecureHttp(true)
+                .setClientId("client")
+                .setClientSecret("secret");
+        OpenApiSpec spec = createSpec(config);
+        try (HttpClient apiClient = new JettyHttpClient()) {
+            // wrapped the same way as by the OpenAPI client
+            HttpClient client = new UnchallengedResponseHttpClient(new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE));
+
+            assertThat(get(client, serverUri, "/secured").getStatusCode()).isEqualTo(401);
+        }
+        finally {
+            server.stop(0);
+        }
+
+        assertThat(tokenRequests).hasValue(1);
+        assertThat(sentAuthorizations).containsExactly("Bearer token-1");
+    }
+
+    @Test
     void testStaticBearerTokenIsNotRefreshed()
             throws Exception
     {
@@ -189,10 +228,6 @@ class TestAuthenticatingHttpClient
                 .setClientSecret("secret")
                 .setClientAuthenticationMethod(clientAuthenticationMethod)
                 .setBearerToken("static-token");
-        HttpClient tokenClient = new TestingHttpClient(_ -> mockResponse(
-                HttpStatus.OK,
-                JSON_UTF_8,
-                "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":300}".formatted(tokenRequests.incrementAndGet())));
         HttpClient apiClient = new TestingHttpClient(request -> {
             String authorization = request.getHeader(AUTHORIZATION);
             sentAuthorizations.add(authorization);
@@ -205,14 +240,27 @@ class TestAuthenticatingHttpClient
             return new TestingResponse(HttpStatus.UNAUTHORIZED, ImmutableListMultimap.of(WWW_AUTHENTICATE, challenge), new byte[0]);
         });
         OpenApiSpec spec = createSpec(config);
-        return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), tokenClient), UserCredentials.NONE);
+        return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), createTokenClient()), UserCredentials.NONE);
+    }
+
+    private HttpClient createTokenClient()
+    {
+        return new TestingHttpClient(_ -> mockResponse(
+                HttpStatus.OK,
+                JSON_UTF_8,
+                "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":300}".formatted(tokenRequests.incrementAndGet())));
     }
 
     private static StringResponse get(HttpClient client, String path)
     {
+        return get(client, BASE_URI, path);
+    }
+
+    private static StringResponse get(HttpClient client, URI baseUri, String path)
+    {
         return client.execute(
                 prepareGet()
-                        .setUri(BASE_URI.resolve(path))
+                        .setUri(baseUri.resolve(path))
                         .addHeader(OPENAPI_PATH_HEADER, path)
                         .build(),
                 createStringResponseHandler());
