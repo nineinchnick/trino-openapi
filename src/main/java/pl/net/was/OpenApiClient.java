@@ -1231,8 +1231,12 @@ public class OpenApiClient
             if (notFoundIsEmpty && response.getStatusCode() == HttpStatus.NOT_FOUND.code()) {
                 return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
-            if (response.getStatusCode() != HttpStatus.OK.code()) {
+            // like writes, reads can respond with other success codes, like 201 Created to a search sent as a POST
+            if (HttpStatus.familyForStatusCode(response.getStatusCode()) != HttpStatus.Family.SUCCESSFUL) {
                 throw HttpRequestFailure.ErrorResponse.read(response);
+            }
+            if (response.getStatusCode() == HttpStatus.NO_CONTENT.code()) {
+                return new ResultsPage(List.of(), OptionalLong.empty(), OptionalLong.empty(), Optional.empty());
             }
             String result = readBody(response);
             log.debug("Received response code %d with %d characters", response.getStatusCode(), result.length());
