@@ -410,7 +410,8 @@ A table has columns for:
 * the request parameters (path, query, header, and cookie), including the ones
   shared by all operations of a path;
 * the fields of JSON request bodies, like the ones of `POST`, `PUT`, and `PATCH`
-  operations.
+  operations, or of `application/x-www-form-urlencoded` request bodies of
+  operations that don't accept JSON.
 
 Request parameters are filters. Their values are copied from the query into
 every returned row, because most APIs don't repeat them in responses. If the
