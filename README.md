@@ -177,6 +177,19 @@ Operations with `security: []`, or specs with an empty top-level `security`
 list, are called without credentials. If the specification doesn't declare any
 security requirements, the connector uses `authentication.type`.
 
+The specification decides where and how credentials are sent: which operations
+get them, whether an API key goes in a header or the query string, and where
+OAuth credentials are sent to get a token. Only use specifications from a source
+you trust as much as the API itself. To limit what a specification can change:
+
+* requests are only sent to `base-uri`, and redirects are not followed, because
+  the HTTP client would send custom headers, like API keys, to the new location;
+* a `tokenUrl` from the specification must use HTTPS, or the host of
+  `base-uri`; set `authentication.token-url` to use another one;
+* credentials are only sent over HTTPS, unless
+  `authentication.allow-insecure-http` is set, for example for an API on a local
+  network.
+
 ## HTTP client
 
 The connector uses the Airlift HTTP client, which can be configured with
