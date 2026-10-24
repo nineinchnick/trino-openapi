@@ -803,6 +803,42 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void sendIntersectionOfPredicatesPushedDownAgain()
+    {
+        // every value of the intersection is read in a separate split, so only its values count toward max-filter-combinations
+        assertQuery(
+                filterAgain("SELECT text, comment_id, author FROM fastapi_few_combinations.default.comments WHERE comment_id IN (1, 2, 3, 4, 5)", "author", "comment_id IN (1, 3)"),
+                "VALUES ('First', 1), ('Third', 3)");
+        // ranges of parameters are expanded into single values before they're intersected
+        assertQuery(
+                filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id BETWEEN 1 AND 3", "author", "comment_id >= 2"),
+                "VALUES ('Second', 2), ('Third', 3)");
+        assertQuery(
+                "SELECT id, array_sort(split(query, '&')) FROM (%s)".formatted(filterAgain("SELECT id, query, updated_at, since FROM fastapi.default.exact_changes WHERE updated_at >= TIMESTAMP '2024-01-02 00:00:00'", "since", "updated_at < TIMESTAMP '2024-01-04 00:00:00'")),
+                "VALUES " +
+                        "(2, ARRAY['since=2024-01-02T00%3A00%3A00.000Z', 'until=2024-01-04T00%3A00%3A00.000Z']), " +
+                        "(3, ARRAY['since=2024-01-02T00%3A00%3A00.000Z', 'until=2024-01-04T00%3A00%3A00.000Z'])");
+    }
+
+    @Test
+    public void refusePredicatesPushedDownAgainAfterLimit()
+    {
+        // the limit applies to rows before the second filter, so Trino applies it instead
+        assertExplain(
+                "EXPLAIN " + filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id IN (1, 2) LIMIT 5", "author", "comment_id = 1"),
+                Pattern.quote("constraint={comment_id=[ SortedRangeSet[type=bigint, ranges=2, {[1], [2]}] ]} limit=5]"));
+        assertQuery(
+                filterAgain("SELECT text, comment_id, author FROM fastapi.default.comments WHERE comment_id IN (1, 2) LIMIT 5", "author", "comment_id = 1"),
+                "VALUES ('First', 1)");
+        assertExplain(
+                "EXPLAIN " + filterAgain("SELECT name, tax FROM fastapi.default.counted_items WHERE name IN ('Plumbus', 'Portal Gun') ORDER BY price LIMIT 1", "tax", "name = 'Plumbus'"),
+                Pattern.quote("constraint={name=[ SortedRangeSet[type=varchar, ranges=2, {[Plumbus], [Portal Gun]}] ]} sortOrder=price ASC NULLS LAST limit=1]"));
+        assertQuery(
+                filterAgain("SELECT name, tax FROM fastapi.default.counted_items WHERE name IN ('Plumbus', 'Portal Gun') ORDER BY price LIMIT 1", "tax", "name = 'Plumbus'"),
+                "VALUES 'Plumbus'");
+    }
+
+    @Test
     public void joinWithPushedDownPredicates()
     {
         try (TestTable table = createIdsTable("memory.default.test_comment_ids", "1, 3")) {
@@ -1599,6 +1635,12 @@ public class TestOpenApiQueries
     private TestTable generateDataset(String namePrefix, int elements)
     {
         return new TestTable(new TrinoSqlExecutor(getQueryRunner()), namePrefix, "AS SELECT CAST(sequential_number AS VARCHAR) AS item_id FROM TABLE(sequence(start=>0, stop=>%d))".formatted(elements - 1));
+    }
+
+    // Trino pushes down a filter outside of a table function after the filter inside it
+    private static String filterAgain(String query, String excludedColumn, String filter)
+    {
+        return "SELECT * FROM TABLE(exclude_columns(input => TABLE(%s), columns => DESCRIPTOR(%s))) WHERE %s".formatted(query, excludedColumn, filter);
     }
 
     private TestTable createIdsTable(String namePrefix, String ids)
