@@ -445,6 +445,14 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectPlainValues()
+    {
+        String query = "SELECT value FROM fastapi.default.item_names";
+        assertThat(computeActual(query).getTypes()).containsExactly(VARCHAR);
+        assertQuery(query, "VALUES 'Portal Gun', 'Plumbus', NULL");
+    }
+
+    @Test
     public void selectRealValues()
     {
         assertThat(selectNumbers(1, "real_value, real_values")).containsExactly(

@@ -65,6 +65,7 @@ import static io.trino.spi.type.TypeUtils.writeNativeValue;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToIntBits;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -1250,6 +1251,36 @@ class TestOpenApiClientRequests
         responses.add(respond(200, "{\"results\":[\"c\"]}"));
         assertThat(getRows(newConfig(plainValuesSpec("type: string")), "wrapped_values", null))
                 .containsExactly(List.of("c"));
+    }
+
+    @Test
+    void testPlainValueTypes()
+            throws IOException
+    {
+        responses.add(respond(200, "[1.5,2]"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: number\nformat: double")), "values", null))
+                .containsExactly(List.of(1.5), List.of(2.0));
+
+        responses.add(respond(200, "[1,2]"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: integer\nformat: int32")), "values", null))
+                .containsExactly(List.of(1), List.of(2));
+
+        responses.add(respond(200, "[true,false]"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: boolean")), "values", null))
+                .containsExactly(List.of(true), List.of(false));
+    }
+
+    @Test
+    void testNullPlainValues()
+            throws IOException
+    {
+        responses.add(respond(200, "[\"a\",null]"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: string\nnullable: true")), "values", null))
+                .containsExactly(List.of("a"), singletonList(null));
+
+        responses.add(respond(200, "{\"results\":[null,2.5]}"));
+        assertThat(getRows(newConfig(plainValuesSpec("type: number\nformat: double\nnullable: true")), "wrapped_values", null))
+                .containsExactly(singletonList(null), List.of(2.5));
     }
 
     @Test

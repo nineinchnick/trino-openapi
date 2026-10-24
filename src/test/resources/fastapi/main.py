@@ -378,6 +378,11 @@ def list_optional_values() -> list[OptionalValues]:
     ]
 
 
+@router.get("/item_names")
+def list_item_names() -> list[str | None]:
+    return [item.name for item in items.values()] + [None]
+
+
 @router.get("/cached_items")
 def list_cached_items(request: Request, response: Response) -> list[Item]:
     cached_item_requests.total += 1
