@@ -26,7 +26,6 @@ import io.trino.testing.QueryRunner.MaterializedResultWithPlan;
 import io.trino.testing.sql.TestTable;
 import io.trino.testing.sql.TrinoSqlExecutor;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -1136,9 +1135,11 @@ public class TestOpenApiQueries
     @Test
     public void itemsWithStrideSplits()
     {
-        assertSplits("SELECT name FROM fastapi_stride.default.items", 3);
-        // the server returns the last page for every page number past it, which must be skipped
-        assertSplits("SELECT name FROM fastapi_stride.default.clamped_items", 3);
+        assertSplits("SELECT name FROM fastapi_stride.default.items WHERE per_page = 1", 3);
+        assertSplits("SELECT name FROM fastapi_stride.default.items WHERE per_page = 2", 3);
+        // without the page size, the number of pages is probed from the total number of results in the first page
+        assertSplits("SELECT name FROM fastapi_stride.default.items", 2);
+        assertSplits("SELECT name FROM fastapi_stride.default.clamped_items", 2);
         // without a signal of the last page, pages are read in a single split
         assertSplits("SELECT name FROM fastapi_stride.default.max_pages_items", 1);
         // pagination stops once the limit is reached
@@ -1146,12 +1147,13 @@ public class TestOpenApiQueries
     }
 
     @Test
-    @Disabled("Stride splits past the last page return its rows again, see https://github.com/nineinchnick/trino-openapi/issues/283")
     public void itemsWithStrideSplitsPastLastPage()
     {
         // the server returns the last page for every page number past it, which must be skipped
-        assertSplits("SELECT name FROM fastapi_stride.default.has_more_items", getQueryRunner().getNodeCount());
-        assertSplits("SELECT name FROM fastapi_stride.default.clamped_sized_items", getQueryRunner().getNodeCount());
+        assertSplits("SELECT name FROM fastapi_stride.default.total_pages_items", getQueryRunner().getNodeCount());
+        // without a total, a split can't tell if it started past the last page, so pages are read in a single split
+        assertSplits("SELECT name FROM fastapi_stride.default.has_more_items", 1);
+        assertSplits("SELECT name FROM fastapi_stride.default.clamped_sized_items", 1);
     }
 
     @Test
@@ -1161,7 +1163,7 @@ public class TestOpenApiQueries
         assertSplits(withSession("split_strategy", "off"), "SELECT name FROM fastapi_probe.default.items", 1);
         assertSplits(withSession("split_strategy", "probe"), "SELECT name FROM fastapi.default.items", 2);
         // and the spec, which sets strideSplits only for some operations
-        assertSplits(withSession("split_strategy", "stride"), "SELECT name FROM fastapi.default.items", 3);
+        assertSplits(withSession("split_strategy", "stride"), "SELECT name FROM fastapi.default.items WHERE per_page = 1", 3);
         assertSplits(withSession("probe_limit", "0"), "SELECT name FROM fastapi_probe.default.items WHERE per_page = 1", 2);
         assertQueryFails(withSession("probe_limit", "few"), "SELECT name FROM fastapi_probe.default.items", ".*Invalid probe limit: 'few', must be a number or none.*");
     }
