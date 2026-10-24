@@ -383,6 +383,34 @@ def list_item_names() -> list[str | None]:
     return [item.name for item in items.values()] + [None]
 
 
+class SnippetComponent(BaseModel):
+    key: str
+    path: str
+
+
+class SourceLine(BaseModel):
+    line: int
+    code: str
+
+
+class FileSnippets(BaseModel):
+    component: SnippetComponent
+    sources: list[SourceLine]
+
+
+# like the issue snippets of SonarQube, keyed by the file paths
+@router.get("/issue_snippets")
+def get_issue_snippets() -> dict[str, FileSnippets]:
+    return {
+        "project:src/Main.java": FileSnippets(
+            component=SnippetComponent(key="project:src/Main.java", path="src/Main.java"),
+            sources=[SourceLine(line=1, code="package org.example;"), SourceLine(line=2, code="")]),
+        "project:src/Util.java": FileSnippets(
+            component=SnippetComponent(key="project:src/Util.java", path="src/Util.java"),
+            sources=[SourceLine(line=1, code="package org.example;")]),
+    }
+
+
 @router.get("/cached_items")
 def list_cached_items(request: Request, response: Response) -> list[Item]:
     cached_item_requests.total += 1

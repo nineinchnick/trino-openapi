@@ -1130,6 +1130,7 @@ class TestOpenApiSpec
                 "pet_find_by_tags",
                 "user_login",
                 "store_order",
+                "store_inventory",
                 "user",
                 "user_create_with_list",
                 "pet");
@@ -4571,6 +4572,159 @@ class TestOpenApiSpec
         Assertions.assertThat(tables.get("tags"))
                 .extracting(OpenApiColumn::getName, OpenApiColumn::getType)
                 .containsExactly(Assertions.tuple("value", VARCHAR));
+    }
+
+    @Test
+    public void testDynamicKeyResponses()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /inventory:
+                    get:
+                      responses:
+                        "200":
+                          description: Quantities by status
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                additionalProperties:
+                                  type: integer
+                                  format: int32
+                  /snippets:
+                    get:
+                      x-trino:
+                        resultsPath: $response.body#/files
+                      responses:
+                        "200":
+                          description: Snippets by file path
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  total:
+                                    type: integer
+                                  files:
+                                    type: object
+                                    additionalProperties:
+                                      type: object
+                                      required:
+                                      - path
+                                      properties:
+                                        path:
+                                          type: string
+                                        lines:
+                                          type: array
+                                          items:
+                                            type: integer
+                  /settings:
+                    get:
+                      responses:
+                        "200":
+                          description: Settings of any type
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                additionalProperties: true
+                  /labels:
+                    get:
+                      responses:
+                        "200":
+                          description: Labels by name
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                additionalProperties:
+                                  type: object
+                                  properties:
+                                    key:
+                                      type: string
+                  /flags:
+                    get:
+                      parameters:
+                      - name: key
+                        in: query
+                        schema:
+                          type: string
+                      responses:
+                        "200":
+                          description: Flags with names starting with the key
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                additionalProperties:
+                                  type: boolean
+                """;
+        Map<String, List<OpenApiColumn>> tables = parseSpec(specContents).getTables();
+
+        Assertions.assertThat(tables.get("inventory"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), OpenApiColumn::getEntryKeyPaths, OpenApiColumn::getPlainValuePaths)
+                .containsExactly(
+                        Assertions.tuple("key", VARCHAR, false, Set.of(new HttpPath(PathItem.HttpMethod.GET, "/inventory")), Set.of()),
+                        Assertions.tuple("value", INTEGER, false, Set.of(), Set.of(new HttpPath(PathItem.HttpMethod.GET, "/inventory"))));
+        Assertions.assertThat(tables.get("snippets"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable(), column -> column.getMetadata().isHidden())
+                .containsExactly(
+                        Assertions.tuple("total", BIGINT, true, true),
+                        Assertions.tuple("key", VARCHAR, false, false),
+                        Assertions.tuple("path", VARCHAR, false, false),
+                        Assertions.tuple("lines", new ArrayType(BIGINT), true, false));
+        Assertions.assertThat(tables.get("settings"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getType, column -> column.getMetadata().isNullable())
+                .containsExactly(
+                        Assertions.tuple("key", VARCHAR, false),
+                        Assertions.tuple("value", VARCHAR, true));
+        // the field of the entries keeps its name, because it comes from the API
+        Assertions.assertThat(tables.get("labels"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::getSourceName, OpenApiColumn::getEntryKeyPaths)
+                .containsExactly(
+                        Assertions.tuple("key_2", "key_2", Set.of(new HttpPath(PathItem.HttpMethod.GET, "/labels"))),
+                        Assertions.tuple("key", "key", Set.of()));
+        Assertions.assertThat(tables.get("flags"))
+                .extracting(OpenApiColumn::getName, OpenApiColumn::isRequestOnly, OpenApiColumn::getEntryKeyPaths)
+                .containsExactly(
+                        Assertions.tuple("key_2", false, Set.of(new HttpPath(PathItem.HttpMethod.GET, "/flags"))),
+                        Assertions.tuple("value", false, Set.of()),
+                        Assertions.tuple("key", true, Set.of()));
+    }
+
+    @Test
+    public void testObjectsWithPropertiesAndDynamicKeys()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: 1.0
+                paths:
+                  /instances:
+                    get:
+                      responses:
+                        "200":
+                          description: An instance, which can have other properties
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                additionalProperties: {}
+                """;
+
+        Assertions.assertThat(parseSpec(specContents).getTables().get("instances"))
+                .extracting(OpenApiColumn::getName)
+                .containsExactly("id");
     }
 
     @Test

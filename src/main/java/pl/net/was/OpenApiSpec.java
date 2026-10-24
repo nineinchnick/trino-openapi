@@ -160,6 +160,7 @@ public class OpenApiSpec
     private static final Pattern JSON_POINTER_PATTERN = Pattern.compile("\\$response\\.body#(/.*)");
     private static final Set<String> PLAIN_TYPES = ImmutableSet.of("string", "integer", "number", "boolean", "int", "float");
     private static final String PLAIN_VALUE_COLUMN = "value";
+    private static final String ENTRY_KEY_COLUMN = "key";
     private static final Pattern SUCCESS_STATUS_PATTERN = Pattern.compile("2(\\d\\d|XX)", Pattern.CASE_INSENSITIVE);
 
     // should only be used to manually resolving references
@@ -773,7 +774,11 @@ public class OpenApiSpec
         Schema<?> schema = getResponseSchema(new HttpPath(method, path), op);
         if (schema != null) {
             Schema<?> resultsSchema = getResultsSchema(new HttpPath(method, path), specExtension.get(PAGINATION_RESULTS_PATH), schema, resultsPointer);
-            Map<String, Schema> resultsProperties = getAlternativesProperties(resultsSchema);
+            // every entry of an object with dynamic keys is a row, so fields of rows are the fields of its entries
+            Optional<Schema<?>> entrySchema = getEntrySchema(resultsSchema);
+            Map<String, Schema> resultsProperties = entrySchema
+                    .map(this::getEntryProperties)
+                    .orElseGet(() -> getAlternativesProperties(resultsSchema));
             boolean hasEnvelope = !resultsPointer.equals(JsonPointer.empty());
             List<String> requiredProperties = getRequiredProperties(schema);
             getAlternativesProperties(schema)
@@ -793,7 +798,10 @@ public class OpenApiSpec
                             ? OpenApiColumn.builderFrom(column.get()).setIsHidden(true).setEnvelopePaths(Set.of(new HttpPath(method, path))).build()
                             : column.get())
                     .forEach(result::add);
-            List<String> requiredResultsProperties = getRequiredProperties(resultsSchema);
+            if (entrySchema.isPresent()) {
+                getEntryKeyColumn(new HttpPath(method, path), resultsProperties.keySet(), result, getRequestNames(parameters, op)).ifPresent(result::add);
+            }
+            List<String> requiredResultsProperties = getRequiredProperties(entrySchema.orElse(resultsSchema));
             resultsProperties
                     .entrySet().stream()
                     .map(propEntry -> getResultColumn(
@@ -804,7 +812,9 @@ public class OpenApiSpec
                             propEntry.getKey().equals(specExtension.get(PAGINATION_PAGE_PARAM))))
                     .filter(Optional::isPresent)
                     .forEach(column -> result.add(column.get()));
-            getPlainValuesSchema(resultsSchema)
+            // entries without fields, like numbers, are plain values
+            Optional<Schema<?>> plainValueSchema = entrySchema.isPresent() && resultsProperties.isEmpty() ? entrySchema : getPlainValuesSchema(resultsSchema);
+            plainValueSchema
                     .flatMap(valueSchema -> getPlainValueColumn(new HttpPath(method, path), valueSchema, result, getRequestNames(parameters, op)))
                     .ifPresent(result::add);
         }
@@ -1337,6 +1347,37 @@ public class OpenApiSpec
         return schema;
     }
 
+    private static Optional<Schema<?>> getEntrySchema(Schema<?> results)
+    {
+        if (JsonTrinoConverter.isUnion(results)) {
+            // like an optional map
+            return getNullableAlternative(results).flatMap(OpenApiSpec::getEntrySchema);
+        }
+        String type = getTypeName(results);
+        // objects with declared properties are single rows, even if they allow other properties, like many in the Datadog spec
+        if (isArray(results) || (type != null && !type.equals("object")) || (results.getProperties() != null && !results.getProperties().isEmpty())) {
+            return Optional.empty();
+        }
+        Object additionalProperties = getAdditionalProperties(results);
+        if (additionalProperties instanceof Schema<?> valueSchema) {
+            return Optional.of(valueSchema);
+        }
+        if (TRUE.equals(additionalProperties)) {
+            // values of any type can only be kept as serialized JSON
+            return Optional.of(new Schema<>().nullable(true));
+        }
+        return Optional.empty();
+    }
+
+    private Map<String, Schema> getEntryProperties(Schema<?> entrySchema)
+    {
+        // entries that are arrays, or objects with dynamic keys, are single values, not rows of their own
+        if (!isObjectAlternative(entrySchema)) {
+            return Map.of();
+        }
+        return getAlternativesProperties(entrySchema);
+    }
+
     private static Optional<Schema<?>> getPlainValuesSchema(Schema<?> results)
     {
         if (JsonTrinoConverter.isUnion(results)) {
@@ -1465,6 +1506,23 @@ public class OpenApiSpec
                 .setIsPageNumber(isPageNumber)
                 .setComment(schema.getDescription())
                 .build());
+    }
+
+    private Optional<OpenApiColumn> getEntryKeyColumn(HttpPath httpPath, Set<String> entryFields, List<OpenApiColumn> otherColumns, Set<String> requestNames)
+    {
+        // fields of the entries, fields next to the results, and request parameters and body fields, keep their names,
+        // because they come from the API, and this name doesn't; a request parameter would also be merged with this column
+        Set<String> usedNames = Stream.of(
+                        otherColumns.stream().map(OpenApiColumn::getName),
+                        entryFields.stream().map(OpenApiSpec::getIdentifier),
+                        requestNames.stream())
+                .flatMap(names -> names)
+                .collect(toCollection(HashSet::new));
+        String name = usedNames.contains(ENTRY_KEY_COLUMN) ? getUnusedName(ENTRY_KEY_COLUMN, usedNames) : ENTRY_KEY_COLUMN;
+        return getResultColumn(httpPath, name, new StringSchema(), false, false)
+                .map(column -> OpenApiColumn.builderFrom(column)
+                        .setEntryKeyPaths(Set.of(httpPath))
+                        .build());
     }
 
     private Optional<OpenApiColumn> getPlainValueColumn(HttpPath httpPath, Schema<?> valueSchema, List<OpenApiColumn> otherColumns, Set<String> requestNames)
@@ -2039,6 +2097,9 @@ public class OpenApiSpec
                                 .collect(toImmutableSet()))
                         .setPlainValuePaths(sameColumns.stream()
                                 .flatMap(column -> column.getPlainValuePaths().stream())
+                                .collect(toImmutableSet()))
+                        .setEntryKeyPaths(sameColumns.stream()
+                                .flatMap(column -> column.getEntryKeyPaths().stream())
                                 .collect(toImmutableSet()))
                         .setRequiresPredicate(sameColumns.stream()
                                 .map(OpenApiColumn::getRequiresPredicate)

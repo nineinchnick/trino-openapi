@@ -45,6 +45,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -408,6 +409,52 @@ class TestOpenApiClientRequests
                                       type: integer
                               total:
                                 type: string
+            """;
+
+    private static final String DYNAMIC_KEYS_SPEC =
+            """
+            openapi: 3.0.0
+            info:
+              title: test
+              version: '1'
+            paths:
+              /inventory:
+                get:
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            additionalProperties:
+                              type: integer
+                              format: int32
+                              nullable: true
+              /snippets:
+                get:
+                  x-trino:
+                    resultsPath: $response.body#/files
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              total:
+                                type: integer
+                                format: int32
+                              files:
+                                type: object
+                                additionalProperties:
+                                  type: object
+                                  properties:
+                                    path:
+                                      type: string
+                                    key:
+                                      type: string
             """;
 
     private static final String PAGED_ERROR_PATH_SPEC = PAGED_SPEC.replace(
@@ -1281,6 +1328,28 @@ class TestOpenApiClientRequests
         responses.add(respond(200, "{\"results\":[null,2.5]}"));
         assertThat(getRows(newConfig(plainValuesSpec("type: number\nformat: double\nnullable: true")), "wrapped_values", null))
                 .containsExactly(singletonList(null), List.of(2.5));
+    }
+
+    @Test
+    void testDynamicKeyResults()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"a\":1,\"b\":null}"));
+        assertThat(getRows(newConfig(DYNAMIC_KEYS_SPEC), "inventory", null))
+                .containsExactly(List.of("a", 1), Arrays.asList("b", null));
+
+        // the entry key column is named key_2, because the entries have a field named key
+        responses.add(respond(200, "{\"total\":2,\"files\":{\"src/a.java\":{\"path\":\"a.java\",\"key\":\"k1\"},\"src/b.java\":{\"path\":\"b.java\"}}}"));
+        assertThat(getRows(newConfig(DYNAMIC_KEYS_SPEC), "snippets", null))
+                .containsExactly(List.of(2, "src/a.java", "a.java", "k1"), Arrays.asList(2, "src/b.java", "b.java", null));
+
+        responses.add(respond(200, "{\"total\":0,\"files\":null}"));
+        assertThat(getRows(newConfig(DYNAMIC_KEYS_SPEC), "snippets", null)).isEmpty();
+
+        responses.add(respond(200, "{\"total\":1,\"files\":[\"internal-details\"]}"));
+        assertThatThrownBy(() -> getRows(newConfig(DYNAMIC_KEYS_SPEC), "snippets", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_INVALID_RESPONSE.toErrorCode()))
+                .hasMessage("Response to GET %s/snippets contains a JSON STRING where an object was expected", baseUri);
     }
 
     @Test
