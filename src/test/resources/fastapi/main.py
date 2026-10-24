@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Callable, Literal
 
-from fastapi import APIRouter, Cookie, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Cookie, FastAPI, Form, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
@@ -124,6 +124,17 @@ class LabelBody(BaseModel):
 
 class Bookmark(BaseModel):
     url: str
+
+
+# fields have defaults instead of None, because pydantic describes optional values as unions with null
+class Memo(BaseModel):
+    id: int
+    text: str
+    priority: int = 0
+    ratio: float = 0.0
+    urgent: bool = False
+    color: Literal["red", "green"] = "red"
+    tags: list[str] = []
 
 
 class HasMoreResults(BaseModel):
@@ -287,6 +298,8 @@ notes: dict[int, Note] = {}
 labels: dict[int, Label] = {}
 
 bookmarks = [Bookmark(url="https://trino.io"), Bookmark(url="https://example.com")]
+
+memos: dict[int, Memo] = {}
 
 stations = {
     1: Station(station_id=1, name="Alpha", temperature=20.0),
@@ -784,6 +797,25 @@ def delete_bookmarks(body: Bookmark) -> list[Bookmark]:
     return deleted
 
 
+@router.get("/memos")
+def list_memos() -> list[Memo]:
+    return list(memos.values())
+
+
+# like OAuth token endpoints and some older APIs, this one only accepts form bodies
+@router.post("/memos", status_code=201)
+def create_memo(body: Annotated[Memo, Form()]) -> Memo:
+    if body.id in memos:
+        raise HTTPException(status_code=409, detail="Memo already exists")
+    memos[body.id] = body
+    return body
+
+
+@router.post("/echo_memo")
+def echo_memo(body: Annotated[Memo, Form()]) -> Memo:
+    return body
+
+
 @router.get("/stations")
 def list_stations() -> list[Station]:
     return list(stations.values())
@@ -1200,7 +1232,7 @@ def custom_openapi():
         "totalResultsPath": "$response.body#/total_results",
     }
     # these POST operations only read data, but POST operations are used for INSERT, unless marked otherwise
-    for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_gadget", "/echo_event"]:
+    for path in ["/search", "/paged_search", "/echo_numbers", "/echo_union", "/echo_map", "/echo_union_value", "/echo_gadget", "/echo_event", "/echo_memo"]:
         openapi_schema["paths"][path]["post"].setdefault("x-trino", {})["sqlOperation"] = "select"
     openapi_schema["paths"]["/bookmarks"]["post"]["x-trino"] = {"sqlOperation": "delete"}
     # pydantic describes optional values as unions with null, which are mapped to VARCHAR
