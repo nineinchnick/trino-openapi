@@ -3671,6 +3671,162 @@ class TestOpenApiSpec
     }
 
     @Test
+    public void testTableNameExtension()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /api/users:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /api/users/{id}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                      x-trino:
+                        tableName: people
+                  /api/accounts:
+                    x-trino:
+                      tableName: customers
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                    post:
+                      requestBody:
+                        content:
+                          application/json:
+                            schema:
+                              $ref: '#/components/schemas/Item'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                      x-trino:
+                        tableName: 'customers'
+                  /api/teams:
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                      x-trino:
+                        tableName: people
+                components:
+                  parameters:
+                    Id:
+                      name: id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                  schemas:
+                    Item:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                  responses:
+                    Ok:
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Item'
+                """;
+        OpenApiSpec spec = parseSpec(specContents);
+
+        // the name of a path with parameters applies to the table merged with its base path, and names set twice get numeric suffixes
+        Assertions.assertThat(spec.getTables().keySet().stream()
+                        .collect(toImmutableMap(identity(), table -> spec.getTableHandle(schemaTableName(SCHEMA_NAME, table)).getSelectPaths().stream()
+                                .map(HttpPath::path)
+                                .toList())))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "customers", List.of("/api/accounts"),
+                        "people", List.of("/api/teams"),
+                        "people_2", List.of("/api/users", "/api/users/{id}")));
+
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("tableName: 'customers'", "tableName: clients")))
+                .hasMessage("Invalid value of tableName in /api/accounts: operations of a path are mapped to a single table, but set different names: [clients, customers]");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("tableName: people", "tableName: People")))
+                .hasMessage("Invalid value of tableName in /api/users/{id}: People, must be lowercase");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("tableName: customers", "pageParam: page")))
+                .hasMessage("Invalid property of the x-trino extension of /api/accounts: pageParam, must be one of: tableName");
+    }
+
+    @Test
+    public void testTableNameExtensionOfPathMergedIntoSeveralTables()
+    {
+        String specContents =
+                """
+                openapi: 3.0.0
+                info:
+                  title: test
+                  version: '1'
+                paths:
+                  /users:
+                    # x-trino
+                    get:
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                  /users/{id}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                      x-trino:
+                        tableName: people
+                  /users/{name}/{id}:
+                    get:
+                      parameters:
+                        - $ref: '#/components/parameters/Name'
+                        - $ref: '#/components/parameters/Id'
+                      responses:
+                        '200':
+                          $ref: '#/components/responses/Ok'
+                components:
+                  parameters:
+                    Id:
+                      name: id
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                    Name:
+                      name: name
+                      in: path
+                      required: true
+                      schema:
+                        type: string
+                  responses:
+                    Ok:
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                """;
+
+        Assertions.assertThat(parseSpec(specContents).getTables().keySet())
+                .containsExactlyInAnyOrder("people", "users_name_id");
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("# x-trino", "x-trino: {tableName: users}")))
+                .hasMessage("Invalid value of tableName in /users: the path is merged into several tables, so set tableName in the paths with path parameters instead: [/users/{id}, /users/{name}/{id}]");
+    }
+
+    @Test
     public void getDatadogTablesWithTrimmedPathPrefixes()
     {
         OpenApiConfig config = new OpenApiConfig()
