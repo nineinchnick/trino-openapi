@@ -49,7 +49,9 @@ import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import static java.util.Objects.requireNonNull;
 
 // a stored response, with the times needed to calculate its age (RFC 9111, section 4.2.3),
-// and the values of the request headers listed in its Vary header (RFC 9111, section 4.1)
+// and the values of the request headers listed in its Vary header (RFC 9111, section 4.1).
+// Stored responses are never compared, so comparing the body by reference in equals() doesn't matter
+@SuppressWarnings("ArrayRecordComponent")
 public record CachedResponse(
         int statusCode,
         List<Header> headers,

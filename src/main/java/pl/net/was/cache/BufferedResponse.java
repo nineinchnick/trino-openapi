@@ -30,6 +30,8 @@ import java.io.UncheckedIOException;
 import static java.util.Objects.requireNonNull;
 
 // a response read into memory, so it can be stored, and then passed to the caller's response handler
+// responses are never compared, so comparing the body by reference in equals() doesn't matter
+@SuppressWarnings("ArrayRecordComponent")
 record BufferedResponse(int statusCode, ListMultimap<HeaderName, String> headers, byte[] body)
         implements Response
 {

@@ -125,7 +125,7 @@ public class HttpCache
                     response.varyingRequestHeaders(),
                     response.requestTimeMillis(),
                     response.responseTimeMillis()));
-            long size = HEADER_SIZE + metadata.length + response.body().length;
+            long size = (long) HEADER_SIZE + metadata.length + response.body().length;
             if (size > maxEntrySizeInBytes) {
                 remove(method, uri);
                 return;

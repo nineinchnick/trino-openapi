@@ -169,7 +169,7 @@ class TestOpenApiClientRequests
     void setUp()
             throws IOException
     {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", exchange -> {
             requestCount.incrementAndGet();
             requestUris.add(exchange.getRequestURI());

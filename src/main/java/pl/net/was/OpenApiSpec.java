@@ -678,9 +678,9 @@ public class OpenApiSpec
                 parameter,
                 operation,
                 type);
-        boolean matchesType = type.equals(VARCHAR) && value instanceof String
-                || (type.equals(BIGINT) || type.equals(INTEGER)) && (value instanceof Integer || value instanceof Long)
-                || type.equals(BOOLEAN) && value instanceof Boolean;
+        boolean matchesType = (type.equals(VARCHAR) && value instanceof String)
+                || ((type.equals(BIGINT) || type.equals(INTEGER)) && (value instanceof Integer || value instanceof Long))
+                || (type.equals(BOOLEAN) && value instanceof Boolean);
         checkArgument(matchesType, "Invalid value of %s: %s for parameter %s of %s doesn't have type %s", PARAMETER_DEFAULTS, value, parameter, operation, type);
         Schema<?> schema = column.getSourceType();
         checkArgument(
