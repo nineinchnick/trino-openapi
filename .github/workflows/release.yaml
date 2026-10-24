@@ -51,6 +51,7 @@ jobs:
       - name: Save version number in env
         run: |
           echo "VERSION=$(grep 'project.rel.*=' release.properties | cut -d'=' -f2)" >> $GITHUB_ENV
+          echo "TRINO_VERSION=$(./mvnw help:evaluate -Dexpression=dep.trino.version -q -DforceStdout)" >> $GITHUB_ENV
 
       - name: Publish JAR
         run: ./mvnw -B release:perform -Darguments="-Dgpg.skip -Dmaven.deploy.skip=true"

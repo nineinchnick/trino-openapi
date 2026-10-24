@@ -17,3 +17,12 @@ files:
 release:
   github:
     owner: nineinchnick
+    changelog:
+      formatted: ALWAYS
+      format: "{{commitShortHash}} {{commitTitle}}"
+      content: |
+        Built for Trino {{Env.TRINO_VERSION}}
+
+        ## Changelog
+
+        {{changelogChanges}}
