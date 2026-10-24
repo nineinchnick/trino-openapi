@@ -689,7 +689,7 @@ class TestOpenApiClientRequests
         Stopwatch stopwatch = Stopwatch.createStarted();
 
         // the rate limiter lets the first request through immediately, and delays every next one by half a second
-        assertThat(getRows(newConfig().setMaxRequestsPerSecond(2), "items", null)).isEmpty();
+        assertThat(getRows(newConfig().setMaxRequestsPerSecond(2.0), "items", null)).isEmpty();
         assertThat(stopwatch.elapsed()).isGreaterThanOrEqualTo(java.time.Duration.ofMillis(900));
         assertThat(requestCount).hasValue(3);
     }

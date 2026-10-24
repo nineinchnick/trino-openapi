@@ -68,7 +68,7 @@ public class OpenApiSplitManager
     private final OpenApiSpec spec;
     private final OpenApiClient client;
     private final NodeManager nodeManager;
-    private final double maxSplitsPerSecond;
+    private final Optional<Double> maxSplitsPerSecond;
     private final int domainExpansionLimit;
     private final SplitStrategy splitStrategy;
     private final ProbeLimit probeLimit;
@@ -365,7 +365,7 @@ public class OpenApiSplitManager
 
     private ConnectorSplitSource getSplitSource(List<ConnectorSplit> splits, List<Supplier<List<ConnectorSplit>>> laterSplits)
     {
-        if (maxSplitsPerSecond == Double.MAX_VALUE && laterSplits.isEmpty()) {
+        if (maxSplitsPerSecond.isEmpty() && laterSplits.isEmpty()) {
             return new FixedSplitSource(splits);
         }
         return new RateLimitedSplitSource(
@@ -374,6 +374,7 @@ public class OpenApiSplitManager
                         .add(() -> splits)
                         .addAll(laterSplits)
                         .build(),
-                maxSplitsPerSecond);
+                // later splits are generated in the background, which this split source does even without a limit
+                maxSplitsPerSecond.orElse(Double.MAX_VALUE));
     }
 }

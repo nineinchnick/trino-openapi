@@ -139,8 +139,8 @@ Trino version it's built for.
 | `authentication.client-secret`       | `OPENAPI_CLIENT_SECRET`             |           | OAuth client secret                                                                                             |
 | `authentication.token-url`           | `OPENAPI_TOKEN_URL`                 |           | OAuth token endpoint, used instead of the `tokenUrl` of the specification                                       |
 | `authentication.allow-insecure-http` | `OPENAPI_ALLOW_INSECURE_HTTP`       | `false`   | Allow sending credentials over HTTP, without TLS                                                                |
-| `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited | Maximum number of HTTP requests per second from a single Trino node                                             |
-| `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited | Maximum number of splits per second generated for a query                                                       |
+| `max-requests-per-second`            | `OPENAPI_MAX_REQUESTS_PER_SECOND`   | unlimited | Maximum number of HTTP requests per second from a single Trino node, greater than `0`; unlimited if not set     |
+| `max-splits-per-second`              | `OPENAPI_MAX_SPLITS_PER_SECOND`     | unlimited | Maximum number of splits per second generated for a query, greater than `0`; unlimited if not set               |
 | `max-retries`                        | `OPENAPI_MAX_RETRIES`               | `3`       | Maximum number of times a request that failed with a transient error is retried; `0` disables retries           |
 | `retry-initial-delay`                | `OPENAPI_RETRY_INITIAL_DELAY`       | `1s`      | Delay before the first retry, doubled for every next retry                                                      |
 | `retry-max-delay`                    | `OPENAPI_RETRY_MAX_DELAY`           | `1m`      | Maximum delay between retries; fails if the server asks to wait longer with `Retry-After`                       |
