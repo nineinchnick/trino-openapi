@@ -351,10 +351,11 @@ class TestOpenApiSpec
                                 .setName("collaborators").setSourceName("collaborators")
                                 .setType(BIGINT).setSourceType(intSchema)
                                 .setIsNullable(true)
-                                .setComment("""
-                                            The number of collaborators on private repositories.
-                                            
-                                            This field may be null if the number of private repositories is over 50,000.""")
+                                .setComment(
+                                        """
+                                        The number of collaborators on private repositories.
+
+                                        This field may be null if the number of private repositories is over 50,000.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("billing_email").setSourceName("billing_email")
@@ -494,72 +495,78 @@ class TestOpenApiSpec
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether GitHub Advanced Security is enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependabot_alerts_enabled_for_new_repositories").setSourceName("dependabot_alerts_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether Dependabot alerts are automatically enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether Dependabot alerts are automatically enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependabot_security_updates_enabled_for_new_repositories").setSourceName("dependabot_security_updates_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether Dependabot security updates are automatically enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether Dependabot security updates are automatically enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("dependency_graph_enabled_for_new_repositories").setSourceName("dependency_graph_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether dependency graph is automatically enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether dependency graph is automatically enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_enabled_for_new_repositories").setSourceName("secret_scanning_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether secret scanning is automatically enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether secret scanning is automatically enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_enabled_for_new_repositories").setSourceName("secret_scanning_push_protection_enabled_for_new_repositories")
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, paramsPath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
-                                            
-                                            Whether secret scanning push protection is automatically enabled for new repositories and repositories transferred to this organization.
-                                            
-                                            This field is only visible to organization owners or members of a team with the security manager role.""")
+                                .setComment(
+                                        """
+                                        **Endpoint closing down notice.** Please use [code security configurations](https://docs.github.com/rest/code-security/configurations) instead.
+
+                                        Whether secret scanning push protection is automatically enabled for new repositories and repositories transferred to this organization.
+
+                                        This field is only visible to organization owners or members of a team with the security manager role.""")
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("secret_scanning_push_protection_custom_link_enabled").setSourceName("secret_scanning_push_protection_custom_link_enabled")
@@ -722,7 +729,9 @@ class TestOpenApiSpec
 
         // the pagination extensions come from dev/specs/github.patch.json, so check that they match the upstream operations:
         // the page parameters must exist, and rows must be read from an array, either the whole response or the results path
+
         record PaginatedPath(String table, String path, String resultColumn) {}
+
         List<PaginatedPath> paginatedPaths = List.of(
                 new PaginatedPath("orgs_members", "/orgs/{org}/members", "login"),
                 new PaginatedPath("repos_actions_runs", "/repos/{owner}/{repo}/actions/runs", "head_branch"),
@@ -1568,17 +1577,18 @@ class TestOpenApiSpec
                                 .setRequiresPredicate(Map.of(new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY))
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            A domain name. Optional filter operators can be provided to extend refine the search:
-                                              * `equal` (default)
-                                              * `not_equal`
-                                              * `starts_with`
-                                              * `ends_with`
-                                              * `contains`
-                                              * `starts_with_case_sensitive`
-                                              * `ends_with_case_sensitive`
-                                              * `contains_case_sensitive`
-                                            """)
+                                .setComment(
+                                        """
+                                        A domain name. Optional filter operators can be provided to extend refine the search:
+                                          * `equal` (default)
+                                          * `not_equal`
+                                          * `starts_with`
+                                          * `ends_with`
+                                          * `contains`
+                                          * `starts_with_case_sensitive`
+                                          * `ends_with_case_sensitive`
+                                          * `contains_case_sensitive`
+                                        """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("status").setSourceName("status")
@@ -1602,10 +1612,11 @@ class TestOpenApiSpec
                                         new HttpPath(PathItem.HttpMethod.POST, listPath), ParameterLocation.BODY,
                                         new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            A full zone implies that DNS is hosted with Cloudflare. A partial zone is
-                                            typically a partner-hosted zone or a CNAME setup.
-                                            """)
+                                .setComment(
+                                        """
+                                        A full zone implies that DNS is hosted with Cloudflare. A partial zone is
+                                        typically a partner-hosted zone or a CNAME setup.
+                                        """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("account.id").setSourceName("account.id")
@@ -1619,17 +1630,18 @@ class TestOpenApiSpec
                                 .setType(VARCHAR).setSourceType(stringSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.GET, listPath), ParameterLocation.QUERY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            An account Name. Optional filter operators can be provided to extend refine the search:
-                                              * `equal` (default)
-                                              * `not_equal`
-                                              * `starts_with`
-                                              * `ends_with`
-                                              * `contains`
-                                              * `starts_with_case_sensitive`
-                                              * `ends_with_case_sensitive`
-                                              * `contains_case_sensitive`
-                                            """)
+                                .setComment(
+                                        """
+                                        An account Name. Optional filter operators can be provided to extend refine the search:
+                                          * `equal` (default)
+                                          * `not_equal`
+                                          * `starts_with`
+                                          * `ends_with`
+                                          * `contains`
+                                          * `starts_with_case_sensitive`
+                                          * `ends_with_case_sensitive`
+                                          * `contains_case_sensitive`
+                                        """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("page").setSourceName("page")
@@ -1688,11 +1700,12 @@ class TestOpenApiSpec
                                 .setType(BOOLEAN).setSourceType(booleanSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            Indicates whether the zone is only using Cloudflare DNS services. A
-                                            true value means the zone will not receive security or performance
-                                            benefits.
-                                            """)
+                                .setComment(
+                                        """
+                                        Indicates whether the zone is only using Cloudflare DNS services. A
+                                        true value means the zone will not receive security or performance
+                                        benefits.
+                                        """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("plan").setSourceName("plan")
@@ -1700,21 +1713,23 @@ class TestOpenApiSpec
                                         RowType.field("id", VARCHAR)))).setSourceType(objectSchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            (Deprecated) Please use the `/zones/{zone_id}/subscription` API
-                                            to update a zone's plan. Changing this value will create/cancel
-                                            associated subscriptions. To view available plans for this zone,
-                                            see Zone Plans.
-                                            """)
+                                .setComment(
+                                        """
+                                        (Deprecated) Please use the `/zones/{zone_id}/subscription` API
+                                        to update a zone's plan. Changing this value will create/cancel
+                                        associated subscriptions. To view available plans for this zone,
+                                        see Zone Plans.
+                                        """)
                                 .build(),
                         OpenApiColumn.builder()
                                 .setName("vanity_name_servers").setSourceName("vanity_name_servers")
                                 .setType(new ArrayType(VARCHAR)).setSourceType(arraySchema)
                                 .setOptionalPredicate(Map.of(new HttpPath(PathItem.HttpMethod.PATCH, onePath), ParameterLocation.BODY))
                                 .setIsNullable(true)
-                                .setComment("""
-                                            An array of domains used for custom name servers. This is only
-                                            available for Business and Enterprise plans.""")
+                                .setComment(
+                                        """
+                                        An array of domains used for custom name servers. This is only
+                                        available for Business and Enterprise plans.""")
                                 .build());
     }
 
@@ -1983,7 +1998,8 @@ class TestOpenApiSpec
     @Test
     public void testComponentsWithoutSchemas()
     {
-        OpenApiSpec spec = parseSpec(itemsSpec("""
+        OpenApiSpec spec = parseSpec(itemsSpec(
+                """
                 components:
                   parameters:
                     limit:
@@ -2000,7 +2016,8 @@ class TestOpenApiSpec
     @Test
     public void testSpecWithoutPaths()
     {
-        OpenApiSpec spec = parseSpec("""
+        OpenApiSpec spec = parseSpec(
+                """
                 openapi: 3.1.0
                 info:
                   title: test
@@ -2021,7 +2038,8 @@ class TestOpenApiSpec
     public void testArrayReferencedInAllOf()
     {
         // the parser merges allOf alternatives into a single schema, but drops the items of arrays, like in the Cloudflare spec
-        OpenApiSpec spec = parseSpec("""
+        OpenApiSpec spec = parseSpec(
+                """
                 openapi: 3.0.3
                 info:
                   title: test
@@ -2142,169 +2160,169 @@ class TestOpenApiSpec
     {
         // all properties are required, so only the nullable ones map to nullable columns
         return """
-                openapi: %s
-                info:
-                  title: test
-                  version: 1.0
-                paths:
-                  /points:
-                    get:
-                      responses:
-                        "200":
-                          description: Points
-                          content:
-                            application/json:
-                              schema:
-                                type: object
-                                required:
-                                  - id
-                                  - count
-                                  - point
-                                properties:
-                                  id:
-                                    type: integer
-                                  count: {%s}
-                                  point: {%s, properties: {x: {type: number, format: double}}}
-                """.formatted(version, nullableInteger, nullableObject);
+               openapi: %s
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /points:
+                   get:
+                     responses:
+                       "200":
+                         description: Points
+                         content:
+                           application/json:
+                             schema:
+                               type: object
+                               required:
+                                 - id
+                                 - count
+                                 - point
+                               properties:
+                                 id:
+                                   type: integer
+                                 count: {%s}
+                                 point: {%s, properties: {x: {type: number, format: double}}}
+               """.formatted(version, nullableInteger, nullableObject);
     }
 
     private static String typesSpec(String version)
     {
         return """
-                openapi: %s
-                info:
-                  title: test
-                  version: 1.0
-                paths:
-                  /types:
-                    get:
-                      responses:
-                        "200":
-                          description: Types
-                          content:
-                            application/json:
-                              schema:
-                                type: array
-                                items:
-                                  type: object
-                                  properties:
-                                    integer:
-                                      type: integer
-                                    int32:
-                                      type: integer
-                                      format: int32
-                                    int64:
-                                      type: integer
-                                      format: int64
-                                    number:
-                                      type: number
-                                    float:
-                                      type: number
-                                      format: float
-                                    double:
-                                      type: number
-                                      format: double
-                                    boolean:
-                                      type: boolean
-                                    string:
-                                      type: string
-                                    date:
-                                      type: string
-                                      format: date
-                                    date_time:
-                                      type: string
-                                      format: date-time
-                                    integers:
-                                      type: array
-                                      items:
-                                        type: integer
-                                        format: int64
-                                    object:
-                                      type: object
-                                      properties:
-                                        int64:
-                                          type: integer
-                                          format: int64
-                                        boolean:
-                                          type: boolean
-                                        float:
-                                          type: number
-                                          format: float
-                                    objects:
-                                      type: array
-                                      items:
-                                        type: object
-                                        properties:
-                                          int64:
-                                            type: integer
-                                            format: int64
-                                          boolean:
-                                            type: boolean
-                                          float:
-                                            type: number
-                                            format: float
-                                    map:
-                                      type: object
-                                      additionalProperties:
-                                        type: number
-                                        format: double
-                                    empty_object:
-                                      type: object
-                                    open_object:
-                                      type: object
-                                      properties:
-                                        name:
-                                          type: string
-                                      additionalProperties: true
-                                    closed_object:
-                                      type: object
-                                      properties:
-                                        name:
-                                          type: string
-                                      additionalProperties: false
-                                    dimensions:
-                                      $ref: '#/components/schemas/Dimensions'
-                components:
-                  schemas:
-                    Dimensions:
-                      type: object
-                      properties:
-                        width:
-                          type: number
-                          format: double
-                        height:
-                          type: number
-                          format: double
-                """.formatted(version);
+               openapi: %s
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /types:
+                   get:
+                     responses:
+                       "200":
+                         description: Types
+                         content:
+                           application/json:
+                             schema:
+                               type: array
+                               items:
+                                 type: object
+                                 properties:
+                                   integer:
+                                     type: integer
+                                   int32:
+                                     type: integer
+                                     format: int32
+                                   int64:
+                                     type: integer
+                                     format: int64
+                                   number:
+                                     type: number
+                                   float:
+                                     type: number
+                                     format: float
+                                   double:
+                                     type: number
+                                     format: double
+                                   boolean:
+                                     type: boolean
+                                   string:
+                                     type: string
+                                   date:
+                                     type: string
+                                     format: date
+                                   date_time:
+                                     type: string
+                                     format: date-time
+                                   integers:
+                                     type: array
+                                     items:
+                                       type: integer
+                                       format: int64
+                                   object:
+                                     type: object
+                                     properties:
+                                       int64:
+                                         type: integer
+                                         format: int64
+                                       boolean:
+                                         type: boolean
+                                       float:
+                                         type: number
+                                         format: float
+                                   objects:
+                                     type: array
+                                     items:
+                                       type: object
+                                       properties:
+                                         int64:
+                                           type: integer
+                                           format: int64
+                                         boolean:
+                                           type: boolean
+                                         float:
+                                           type: number
+                                           format: float
+                                   map:
+                                     type: object
+                                     additionalProperties:
+                                       type: number
+                                       format: double
+                                   empty_object:
+                                     type: object
+                                   open_object:
+                                     type: object
+                                     properties:
+                                       name:
+                                         type: string
+                                     additionalProperties: true
+                                   closed_object:
+                                     type: object
+                                     properties:
+                                       name:
+                                         type: string
+                                     additionalProperties: false
+                                   dimensions:
+                                     $ref: '#/components/schemas/Dimensions'
+               components:
+                 schemas:
+                   Dimensions:
+                     type: object
+                     properties:
+                       width:
+                         type: number
+                         format: double
+                       height:
+                         type: number
+                         format: double
+               """.formatted(version);
     }
 
     private static String itemsSpec(String components)
     {
         // a non-standard type makes the spec look it up as a named schema in components
         return """
-                openapi: 3.0.0
-                info:
-                  title: test
-                  version: 1.0
-                paths:
-                  /items:
-                    get:
-                      responses:
-                        "200":
-                          description: Items
-                          content:
-                            application/json:
-                              schema:
-                                type: array
-                                items:
-                                  type: object
-                                  properties:
-                                    name:
-                                      type: string
-                                    custom:
-                                      type: custom
-                %s
-                """.formatted(components);
+               openapi: 3.0.0
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /items:
+                   get:
+                     responses:
+                       "200":
+                         description: Items
+                         content:
+                           application/json:
+                             schema:
+                               type: array
+                               items:
+                                 type: object
+                                 properties:
+                                   name:
+                                     type: string
+                                   custom:
+                                     type: custom
+               %s
+               """.formatted(components);
     }
 
     private static void assertItemsTable(OpenApiSpec spec)
@@ -2851,14 +2869,16 @@ class TestOpenApiSpec
                 .hasMessage("Invalid value of parameterDefaults: page is the page number parameter of GET /items");
         Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("state: all", "since: \"2024-01-01T00:00:00Z\"")))
                 .hasMessage("Invalid value of parameterDefaults: parameter since of GET /items has type timestamp(3), but only string, integer, and boolean parameters can have defaults");
-        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace("""
-                        parameterDefaults:
-                          per_page: 100
-                          state: all
-                          x-archived: false
-                """, """
-                        parameterDefaults: all
-                """)))
+        Assertions.assertThatThrownBy(() -> parseSpec(specContents.replace(
+                        """
+                                parameterDefaults:
+                                  per_page: 100
+                                  state: all
+                                  x-archived: false
+                        """,
+                        """
+                                parameterDefaults: all
+                        """)))
                 .hasMessage("Invalid value of parameterDefaults: expected an object with parameter names as keys");
     }
 
@@ -2971,14 +2991,17 @@ class TestOpenApiSpec
     public void testParserDropsEmptyGlobalSecurity()
     {
         // OpenApiSpec.parse() restores the empty list, so if this fails after upgrading the parser, that workaround can be removed
-        SwaggerParseResult result = new OpenAPIV3Parser().readContents("""
+        SwaggerParseResult result = new OpenAPIV3Parser().readContents(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
                   version: '1'
                 security: []
                 paths: {}
-                """, null, new ParseOptions());
+                """,
+                null,
+                new ParseOptions());
 
         Assertions.assertThat(result.getOpenAPI().getSecurity()).isNull();
     }
@@ -3117,83 +3140,83 @@ class TestOpenApiSpec
     private static String sqlOperationsSpec(String searchOperation, String itemsOperation, String tagsOperation)
     {
         return """
-                openapi: 3.0.0
-                info:
-                  title: test
-                  version: 1.0
-                paths:
-                  /search:
-                    post:
-                      x-trino:
-                        sqlOperation: %s
-                      requestBody:
-                        content:
-                          application/json:
-                            schema:
-                              type: object
-                              properties:
-                                query:
-                                  type: string
-                      responses:
-                        "200":
-                          $ref: '#/components/responses/Items'
-                  /items/{id}:
-                    parameters:
-                    - in: path
-                      name: id
-                      required: true
-                      schema:
-                        type: integer
-                    get:
-                      responses:
-                        "200":
-                          $ref: '#/components/responses/Items'
-                    put:
-                      x-trino:
-                        sqlOperation: %s
-                      requestBody:
-                        $ref: '#/components/requestBodies/Item'
-                      responses:
-                        "200":
-                          $ref: '#/components/responses/Items'
-                    delete:
-                      responses:
-                        "200":
-                          $ref: '#/components/responses/Items'
-                  /tags:
-                    post:
-                      x-trino:
-                        sqlOperation: %s
-                      requestBody:
-                        $ref: '#/components/requestBodies/Item'
-                      responses:
-                        "200":
-                          $ref: '#/components/responses/Items'
-                components:
-                  requestBodies:
-                    Item:
-                      content:
-                        application/json:
-                          schema:
-                            $ref: '#/components/schemas/Item'
-                  responses:
-                    Items:
-                      description: Items
-                      content:
-                        application/json:
-                          schema:
-                            type: array
-                            items:
-                              $ref: '#/components/schemas/Item'
-                  schemas:
-                    Item:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        name:
-                          type: string
-                """.formatted(searchOperation, itemsOperation, tagsOperation);
+               openapi: 3.0.0
+               info:
+                 title: test
+                 version: 1.0
+               paths:
+                 /search:
+                   post:
+                     x-trino:
+                       sqlOperation: %s
+                     requestBody:
+                       content:
+                         application/json:
+                           schema:
+                             type: object
+                             properties:
+                               query:
+                                 type: string
+                     responses:
+                       "200":
+                         $ref: '#/components/responses/Items'
+                 /items/{id}:
+                   parameters:
+                   - in: path
+                     name: id
+                     required: true
+                     schema:
+                       type: integer
+                   get:
+                     responses:
+                       "200":
+                         $ref: '#/components/responses/Items'
+                   put:
+                     x-trino:
+                       sqlOperation: %s
+                     requestBody:
+                       $ref: '#/components/requestBodies/Item'
+                     responses:
+                       "200":
+                         $ref: '#/components/responses/Items'
+                   delete:
+                     responses:
+                       "200":
+                         $ref: '#/components/responses/Items'
+                 /tags:
+                   post:
+                     x-trino:
+                       sqlOperation: %s
+                     requestBody:
+                       $ref: '#/components/requestBodies/Item'
+                     responses:
+                       "200":
+                         $ref: '#/components/responses/Items'
+               components:
+                 requestBodies:
+                   Item:
+                     content:
+                       application/json:
+                         schema:
+                           $ref: '#/components/schemas/Item'
+                 responses:
+                   Items:
+                     description: Items
+                     content:
+                       application/json:
+                         schema:
+                           type: array
+                           items:
+                             $ref: '#/components/schemas/Item'
+                 schemas:
+                   Item:
+                     type: object
+                     properties:
+                       id:
+                         type: integer
+                       name:
+                         type: string
+               """.formatted(searchOperation, itemsOperation, tagsOperation);
     }
 
     @Test

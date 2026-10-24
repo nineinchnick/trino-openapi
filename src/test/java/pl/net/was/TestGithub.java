@@ -583,7 +583,8 @@ public class TestGithub
     @Test
     public void selectFromTable()
     {
-        assertQuery("SELECT login FROM orgs WHERE org = 'trinodb'",
+        assertQuery(
+                "SELECT login FROM orgs WHERE org = 'trinodb'",
                 "VALUES ('trinodb')");
         // TODO when merging endpoints into one table, the required parameters should be marked optional, but should be used to make a decision which endpoint to call
         /*
@@ -592,15 +593,20 @@ public class TestGithub
         assertQuery("SELECT name FROM repos WHERE owner_req = 'nineinchnick' and name = 'trino-openapi'",
                 "VALUES ('trino-openapi')");
          */
-        assertQuery("SELECT login FROM orgs_members WHERE org = 'trinodb' AND login = 'martint'",
+        assertQuery(
+                "SELECT login FROM orgs_members WHERE org = 'trinodb' AND login = 'martint'",
                 "VALUES ('martint')");
-        assertQuery("SELECT login FROM repos_collaborators WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND login = 'nineinchnick'",
+        assertQuery(
+                "SELECT login FROM repos_collaborators WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND login = 'nineinchnick'",
                 "VALUES ('nineinchnick')");
-        assertQuery("SELECT message FROM repos_git_commits WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND commit_sha = '293cca50a6e7b508f61b7270988d8444d3b736c3'",
+        assertQuery(
+                "SELECT message FROM repos_git_commits WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND commit_sha = '293cca50a6e7b508f61b7270988d8444d3b736c3'",
                 "VALUES ('Initial commit')");
-        assertQuery("SELECT title FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND number = 5",
+        assertQuery(
+                "SELECT title FROM repos_issues WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND number = 5",
                 "VALUES ('Improve predicate pushdown operator support')");
-        assertQuery("SELECT user.login FROM repos_owner_repo_issues_issue_number_comments WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND id = 2970234636",
+        assertQuery(
+                "SELECT user.login FROM repos_owner_repo_issues_issue_number_comments WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND issue_number = 5 AND id = 2970234636",
                 "VALUES ('nineinchnick')");
         /*
         assertQuery("SELECT title FROM repos_pulls WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND pull_number = 1",
@@ -620,9 +626,11 @@ public class TestGithub
     @Test
     public void selectFromGithubActionsTable()
     {
-        assertQuery("SELECT name FROM repos_actions_workflows WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven'",
+        assertQuery(
+                "SELECT name FROM repos_actions_workflows WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven'",
                 "VALUES ('Release with Maven')");
-        assertQuery("SELECT name FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' LIMIT 1",
+        assertQuery(
+                "SELECT name FROM repos_actions_runs WHERE owner = 'nineinchnick' AND repo = 'trino-openapi' AND name = 'Release with Maven' LIMIT 1",
                 "VALUES ('Release with Maven')");
 
         QueryRunner runner = getQueryRunner();
@@ -707,7 +715,8 @@ public class TestGithub
                         "JOIN workflows w ON w.owner = r.owner_login AND w.repo = r.name",
                 "VALUES (true)");
          */
-        assertQuery("SELECT count(*) > 0 " +
+        assertQuery(
+                "SELECT count(*) > 0 " +
                         "FROM repos_actions_workflows w " +
                         "JOIN repos_actions_runs r ON r.workflow_id = w.id " +
                         "WHERE w.owner = 'nineinchnick' AND w.repo = 'trino-openapi' " +

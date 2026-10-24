@@ -276,7 +276,7 @@ public class OpenApiTableHandle
             found = true;
             // if the path selected for a split doesn't send this filter, the connector applies it to the returned rows
             summary = summary.filter(
-                    (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
+                    (columnHandle, _) -> !columnHandle.equals(column.getHandle()));
         }
 
         Map<ColumnHandle, Domain> summaryDomains = constraint.getSummary().getDomains().get();
@@ -300,7 +300,7 @@ public class OpenApiTableHandle
                 continue;
             }
             summary = summary.filter(
-                    (columnHandle, tupleDomain) -> !columnHandle.equals(column.getHandle()));
+                    (columnHandle, _) -> !columnHandle.equals(column.getHandle()));
         }
         if (!found) {
             return Optional.empty();
@@ -333,14 +333,13 @@ public class OpenApiTableHandle
             return null;
         }
         TupleDomain<ColumnHandle> newConstraint = constraint.filter(
-                (columnHandle, tupleDomain) -> columnHandle.equals(column));
+                (columnHandle, _) -> columnHandle.equals(column));
         if (domain.getValues().isDiscreteSet()) {
             return newConstraint;
         }
         return domain.getValues().tryExpandRanges(domainExpansionLimit)
                 .map(ranges -> TupleDomain.withColumnDomains(Map.of(
-                        (ColumnHandle) column,
-                        Domain.multipleValues(domain.getType(), ranges.stream().collect(toImmutableList())))))
+                        (ColumnHandle) column, Domain.multipleValues(domain.getType(), ranges.stream().collect(toImmutableList())))))
                 .orElse(null);
     }
 

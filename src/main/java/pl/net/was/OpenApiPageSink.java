@@ -58,7 +58,5 @@ public class OpenApiPageSink
 
     @SuppressWarnings("unused")
     @Override
-    public void abort()
-    {
-    }
+    public void abort() {}
 }

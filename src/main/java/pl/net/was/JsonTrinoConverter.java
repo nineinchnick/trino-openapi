@@ -68,8 +68,8 @@ import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Boolean.TRUE;
 import static java.lang.Float.floatToIntBits;
 import static java.lang.String.format;
-import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static java.math.RoundingMode.HALF_UP;
+import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 
 public class JsonTrinoConverter
 {
@@ -78,9 +78,7 @@ public class JsonTrinoConverter
      */
     public static final String MERGED_UNION_EXTENSION = "x-trino-merged-union";
 
-    private JsonTrinoConverter()
-    {
-    }
+    private JsonTrinoConverter() {}
 
     /**
      * Converts a JSON value into the representation that {@link io.trino.spi.connector.InMemoryRecordSet} expects for a top-level column.

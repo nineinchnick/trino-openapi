@@ -32,7 +32,9 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.Objects.requireNonNull;
 
 public class OpenApiOutputTableHandle
-        implements ConnectorOutputTableHandle, ConnectorInsertTableHandle, ConnectorMergeTableHandle
+        implements ConnectorInsertTableHandle,
+                   ConnectorMergeTableHandle,
+                   ConnectorOutputTableHandle
 {
     private final OpenApiTableHandle tableHandle;
     private final List<OpenApiColumnHandle> columns;

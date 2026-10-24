@@ -18,5 +18,5 @@ public enum SplitStrategy
 {
     PROBE,
     STRIDE,
-    OFF
+    OFF,
 }

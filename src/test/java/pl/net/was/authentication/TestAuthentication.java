@@ -14,9 +14,9 @@
 package pl.net.was.authentication;
 
 import io.airlift.configuration.InvalidConfigurationException;
+import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpStatus;
-import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.Request;
 import io.airlift.http.client.testing.TestingHttpClient;
 import io.trino.spi.TrinoException;
@@ -43,7 +43,8 @@ import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 class TestAuthentication
 {
     private static final URI BASE_URI = URI.create("http://localhost:8080");
-    private static final String SECURITY_SCHEMES = """
+    private static final String SECURITY_SCHEMES =
+            """
             components:
               securitySchemes:
                 basicAuth:
@@ -62,7 +63,8 @@ class TestAuthentication
                   in: query
                   name: api_key
             """;
-    private static final String OPERATION_RESPONSES = """
+    private static final String OPERATION_RESPONSES =
+            """
                   responses:
                     '200':
                       description: OK
@@ -84,7 +86,8 @@ class TestAuthentication
     void testAnonymousOperationSkipsDefaultAuthentication()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -109,7 +112,8 @@ class TestAuthentication
     void testAnonymousOperationSkipsGlobalRequirements()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -142,7 +146,8 @@ class TestAuthentication
     void testGlobalAnonymousSecuritySkipsDefaultAuthentication()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -169,7 +174,8 @@ class TestAuthentication
     void testSpecWithoutSecuritySchemes()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -189,7 +195,8 @@ class TestAuthentication
     void testSpecWithoutPaths()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.1.0
                 info:
                   title: test
@@ -205,7 +212,8 @@ class TestAuthentication
     void testOAuthFlowsRequiringBrowser()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -239,7 +247,8 @@ class TestAuthentication
     void testOAuthPasswordFlowWithoutCredentials()
             throws Exception
     {
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -258,10 +267,11 @@ class TestAuthentication
                         password:
                           tokenUrl: http://localhost:8081/token
                           scopes: {}
-                """.formatted(OPERATION_RESPONSES), new OpenApiConfig()
-                .setAuthenticationType(AuthenticationType.OAUTH)
-                .setClientId("client")
-                .setClientSecret("secret"));
+                """.formatted(OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setAuthenticationType(AuthenticationType.OAUTH)
+                        .setClientId("client")
+                        .setClientSecret("secret"));
 
         assertThatThrownBy(() -> authentication.filterRequest(request("/secured")))
                 .isInstanceOf(TrinoException.class)
@@ -273,7 +283,8 @@ class TestAuthentication
             throws Exception
     {
         AtomicInteger tokenRequests = new AtomicInteger();
-        Authentication authentication = createAuthentication("""
+        Authentication authentication = createAuthentication(
+                """
                 openapi: 3.0.0
                 info:
                   title: test
@@ -292,13 +303,15 @@ class TestAuthentication
                         clientCredentials:
                           tokenUrl: http://localhost:8081/token
                           scopes: {}
-                """.formatted(OPERATION_RESPONSES), new OpenApiConfig()
-                .setAuthenticationType(AuthenticationType.OAUTH)
-                .setClientId("client")
-                .setClientSecret("secret"), new TestingHttpClient(_ -> mockResponse(
-                HttpStatus.OK,
-                JSON_UTF_8,
-                "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":30}".formatted(tokenRequests.incrementAndGet()))));
+                """.formatted(OPERATION_RESPONSES),
+                new OpenApiConfig()
+                        .setAuthenticationType(AuthenticationType.OAUTH)
+                        .setClientId("client")
+                        .setClientSecret("secret"),
+                new TestingHttpClient(_ -> mockResponse(
+                        HttpStatus.OK,
+                        JSON_UTF_8,
+                        "{\"access_token\":\"token-%d\",\"token_type\":\"Bearer\",\"expires_in\":30}".formatted(tokenRequests.incrementAndGet()))));
 
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
         assertThat(authentication.filterRequest(request("/secured")).getHeader(AUTHORIZATION)).isEqualTo("Bearer token-1");
