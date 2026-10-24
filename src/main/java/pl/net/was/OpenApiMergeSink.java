@@ -40,7 +40,7 @@ public class OpenApiMergeSink
             byte op = TINYINT.getByte(ops, position);
             switch (op) {
                 case INSERT_OPERATION_NUMBER -> insertedPage(page, position);
-                case UPDATE_OPERATION_NUMBER -> updatedPage(page, position, INTEGER.getInt(caseNumbers, position));
+                case UPDATE_OPERATION_NUMBER -> updatedPage(page, rowIds, position, INTEGER.getInt(caseNumbers, position));
                 case DELETE_OPERATION_NUMBER -> deletedPage(rowIds, position);
                 default -> throw new IllegalStateException("Unsupported operation: " + op);
             }
@@ -53,9 +53,9 @@ public class OpenApiMergeSink
         return 0L;
     }
 
-    private void updatedPage(Page page, int position, int caseNumber)
+    private void updatedPage(Page page, Block rowIds, int position, int caseNumber)
     {
-        client.updateRows(table, page, position, table.getUpdatedColumns(caseNumber));
+        client.updateRows(table, page, rowIds, position, table.getUpdatedColumns(caseNumber));
     }
 
     private void deletedPage(Block rowIds, int position)
