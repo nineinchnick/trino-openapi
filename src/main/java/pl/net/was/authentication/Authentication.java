@@ -15,6 +15,7 @@ package pl.net.was.authentication;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimaps;
 import com.google.inject.Inject;
 import io.airlift.http.client.HeaderName;
 import io.airlift.http.client.HttpClient;
@@ -45,7 +46,6 @@ import static io.airlift.http.client.HeaderNames.AUTHORIZATION;
 import static io.airlift.http.client.HeaderNames.CONTENT_TYPE;
 import static io.airlift.http.client.HeaderNames.COOKIE;
 import static io.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
-import static io.airlift.http.client.Request.Builder.fromRequest;
 import static io.airlift.http.client.Request.Builder.preparePost;
 import static io.airlift.http.client.StaticBodyGenerator.createStaticBodyGenerator;
 import static io.airlift.json.JsonCodec.jsonCodec;
@@ -112,19 +112,35 @@ public class Authentication
     @Override
     public Request filterRequest(Request request)
     {
-        URI uri = request.getUri();
         PathItem.HttpMethod method = PathItem.HttpMethod.valueOf(request.getMethod());
         String path = request.getHeader(OPENAPI_PATH_HEADER);
-        Request.Builder builder = fromRequest(request);
+        Request.Builder builder = withoutPathHeader(request);
         List<SecurityRequirement> requirements = getRequirements(path, method);
         String requestName = method + " " + path;
         // null means the spec doesn't declare any requirements, but an empty list explicitly allows anonymous access, so even the default credentials must not be sent
         if (requirements != null) {
-            applyCredentials(builder, uri, selectCredentials(requestName, requirements));
+            applyCredentials(builder, request, selectCredentials(requestName, requirements));
             return builder.build();
         }
-        applyCredentials(builder, uri, getDefaultCredentials(requestName));
+        applyCredentials(builder, request, getDefaultCredentials(requestName));
         return builder.build();
+    }
+
+    private static Request.Builder withoutPathHeader(Request request)
+    {
+        // the path header only tells this filter which operation is called, and Request.Builder can't remove headers copied by fromRequest()
+        Request.Builder builder = new Request.Builder()
+                .setUri(request.getUri())
+                .setMethod(request.getMethod())
+                .addHeaders(Multimaps.filterKeys(request.getHeaders(), name -> !name.equals(OPENAPI_PATH_HEADER)))
+                .setBodyGenerator(request.getBodyGenerator())
+                .setSpanBuilder(request.getSpanBuilder().orElse(null))
+                .setFollowRedirects(request.isFollowRedirects())
+                .setVersion(request.getHttpVersion().orElse(null));
+        request.getRequestTimeout().ifPresent(builder::setRequestTimeout);
+        request.getIdleTimeout().ifPresent(builder::setIdleTimeout);
+        request.getMaxResponseContentLength().ifPresent(builder::setMaxResponseContentLength);
+        return builder;
     }
 
     private List<SecurityRequirement> getRequirements(String path, PathItem.HttpMethod method)
@@ -277,19 +293,25 @@ public class Authentication
         return new Unresolved(format("%s requires the %s configuration %s", subject, String.join(" and ", properties), properties.size() == 1 ? "property" : "properties"));
     }
 
-    private void applyCredentials(Request.Builder builder, URI uri, List<Credential> credentials)
+    private void applyCredentials(Request.Builder builder, Request request, List<Credential> credentials)
     {
+        // RFC 6265 allows only one Cookie header, so API keys are added to the one with cookie parameters
+        List<String> cookies = new ArrayList<>(request.getHeaders().get(COOKIE));
+        int requestCookieCount = cookies.size();
         List<String> queryParameters = new ArrayList<>();
         for (Credential credential : credentials) {
             switch (credential) {
                 case HeaderCredential(HeaderName name, String value) -> builder.addHeader(name, value);
-                case CookieCredential(String pair) -> builder.addHeader(COOKIE, pair);
+                case CookieCredential(String pair) -> cookies.add(pair);
                 case QueryCredential(String pair) -> queryParameters.add(pair);
                 case OAuthCredential(TokenRequest tokenRequest) -> applyOAuth(builder, tokenRequest);
             }
         }
+        if (cookies.size() > requestCookieCount) {
+            builder.setHeader(COOKIE, String.join("; ", cookies));
+        }
         if (!queryParameters.isEmpty()) {
-            builder.setUri(appendQuery(uri, String.join("&", queryParameters)));
+            builder.setUri(appendQuery(request.getUri(), String.join("&", queryParameters)));
         }
     }
 
