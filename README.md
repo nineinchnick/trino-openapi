@@ -946,6 +946,12 @@ separate splits:
   the `probe` strategy.
 * `off` - read all pages in a single split.
 
+Only pages with page numbers are read concurrently. With
+[cursors](#cursor-pagination), [links](#links-to-the-next-page), and
+[offsets](#offset-pagination), every request needs the cursor, the link, or the
+number of results from the previous response, so pages are read one after
+another, in a single split, with any split strategy.
+
 Pages are read one after another when the query has a `LIMIT`, so pagination
 can stop once it's reached. The `probe` strategy is not used when filters on
 multiple values, like `IN` lists, already read every value in a separate split.
