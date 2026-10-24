@@ -28,6 +28,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.common.base.Throwables.getStackTraceAsString;
@@ -327,6 +329,24 @@ class TestAuthentication
     }
 
     @Test
+    void testOAuthTokenRequestDoesNotFollowRedirects()
+            throws IOException
+    {
+        List<Request> tokenRequests = new ArrayList<>();
+        Authentication authentication = createClientCredentialsAuthentication(new TestingHttpClient(request -> {
+            tokenRequests.add(request);
+            return mockResponse(HttpStatus.OK, JSON_UTF_8, "{\"access_token\":\"token\",\"expires_in\":30}");
+        }));
+
+        authentication.filterRequest(request("/secured"));
+
+        assertThat(tokenRequests)
+                .singleElement()
+                .extracting(Request::isFollowRedirects)
+                .isEqualTo(false);
+    }
+
+    @Test
     void testOAuthTokenResponseIsNotInErrors()
             throws IOException
     {
@@ -582,6 +602,12 @@ class TestAuthentication
     private Authentication createClientCredentialsAuthentication(String tokenResponse)
             throws IOException
     {
+        return createClientCredentialsAuthentication(new TestingHttpClient(_ -> mockResponse(HttpStatus.OK, JSON_UTF_8, tokenResponse)));
+    }
+
+    private Authentication createClientCredentialsAuthentication(HttpClient tokenClient)
+            throws IOException
+    {
         return createAuthentication(
                 """
                 openapi: 3.0.0
@@ -607,7 +633,7 @@ class TestAuthentication
                         .setAuthenticationType(AuthenticationType.OAUTH)
                         .setClientId("client")
                         .setClientSecret("secret"),
-                new TestingHttpClient(_ -> mockResponse(HttpStatus.OK, JSON_UTF_8, tokenResponse)));
+                tokenClient);
     }
 
     private static Request request(String path)

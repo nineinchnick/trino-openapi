@@ -282,6 +282,29 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testDoesNotFollowRedirects()
+            throws IOException
+    {
+        responses.add(respond(302, "", "Location", "https://other.example/items?api_key=secret"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .isInstanceOfSatisfying(TrinoException.class, e -> assertThat(e.getErrorCode()).isEqualTo(OPENAPI_HTTP_ERROR.toErrorCode()))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 302, redirecting to https://other.example/items, but redirects are not followed, so credentials are not sent to other hosts", baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void testDescribesRelativeRedirects()
+            throws IOException
+    {
+        responses.add(respond(307, "", "Location", "/moved"));
+
+        assertThatThrownBy(() -> getRows(newConfig(), "items", null))
+                .hasMessage("Request GET %s/items for operation listItems failed with HTTP 307, redirecting to %s/moved, but redirects are not followed, so credentials are not sent to other hosts", baseUri, baseUri);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
     void testRetriesTransientErrorResponses()
             throws IOException
     {
