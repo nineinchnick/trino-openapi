@@ -76,6 +76,8 @@ import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarcharType;
+import pl.net.was.authentication.AuthenticatingHttpClient;
+import pl.net.was.authentication.Authentication;
 import pl.net.was.cache.CachingHttpClient;
 import pl.net.was.cache.HttpCache;
 
@@ -165,25 +167,28 @@ public class OpenApiClient
     private final OpenApiServers servers;
 
     private final HttpClient httpClient;
+    private final Authentication authentication;
+    private final DataSize maxResponseSize;
+    private final Optional<HttpCache> httpCache;
     private final OpenApiSpec openApiSpec;
     private final RateLimiter rateLimiter;
     private final RetryPolicy retryPolicy;
 
     @Inject
-    public OpenApiClient(OpenApiConfig config, CatalogName catalogName, @ForOpenApi HttpClient httpClient, OpenApiSpec openApiSpec, OpenApiServers servers)
+    public OpenApiClient(
+            OpenApiConfig config,
+            CatalogName catalogName,
+            @ForUnauthenticatedOpenApi HttpClient httpClient,
+            Authentication authentication,
+            OpenApiSpec openApiSpec,
+            OpenApiServers servers)
     {
         this.servers = servers;
-        // the cache is wrapped by decompression, so it stores compressed responses
-        DataSize maxResponseSize = config.getMaxResponseSize();
-        HttpClient sizeLimitingClient = new SizeLimitingHttpClient(httpClient, maxResponseSize);
-        this.httpClient = new DecompressingHttpClient(
-                config.getHttpCacheDirectory()
-                        .<HttpClient>map(directory -> new CachingHttpClient(
-                                sizeLimitingClient,
-                                new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()),
-                                Clock.systemUTC()))
-                        .orElse(sizeLimitingClient),
-                maxResponseSize);
+        this.httpClient = requireNonNull(httpClient, "httpClient is null");
+        this.authentication = requireNonNull(authentication, "authentication is null");
+        this.maxResponseSize = config.getMaxResponseSize();
+        this.httpCache = config.getHttpCacheDirectory()
+                .map(directory -> new HttpCache(getHttpCacheDirectory(config, servers, catalogName, directory), config.getHttpCacheMaxSize(), config.getHttpCacheMaxEntrySize()));
         this.openApiSpec = openApiSpec;
         this.rateLimiter = config.getMaxRequestsPerSecond().map(RateLimiter::create).orElse(null);
         this.retryPolicy = RetryPolicy.fromConfig(config, openApiSpec.getRateLimitHeaders());
@@ -857,9 +862,20 @@ public class OpenApiClient
                     if (rateLimiter != null) {
                         rateLimiter.acquire();
                     }
-                    return httpClient.execute(request, responseHandler);
+                    return getHttpClient().execute(request, responseHandler);
                 },
                 (failure, attempts, notRetriedReason) -> toTrinoException(table, httpPath, request, failure, attempts, notRetriedReason));
+    }
+
+    private HttpClient getHttpClient()
+    {
+        HttpClient sizeLimitingClient = new SizeLimitingHttpClient(new AuthenticatingHttpClient(httpClient, authentication), maxResponseSize);
+        // the cache is wrapped by decompression, so it stores compressed responses
+        return new DecompressingHttpClient(
+                httpCache
+                        .<HttpClient>map(cache -> new CachingHttpClient(sizeLimitingClient, cache, Clock.systemUTC()))
+                        .orElse(sizeLimitingClient),
+                maxResponseSize);
     }
 
     // an operation that is used only by SELECT doesn't change anything, so repeating it is safe, even if it uses POST
