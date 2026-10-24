@@ -69,16 +69,18 @@ every query into HTTP requests.
 
 # Quick start
 
-Run a Trino server with the connector in a Docker container:
+Run a Trino server with the latest release of the connector in a Docker
+container:
 
 ```bash
+VERSION=$(curl -fsSL https://api.github.com/repos/nineinchnick/trino-openapi/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 docker run \
   -d \
   --name trino-openapi \
   -e OPENAPI_SPEC_LOCATION=https://api.example.com/openapi.yaml \
   -e OPENAPI_BASE_URI=https://api.example.com/v1 \
   -p 8080:8080 \
-  nineinchnick/trino-openapi:1.86
+  nineinchnick/trino-openapi:$VERSION
 ```
 
 Then connect to Trino at http://localhost:8080 with any SQL client, and list
