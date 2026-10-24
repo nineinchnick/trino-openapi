@@ -278,6 +278,18 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void selectFromInventoryTable()
+    {
+        // the inventory is an object with a quantity for every status as properties, and the test server counts orders, not pets
+        assertQuery(
+                "DESCRIBE petstore.default.store_inventory",
+                "VALUES ('key', 'varchar', '', ''), ('value', 'integer', '', '')");
+        assertQuery(
+                "SELECT key FROM petstore.default.store_inventory WHERE value > 0",
+                "VALUES 'approved', 'placed', 'delivered'");
+    }
+
+    @Test
     public void insertPet()
     {
         assertQueryReturnsEmptyResult("SELECT name FROM petstore.default.pet WHERE pet_id = 100");
