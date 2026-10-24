@@ -543,6 +543,47 @@ def get_defaulted_items_requests() -> RequestCount:
     return defaulted_items_requests
 
 
+class Fruit(BaseModel):
+    name: str
+
+
+class FruitResults(BaseModel):
+    results: list[Fruit]
+    total_results: int
+
+
+fruits = [Fruit(name="cherry"), Fruit(name="Banana"), Fruit(name="apple")]
+sorted_fruits_requests = RequestCount(requests=0)
+
+
+@router.get("/sorted_fruits")
+def list_sorted_fruits(request: Request, page: int = 1, sort: str = None, direction: str = "asc") -> FruitResults:
+    # like many servers, sort text ignoring case, so apple comes before Banana, unlike in Trino
+    return sort_fruits(request, page, sort, direction, key=str.lower)
+
+
+@router.get("/binary_sorted_fruits")
+def list_binary_sorted_fruits(request: Request, page: int = 1, sort: str = None, direction: str = "asc") -> FruitResults:
+    return sort_fruits(request, page, sort, direction, key=str)
+
+
+def sort_fruits(request: Request, page: int, sort: str, direction: str, key: Callable[[str], str]) -> FruitResults:
+    # save requests, so tests can check how many pages were requested, and with which parameters, using /sorted_fruits_requests
+    sorted_fruits_requests.requests += 1
+    sorted_fruits_requests.last_query = request.url.query
+    results = list(fruits)
+    if sort is not None:
+        results.sort(key=lambda fruit: key(getattr(fruit, sort)), reverse=direction == "desc")
+    return FruitResults(
+        results=results[page - 1:page],
+        total_results=len(results))
+
+
+@router.get("/sorted_fruits_requests")
+def get_sorted_fruits_requests() -> RequestCount:
+    return sorted_fruits_requests
+
+
 class OwnedItem(BaseModel):
     name: str
     ownerId: str
@@ -989,6 +1030,23 @@ def custom_openapi():
         "ascendingValue": "asc",
         "descendingValue": "desc",
         "parameterDefaults": {"state": "all", "per_page": 3},
+    }
+    fruits_sorting = {
+        "pageParam": "page",
+        "resultsPath": "$response.body#/results",
+        "totalResultsPath": "$response.body#/total_results",
+        "sortParam": "sort",
+        "directionParam": "direction",
+        "ascendingValue": "asc",
+        "descendingValue": "desc",
+    }
+    openapi_schema["paths"]["/sorted_fruits"]["get"]["x-trino"] = {
+        **fruits_sorting,
+        "sortValues": {"name": "name"},
+    }
+    openapi_schema["paths"]["/binary_sorted_fruits"]["get"]["x-trino"] = {
+        **fruits_sorting,
+        "sortValues": {"name": {"value": "name", "binaryOrder": True}},
     }
     openapi_schema["paths"]["/max_results_items"]["get"]["x-trino"] = {
         "pageParam": "page",

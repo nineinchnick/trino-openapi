@@ -1121,6 +1121,25 @@ public class TestOpenApiQueries
     }
 
     @Test
+    public void topNOnTextSortedIgnoringCaseRequestsAllPages()
+    {
+        // the server returns apple first, but Trino compares code points, so Banana is first
+        assertThat(assertSortedFruits("SELECT name FROM fastapi.default.sorted_fruits ORDER BY name LIMIT 1", 3, "Banana"))
+                .doesNotContain("sort=");
+        assertThat(assertSortedFruits("SELECT name FROM fastapi.default.sorted_fruits ORDER BY name DESC LIMIT 1", 3, "cherry"))
+                .doesNotContain("sort=");
+    }
+
+    @Test
+    public void topNOnTextSortedLikeTrinoSendsSortParameters()
+    {
+        assertThat(assertSortedFruits("SELECT name FROM fastapi.default.binary_sorted_fruits ORDER BY name LIMIT 1", 1, "Banana"))
+                .contains("sort=name", "direction=asc");
+        assertThat(assertSortedFruits("SELECT name FROM fastapi.default.binary_sorted_fruits ORDER BY name DESC LIMIT 1", 1, "cherry"))
+                .contains("sort=name", "direction=desc");
+    }
+
+    @Test
     public void itemsWithPagesInRequestBody()
     {
         List<MaterializedRow> rows = getQueryRunner().execute("SELECT name FROM fastapi.default.paged_search").getMaterializedRows();
@@ -1211,6 +1230,22 @@ public class TestOpenApiQueries
         MaterializedRow requests = getCountedItemsRequests();
         assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
         return (String) requests.getField(1);
+    }
+
+    private synchronized String assertSortedFruits(String query, long expectedRequests, String... expectedNames)
+    {
+        long requestsBefore = (long) getSortedFruitsRequests().getField(0);
+        assertThat(getQueryRunner().execute(withMaxRunTime(), query).getMaterializedRows())
+                .extracting(row -> row.getFields().getFirst())
+                .containsExactly((Object[]) expectedNames);
+        MaterializedRow requests = getSortedFruitsRequests();
+        assertThat((long) requests.getField(0) - requestsBefore).isEqualTo(expectedRequests);
+        return (String) requests.getField(1);
+    }
+
+    private MaterializedRow getSortedFruitsRequests()
+    {
+        return getOnlyElement(computeActual("SELECT requests, last_query FROM fastapi.default.sorted_fruits_requests").getMaterializedRows());
     }
 
     private synchronized String assertDefaultedItems(String query, long expectedRequests, List<?>... expectedRows)
