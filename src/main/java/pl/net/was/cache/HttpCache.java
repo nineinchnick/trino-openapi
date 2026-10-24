@@ -47,6 +47,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static io.airlift.http.client.HeaderNames.CACHE_CONTROL;
 import static io.airlift.http.client.HeaderNames.PRAGMA;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -61,7 +62,8 @@ import static java.util.Objects.requireNonNull;
 // a file has a header with the format version and the length of the metadata, the metadata as JSON, and the raw body,
 // so the body is written and read without being encoded or copied;
 // a key is a hash of the method and URI, so all stored responses of a resource can be found, and a hash of the request headers,
-// because header and cookie parameters filter the response, and servers rarely list them in the Vary header
+// because header and cookie parameters filter the response, and servers rarely list them in the Vary header;
+// partitions store responses sent with different credentials in separate entries, sharing the size limit and the invalidation of changed resources
 public final class HttpCache
 {
     private static final Logger log = Logger.get(HttpCache.class);
@@ -84,7 +86,9 @@ public final class HttpCache
     private final Path directory;
     private final long maxSizeInBytes;
     private final long maxEntrySizeInBytes;
-    private final Map<String, Entry> entries = new ConcurrentHashMap<>();
+    private final Map<String, Entry> entries;
+    private final Object lock;
+    private final String partition;
 
     private record Entry(long sizeInBytes, long lastAccessMillis, long storedAccessMillis) {}
 
@@ -100,6 +104,9 @@ public final class HttpCache
         this.directory = requireNonNull(directory, "directory is null");
         this.maxSizeInBytes = maxSize.toBytes();
         this.maxEntrySizeInBytes = maxEntrySize.toBytes();
+        this.entries = new ConcurrentHashMap<>();
+        this.lock = new Object();
+        this.partition = "";
         try {
             createDirectory();
             loadEntries();
@@ -107,6 +114,27 @@ public final class HttpCache
         catch (IOException e) {
             throw new UncheckedIOException("Failed to open the HTTP cache directory " + directory, e);
         }
+    }
+
+    private HttpCache(HttpCache cache, String partition)
+    {
+        this.directory = cache.directory;
+        this.maxSizeInBytes = cache.maxSizeInBytes;
+        this.maxEntrySizeInBytes = cache.maxEntrySizeInBytes;
+        this.entries = cache.entries;
+        this.lock = cache.lock;
+        this.partition = partition;
+    }
+
+    /**
+     * Returns a view of this cache that never serves responses stored in other partitions.
+     * The name must not contain a new line, and it is part of the file names, so it must not reveal credentials.
+     */
+    public HttpCache partition(String name)
+    {
+        requireNonNull(name, "name is null");
+        checkArgument(name.indexOf('\n') < 0, "name contains a new line");
+        return new HttpCache(this, name);
     }
 
     public Optional<CachedResponse> get(Request request)
@@ -133,50 +161,56 @@ public final class HttpCache
         }
     }
 
-    public synchronized void put(Request request, CachedResponse response)
+    public void put(Request request, CachedResponse response)
     {
-        String key = key(request);
-        Path file = entryFile(key);
-        // other processes can share the directory, and write the same entry at the same time
-        Path temporaryFile = directory.resolve(key + "." + UUID.randomUUID() + TEMPORARY_SUFFIX);
-        try {
-            byte[] metadata = OBJECT_MAPPER.writeValueAsBytes(new Metadata(
-                    response.statusCode(),
-                    response.headers(),
-                    response.varyingRequestHeaders(),
-                    response.requestTimeMillis(),
-                    response.responseTimeMillis()));
-            long size = (long) HEADER_SIZE + metadata.length + response.body().length;
-            if (size > maxEntrySizeInBytes) {
-                remove(request);
+        synchronized (lock) {
+            String key = key(request);
+            Path file = entryFile(key);
+            // other processes can share the directory, and write the same entry at the same time
+            Path temporaryFile = directory.resolve(key + "." + UUID.randomUUID() + TEMPORARY_SUFFIX);
+            try {
+                byte[] metadata = OBJECT_MAPPER.writeValueAsBytes(new Metadata(
+                        response.statusCode(),
+                        response.headers(),
+                        response.varyingRequestHeaders(),
+                        response.requestTimeMillis(),
+                        response.responseTimeMillis()));
+                long size = (long) HEADER_SIZE + metadata.length + response.body().length;
+                if (size > maxEntrySizeInBytes) {
+                    remove(request);
+                    return;
+                }
+                write(temporaryFile, metadata, response.body());
+                Files.move(temporaryFile, file, ATOMIC_MOVE, REPLACE_EXISTING);
+                long now = System.currentTimeMillis();
+                entries.put(key, new Entry(size, now, now));
+            }
+            catch (IOException e) {
+                log.warn(e, "Failed to store an HTTP cache entry for %s %s", request.getMethod(), request.getUri());
+                deleteQuietly(temporaryFile);
                 return;
             }
-            write(temporaryFile, metadata, response.body());
-            Files.move(temporaryFile, file, ATOMIC_MOVE, REPLACE_EXISTING);
-            long now = System.currentTimeMillis();
-            entries.put(key, new Entry(size, now, now));
+            evict();
         }
-        catch (IOException e) {
-            log.warn(e, "Failed to store an HTTP cache entry for %s %s", request.getMethod(), request.getUri());
-            deleteQuietly(temporaryFile);
-            return;
-        }
-        evict();
     }
 
-    public synchronized void remove(Request request)
+    public void remove(Request request)
     {
         String key = key(request);
-        entries.remove(key);
-        deleteQuietly(entryFile(key));
-    }
-
-    public synchronized void removeAll(String method, URI uri)
-    {
-        String keyPrefix = resourceKey(method, uri) + KEY_SEPARATOR;
-        for (String key : entries.keySet().stream().filter(key -> key.startsWith(keyPrefix)).toList()) {
+        synchronized (lock) {
             entries.remove(key);
             deleteQuietly(entryFile(key));
+        }
+    }
+
+    public void removeAll(String method, URI uri)
+    {
+        synchronized (lock) {
+            String keyPrefix = resourceKey(method, uri) + KEY_SEPARATOR;
+            for (String key : entries.keySet().stream().filter(key -> key.startsWith(keyPrefix)).toList()) {
+                entries.remove(key);
+                deleteQuietly(entryFile(key));
+            }
         }
     }
 
@@ -339,9 +373,13 @@ public final class HttpCache
         return directory.resolve(key + ENTRY_SUFFIX);
     }
 
-    private static String key(Request request)
+    private String key(Request request)
     {
         Hasher headersHasher = Hashing.sha256().newHasher();
+        // every header line contains a NUL, so a partition line can't be mistaken for one, and keys without a partition don't change
+        if (!partition.isEmpty()) {
+            headersHasher.putString(partition, UTF_8).putByte((byte) '\n');
+        }
         request.getHeaders().asMap().entrySet().stream()
                 .filter(entry -> !CACHE_DIRECTIVE_HEADERS.contains(entry.getKey()))
                 .sorted(Comparator.comparing(entry -> entry.getKey().toString().toLowerCase(Locale.ENGLISH)))
