@@ -57,6 +57,7 @@ import io.trino.spi.type.TypeOperators;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -194,6 +195,7 @@ public class OpenApiSpec
                 .filter(entry -> !getIdentifier(stripPathParams(entry.getKey())).isEmpty())
                 // TODO group paths by the response type, otherwise it's not possible to create both unique and easy to use table names
                 .collect(groupingBy(entry -> getIdentifier(stripPathParams(entry.getKey()))));
+        Map<String, String> tableNames = getTableNames(pathGroups.values());
         ImmutableMap.Builder<String, List<OpenApiColumn>> tables = ImmutableMap.builder();
         ImmutableMap.Builder<String, OpenApiTableHandle> handles = ImmutableMap.builder();
         ImmutableMap.Builder<String, Map<HttpPath, JsonPointer>> errorPointers = ImmutableMap.builder();
@@ -206,19 +208,18 @@ public class OpenApiSpec
             if (pathItems.size() == 1) {
                 // create a new entry with the value unwrapped out of a list
                 Map.Entry<String, PathItem> firstEntry = groupEntry.getValue().getFirst();
+                String tableName = tableNames.get(firstEntry.getKey());
                 tables.put(Map.entry(
-                        groupEntry.getKey(),
+                        tableName,
                         mergeColumns(getColumns(pathItems.getFirst(), firstEntry.getKey()))));
                 Map<SqlOperation, List<HttpPath>> tablePaths = operationPaths(firstEntry.getValue(), firstEntry.getKey());
-                errorPointers.put(groupEntry.getKey(), errorPointers(firstEntry.getValue(), firstEntry.getKey()));
-                resultsPointers.put(groupEntry.getKey(), resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
-                paginations.put(groupEntry.getKey(), paginations(firstEntry.getValue(), firstEntry.getKey()));
-                handles.put(groupEntry.getKey(), tableHandle(groupEntry.getKey(), tablePaths));
+                errorPointers.put(tableName, errorPointers(firstEntry.getValue(), firstEntry.getKey()));
+                resultsPointers.put(tableName, resultsPointers(firstEntry.getValue(), firstEntry.getKey()));
+                paginations.put(tableName, paginations(firstEntry.getValue(), firstEntry.getKey()));
+                handles.put(tableName, tableHandle(tableName, tablePaths));
                 continue;
             }
-            Map.Entry<String, PathItem> baseEntry = groupEntry.getValue().stream()
-                    .min(comparingInt(entry -> entry.getKey().length()))
-                    .orElseThrow();
+            Map.Entry<String, PathItem> baseEntry = getBaseEntry(groupEntry.getValue());
             List<OpenApiColumn> baseColumns = getColumns(baseEntry.getValue(), baseEntry.getKey());
             Map<SqlOperation, List<HttpPath>> baseOperations = operationPaths(baseEntry.getValue(), baseEntry.getKey());
             Map<HttpPath, JsonPointer> baseErrorPointers = errorPointers(baseEntry.getValue(), baseEntry.getKey());
@@ -229,7 +230,7 @@ public class OpenApiSpec
             groupEntry.getValue().stream()
                     .filter(entry -> !entry.equals(baseEntry))
                     .forEach(entry -> {
-                        String tableName = getIdentifier(pathItems.size() == 2 ? groupEntry.getKey() : entry.getKey());
+                        String tableName = tableNames.get(entry.getKey());
                         tables.put(
                                 tableName,
                                 mergeColumns(Stream.concat(
@@ -347,6 +348,32 @@ public class OpenApiSpec
                 .map(RateLimitHeaders.ResetFormat::getSpecValue)
                 .collect(joining(", ")));
         return Optional.of(new RateLimitHeaders(resetHeader, format.get(), Optional.ofNullable(documentExtension.get(RATE_LIMIT_REMAINING_HEADER))));
+    }
+
+    // keyed by the path a table is named after, which is the path that is not the base path in groups of more than one path
+    private Map<String, String> getTableNames(Collection<List<Map.Entry<String, PathItem>>> pathGroups)
+    {
+        ImmutableMap.Builder<String, String> tableNames = ImmutableMap.builder();
+        for (List<Map.Entry<String, PathItem>> pathGroup : pathGroups) {
+            if (pathGroup.size() == 1) {
+                String path = pathGroup.getFirst().getKey();
+                tableNames.put(path, getIdentifier(stripPathParams(path)));
+                continue;
+            }
+            Map.Entry<String, PathItem> baseEntry = getBaseEntry(pathGroup);
+            pathGroup.stream()
+                    .filter(entry -> !entry.equals(baseEntry))
+                    // in groups of more than 2 paths, path parameters are included to tell the tables apart
+                    .forEach(entry -> tableNames.put(entry.getKey(), getIdentifier(pathGroup.size() == 2 ? stripPathParams(entry.getKey()) : entry.getKey())));
+        }
+        return tableNames.buildOrThrow();
+    }
+
+    private static Map.Entry<String, PathItem> getBaseEntry(List<Map.Entry<String, PathItem>> pathGroup)
+    {
+        return pathGroup.stream()
+                .min(comparingInt(entry -> entry.getKey().length()))
+                .orElseThrow();
     }
 
     private static String pathsToString(List<HttpPath> paths)
