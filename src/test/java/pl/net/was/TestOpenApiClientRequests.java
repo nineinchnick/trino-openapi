@@ -68,6 +68,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.function.Function.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
@@ -602,6 +603,31 @@ class TestOpenApiClientRequests
     }
 
     @Test
+    void testRowIdHasValuesOfPathParameters()
+            throws IOException
+    {
+        responses.add(respond(200, "{\"id\":\"1\"}"));
+        assertThat(getRows(newConfig(DELETE_SPEC), "items", "id", "1"))
+                .containsExactly(List.of("{\"id\":\"1\"}", "1"));
+    }
+
+    @Test
+    void testDeletesResourcesIdentifiedByRowIds()
+            throws IOException
+    {
+        responses.add(respond(204, ""));
+        responses.add(respond(204, ""));
+        // a filter matching many rows doesn't identify the resource of any of them
+        Map<String, OpenApiColumn> columns = new OpenApiSpec(newConfig(DELETE_SPEC)).getTables().get("items").stream()
+                .collect(toImmutableMap(OpenApiColumn::getName, identity()));
+        TupleDomain<ColumnHandle> constraint = TupleDomain.withColumnDomains(Map.of(
+                columns.get("id").getHandle(), Domain.multipleValues(VARCHAR, List.of(utf8Slice("1"), utf8Slice("2")))));
+        deleteRow(newConfig(DELETE_SPEC), constraint, "{\"id\":\"1\"}");
+        deleteRow(newConfig(DELETE_SPEC), constraint, "{\"id\":\"2\"}");
+        assertThat(requestUris).containsExactly(URI.create("/items/1"), URI.create("/items/2"));
+    }
+
+    @Test
     void testRetriedDeleteOfMissingResourceSucceeds()
             throws IOException
     {
@@ -1133,15 +1159,16 @@ class TestOpenApiClientRequests
 
     private void deleteRow(OpenApiConfig config, String id)
     {
+        deleteRow(config, TupleDomain.all(), "{\"id\":\"%s\"}".formatted(id));
+    }
+
+    private void deleteRow(OpenApiConfig config, TupleDomain<ColumnHandle> constraint, String rowId)
+    {
         OpenApiSpec spec = new OpenApiSpec(config);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec);
-        OpenApiColumn column = spec.getTables().get("items").stream()
-                .filter(candidate -> candidate.getName().equals("id"))
-                .findFirst()
-                .orElseThrow();
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
-                .cloneWithConstraint(TupleDomain.withColumnDomains(Map.of((ColumnHandle) column.getHandle(), Domain.singleValue(VARCHAR, utf8Slice(id)))));
-        client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(id)), 0);
+                .cloneWithConstraint(constraint);
+        client.deleteRows(new OpenApiOutputTableHandle(table, List.of(), Map.of()), writeNativeValue(VARCHAR, utf8Slice(rowId)), 0);
     }
 
     private static HttpHandler disconnect()

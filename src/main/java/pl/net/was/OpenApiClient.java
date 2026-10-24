@@ -30,6 +30,7 @@ import com.fasterxml.jackson.databind.util.RawValue;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Streams;
@@ -118,6 +119,7 @@ import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.INVALID_ROW_FILTER;
 import static io.trino.spi.StandardErrorCode.JSON_INPUT_CONVERSION_ERROR;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.ceilDiv;
 import static java.lang.Math.min;
@@ -482,36 +484,83 @@ public class OpenApiClient
 
     public void insertRows(OpenApiOutputTableHandle table, Page page, int position)
     {
-        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position, Optional.empty());
+        writeRows(table, "INSERT", table.getTableHandle().getInsertPaths(), page, position, column -> getRowValue(table, page, position, column), Optional.empty());
     }
 
-    public void updateRows(OpenApiOutputTableHandle table, Page page, int position, Set<OpenApiColumnHandle> updatedColumns)
+    public void updateRows(OpenApiOutputTableHandle table, Page page, Block rowIds, int position, Set<OpenApiColumnHandle> updatedColumns)
     {
-        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position, Optional.of(updatedColumns));
+        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(table.getTableHandle(), rowIds, position, column -> getRowValue(table, page, position, column));
+        writeRows(table, "UPDATE", table.getTableHandle().getUpdatePaths(), page, position, rowValues, Optional.of(updatedColumns));
     }
 
     public void deleteRows(OpenApiOutputTableHandle table, Block rowIds, int position)
     {
-        table.getTableHandle().checkHasPaths("DELETE", table.getTableHandle().getDeletePaths());
-        // don't have to decode the rowId since it's value is copied from the predicate that's still present in the table handle
-        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(
-                table.getTableHandle(),
-                table.getTableHandle().getDeletePaths(),
-                column -> getFilter(column, table.getTableHandle().getConstraint()));
+        OpenApiTableHandle tableHandle = table.getTableHandle();
+        tableHandle.checkHasPaths("DELETE", tableHandle.getDeletePaths());
+        Function<OpenApiColumn, Object> rowValues = getIdentifiedRowValues(tableHandle, rowIds, position, column -> getFilter(column, tableHandle.getConstraint()));
+        Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(tableHandle, tableHandle.getDeletePaths(), rowValues);
         HttpPath httpPath = pathWithParams.getKey();
         makeRequest(
-                table.getTableHandle(),
+                tableHandle,
                 httpPath,
                 pathWithParams.getValue(),
                 // operations marked for DELETE, like a POST, can require filters in the request body
-                getBodyGenerator(table.getTableHandle(), httpPath),
+                getBodyGenerator(tableHandle, httpPath),
                 new AnyResponseHandler());
     }
 
-    private void writeRows(OpenApiOutputTableHandle table, String statement, List<HttpPath> paths, Page page, int position, Optional<Set<OpenApiColumnHandle>> updatedColumns)
+    /**
+     * Returns the values of path parameters identifying the resource of a row, decoded from its row ID, and other values from the given function.
+     */
+    private Function<OpenApiColumn, Object> getIdentifiedRowValues(OpenApiTableHandle table, Block rowIds, int position, Function<OpenApiColumn, Object> otherValues)
+    {
+        Map<OpenApiColumn, JsonNode> identifiers = decodeRowId(table, rowIds, position);
+        Set<OpenApiColumn> rowIdColumns = ImmutableSet.copyOf(getRowIdColumns(table));
+        return column -> {
+            // a filter can match many resources, so it doesn't identify the resource of a row
+            if (rowIdColumns.contains(column)) {
+                return identifiers.get(column);
+            }
+            return otherValues.apply(column);
+        };
+    }
+
+    private Map<OpenApiColumn, JsonNode> decodeRowId(OpenApiTableHandle table, Block rowIds, int position)
+    {
+        checkState(!rowIds.isNull(position), "Row ID is null");
+        JsonNode rowId;
+        try {
+            rowId = OBJECT_MAPPER.readTree(VARCHAR.getSlice(rowIds, position).toStringUtf8());
+        }
+        catch (JsonProcessingException e) {
+            throw new UncheckedIOException(e);
+        }
+        return getRowIdColumns(table).stream()
+                .filter(column -> rowId.hasNonNull(column.getName()))
+                .collect(toImmutableMap(identity(), column -> rowId.get(column.getName())));
+    }
+
+    /**
+     * Columns of the path parameters of operations used by UPDATE and DELETE, which identify the resource of a row.
+     */
+    private List<OpenApiColumn> getRowIdColumns(OpenApiTableHandle table)
+    {
+        List<HttpPath> writePaths = Stream.concat(table.getUpdatePaths().stream(), table.getDeletePaths().stream()).toList();
+        return openApiSpec.getTables().get(table.getSchemaTableName().getTableName()).stream()
+                .filter(column -> writePaths.stream().anyMatch(httpPath -> isPredicate(column, httpPath, ParameterLocation.PATH)))
+                .toList();
+    }
+
+    private void writeRows(
+            OpenApiOutputTableHandle table,
+            String statement,
+            List<HttpPath> paths,
+            Page page,
+            int position,
+            Function<OpenApiColumn, Object> rowValues,
+            Optional<Set<OpenApiColumnHandle>> updatedColumns)
     {
         table.getTableHandle().checkHasPaths(statement, paths);
-        Function<OpenApiColumn, Object> rowValues = column -> getRowValue(table, page, position, column);
         Map.Entry<HttpPath, Map<OpenApiColumn, Object>> pathWithParams = selectPath(table.getTableHandle(), paths, rowValues);
         HttpPath httpPath = pathWithParams.getKey();
         Function<OpenApiColumn, Object> parameterValues = column -> {
@@ -849,12 +898,6 @@ public class OpenApiClient
             return new BigDecimal(value.toString()).stripTrailingZeros().toPlainString();
         }
         return value.toString();
-    }
-
-    private Map<String, Object> getFilterValues(OpenApiTableHandle table, HttpPath httpPath, ParameterLocation in)
-    {
-        return getFilterColumnValues(table, httpPath, in, column -> getFilter(column, table.getConstraint())).entrySet().stream()
-                .collect(toMap(entry -> entry.getKey().getSourceName(), Map.Entry::getValue));
     }
 
     private Map<String, Object> getRecordFilterValues(OpenApiTableHandle table, HttpPath httpPath)
@@ -1219,8 +1262,8 @@ public class OpenApiClient
     {
         ImmutableList.Builder<List<?>> resultRecordsBuilder = ImmutableList.builder();
 
-        String rowId = getFilterValues(table, httpPath, null).values().stream().findFirst().map(Object::toString).orElse(null);
         Map<String, Object> recordParams = getRecordFilterValues(table, httpPath);
+        String rowId = encodeRowId(getRowIdColumns(table), column -> recordParams.get(column.getSourceName()));
 
         if (jsonNode instanceof ArrayNode arrayNode) {
             for (JsonNode jsonRecord : arrayNode) {
@@ -1232,6 +1275,19 @@ public class OpenApiClient
         }
 
         return resultRecordsBuilder.build();
+    }
+
+    private static String encodeRowId(List<OpenApiColumn> rowIdColumns, Function<OpenApiColumn, Object> nativeValues)
+    {
+        // values are kept the way they're sent in requests, and names of columns are unique, unlike names of parameters of different operations
+        ObjectNode rowId = OBJECT_MAPPER.createObjectNode();
+        for (OpenApiColumn column : rowIdColumns) {
+            Object value = nativeValues.apply(column);
+            if (value != null) {
+                rowId.set(column.getName(), toJsonNode(column, toParameterValue(column, value)));
+            }
+        }
+        return rowId.toString();
     }
 
     private Iterable<List<?>> convertJsonToRecords(Request request, OpenApiTableHandle table, HttpPath httpPath, JsonPointer resultsPointer, String rowId, Map<String, Object> recordParams, JsonNode jsonNode)
