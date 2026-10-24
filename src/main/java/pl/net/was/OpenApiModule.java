@@ -19,6 +19,7 @@ import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.airlift.http.client.HttpClient;
+import io.airlift.units.DataSize;
 import pl.net.was.authentication.AuthenticatingHttpClient;
 import pl.net.was.authentication.Authentication;
 import pl.net.was.authentication.OpenApiAuthenticationClient;
@@ -26,6 +27,7 @@ import pl.net.was.authentication.OpenApiAuthenticationClient;
 import static com.google.inject.Scopes.SINGLETON;
 import static io.airlift.configuration.ConfigBinder.configBinder;
 import static io.airlift.http.client.HttpClientBinder.httpClientBinder;
+import static io.airlift.units.DataSize.Unit.GIGABYTE;
 
 public class OpenApiModule
         extends AbstractConfigurationAwareModule
@@ -43,6 +45,9 @@ public class OpenApiModule
         configBinder(binder).bindConfig(OpenApiConfig.class);
 
         binder.bind(OpenApiSpec.class).in(SINGLETON);
+        // the parser didn't limit the size of the spec when it loaded it, and specs of large APIs exceed the default limit
+        httpClientBinder(binder).bindHttpClient("openApiSpec", ForOpenApiSpec.class)
+                .withConfigDefaults(config -> config.setMaxResponseContentLength(DataSize.of(1, GIGABYTE)));
         binder.bind(OpenApiServers.class).in(SINGLETON);
         binder.bind(Authentication.class).in(SINGLETON);
         httpClientBinder(binder).bindHttpClient("openApi", ForUnauthenticatedOpenApi.class);

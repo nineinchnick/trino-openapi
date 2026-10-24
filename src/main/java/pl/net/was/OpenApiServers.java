@@ -88,7 +88,7 @@ public class OpenApiServers
         checkArgument(insecureUris.isEmpty(), "Servers declared in the spec must use HTTPS when credentials are configured, unless authentication.allow-insecure-http is set: %s", insecureUris);
     }
 
-    private static Optional<URI> getSpecUri(String specLocation)
+    static Optional<URI> getSpecUri(String specLocation)
     {
         String location = specLocation.toLowerCase(Locale.ENGLISH);
         if (!location.startsWith("http://") && !location.startsWith("https://")) {

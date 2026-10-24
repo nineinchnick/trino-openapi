@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestAuthentication
 {
@@ -825,7 +826,7 @@ class TestAuthentication
 
     private static Authentication newAuthentication(OpenApiConfig config, HttpClient httpClient)
     {
-        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiSpec spec = createSpec(config);
         return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
     }
 

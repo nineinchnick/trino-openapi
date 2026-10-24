@@ -50,6 +50,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 @TestInstance(PER_CLASS)
 class TestKeycloakAuthentication
@@ -216,7 +217,7 @@ class TestKeycloakAuthentication
                             openid: OpenID Connect
                 """.formatted(USERINFO_PATH, keycloakServer.getTokenUrl()));
         config.setSpecLocation(specFile.toString());
-        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiSpec spec = createSpec(config);
         return new Authentication(config, spec, new OpenApiServers(config, spec), httpClient);
     }
 

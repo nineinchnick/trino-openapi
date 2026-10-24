@@ -49,6 +49,7 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestOpenApiClient
 {
@@ -201,6 +202,6 @@ class TestOpenApiClient
         OpenApiConfig config = new OpenApiConfig();
         URL specResource = requireNonNull(TestOpenApiClient.class.getClassLoader().getResource(name));
         config.setSpecLocation(specResource.getFile());
-        return new OpenApiSpec(config);
+        return createSpec(config);
     }
 }

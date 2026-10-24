@@ -78,6 +78,7 @@ import static pl.net.was.OpenApiErrorCode.OPENAPI_CONNECTION_ERROR;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_HTTP_ERROR;
 import static pl.net.was.OpenApiErrorCode.OPENAPI_INVALID_RESPONSE;
 import static pl.net.was.OpenApiSpec.SCHEMA_NAME;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 @TestInstance(PER_CLASS)
 class TestOpenApiClientRequests
@@ -784,7 +785,7 @@ class TestOpenApiClientRequests
         responses.add(respond(204, ""));
         responses.add(respond(204, ""));
         // a filter matching many rows doesn't identify the resource of any of them
-        Map<String, OpenApiColumn> columns = new OpenApiSpec(newConfig(DELETE_SPEC)).getTables().get("items").stream()
+        Map<String, OpenApiColumn> columns = createSpec(newConfig(DELETE_SPEC)).getTables().get("items").stream()
                 .collect(toImmutableMap(OpenApiColumn::getName, identity()));
         TupleDomain<ColumnHandle> constraint = TupleDomain.withColumnDomains(Map.of(
                 columns.get("id").getHandle(), Domain.multipleValues(VARCHAR, List.of(utf8Slice("1"), utf8Slice("2")))));
@@ -808,7 +809,7 @@ class TestOpenApiClientRequests
     void testDeleteFailsWithSeveralValuesOfParameter()
             throws IOException
     {
-        Map<String, OpenApiColumn> columns = new OpenApiSpec(newConfig(DELETE_WITH_REASON_SPEC)).getTables().get("items").stream()
+        Map<String, OpenApiColumn> columns = createSpec(newConfig(DELETE_WITH_REASON_SPEC)).getTables().get("items").stream()
                 .collect(toImmutableMap(OpenApiColumn::getName, identity()));
         TupleDomain<ColumnHandle> constraint = TupleDomain.withColumnDomains(Map.of(
                 columns.get("reason").getHandle(), Domain.multipleValues(VARCHAR, List.of(utf8Slice("duplicate"), utf8Slice("spam")))));
@@ -1493,7 +1494,7 @@ class TestOpenApiClientRequests
 
     private List<List<?>> getRowsMatching(OpenApiConfig config, String tableName, Map<String, Domain> columnDomains)
     {
-        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiSpec spec = createSpec(config);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config, spec));
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, tableName));
         if (!columnDomains.isEmpty()) {
@@ -1512,7 +1513,7 @@ class TestOpenApiClientRequests
 
     private void deleteRow(OpenApiConfig config, TupleDomain<ColumnHandle> constraint, String rowId)
     {
-        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiSpec spec = createSpec(config);
         OpenApiClient client = new OpenApiClient(config, new CatalogName("test"), httpClient, spec, new OpenApiServers(config, spec));
         OpenApiTableHandle table = spec.getTableHandle(schemaTableName(SCHEMA_NAME, "items"))
                 .cloneWithConstraint(constraint);

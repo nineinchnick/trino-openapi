@@ -50,6 +50,7 @@ import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static pl.net.was.OpenApiClient.OPENAPI_PATH_HEADER;
+import static pl.net.was.TestingOpenApiSpec.createSpec;
 
 class TestAuthenticatingHttpClient
 {
@@ -203,7 +204,7 @@ class TestAuthenticatingHttpClient
             }
             return new TestingResponse(HttpStatus.UNAUTHORIZED, ImmutableListMultimap.of(WWW_AUTHENTICATE, challenge), new byte[0]);
         });
-        OpenApiSpec spec = new OpenApiSpec(config);
+        OpenApiSpec spec = createSpec(config);
         return new AuthenticatingHttpClient(apiClient, new Authentication(config, spec, new OpenApiServers(config, spec), tokenClient));
     }
 
