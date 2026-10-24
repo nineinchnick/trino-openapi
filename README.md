@@ -991,6 +991,11 @@ paths:
   # ...
 ```
 
+Some APIs respond with status `200` and an error instead of the results. When
+the response has no array or object at `resultsPath`, but has a value at
+`errorPath`, the query fails with that value, the same way as for other error
+responses.
+
 Failed requests have an `EXTERNAL` error type, so clients can tell them apart
 from errors in the connector:
 

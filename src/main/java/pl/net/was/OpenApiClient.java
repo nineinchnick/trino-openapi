@@ -1249,11 +1249,33 @@ public class OpenApiClient
                 bodyLog.debug(ex, message);
                 throw new TrinoException(OPENAPI_INVALID_RESPONSE, message);
             }
+            failOnReportedError(request, response.getStatusCode(), jsonNode);
             return new ResultsPage(
                     convertJson(request, table, httpPath, resultsPointer, jsonNode),
                     getLong(request, jsonNode, "totalResultsPath", pagination.totalResultsPointer()),
                     getLong(request, jsonNode, "totalPagesPath", pagination.totalPagesPointer()),
                     getBoolean(jsonNode, pagination.hasMorePointer()));
+        }
+
+        // some servers respond with status 200 and an error instead of the results
+        private void failOnReportedError(Request request, int statusCode, JsonNode jsonNode)
+        {
+            if (resultsPointer == null || JsonPointer.empty().equals(resultsPointer)) {
+                return;
+            }
+            JsonNode resultNode = jsonNode.at(resultsPointer);
+            if (resultNode.isArray() || resultNode.isObject()) {
+                return;
+            }
+            JsonPointer errorPointer = openApiSpec.getErrorPointers(table.getSchemaTableName()).get(httpPath);
+            if (errorPointer == null) {
+                return;
+            }
+            JsonNode errorNode = jsonNode.at(errorPointer);
+            if (errorNode.isMissingNode() || errorNode.isNull()) {
+                return;
+            }
+            throw new TrinoException(OPENAPI_HTTP_ERROR, format("%s with HTTP %d: %s", describeFailedRequest(httpPath, request), statusCode, errorNode));
         }
 
         private static OptionalLong getLong(Request request, JsonNode jsonNode, String propertyName, JsonPointer pointer)
