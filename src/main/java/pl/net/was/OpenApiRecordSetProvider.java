@@ -38,12 +38,14 @@ public class OpenApiRecordSetProvider
 {
     private final OpenApiClient client;
     private final OpenApiMetadata metadata;
+    private final OpenApiSpec spec;
 
     @Inject
-    public OpenApiRecordSetProvider(OpenApiMetadata metadata, OpenApiClient client)
+    public OpenApiRecordSetProvider(OpenApiMetadata metadata, OpenApiClient client, OpenApiSpec spec)
     {
         this.metadata = metadata;
         this.client = client;
+        this.spec = spec;
     }
 
     @Override
@@ -54,6 +56,7 @@ public class OpenApiRecordSetProvider
             ConnectorTableHandle table,
             List<? extends ColumnHandle> list)
     {
+        spec.checkSameSpec((OpenApiTableHandle) table);
         List<OpenApiColumnHandle> columnHandles = list.stream()
                 .map(c -> (OpenApiColumnHandle) c)
                 .toList();

@@ -164,6 +164,13 @@ properties, or a URL that always serves the same version of it, like one with a
 version number or a commit in its path. To use a changed specification, update
 it on every node and restart Trino.
 
+Queries fail with the `OPENAPI_SPEC_MISMATCH` error when a worker loaded a
+different specification than the coordinator, instead of reading wrong columns
+or using other paths than the coordinator planned. Nodes compare a SHA-256 hash
+of the parsed specification document, so reformatting it doesn't change the
+hash, but changes of other documents it references with `$ref` are not
+detected.
+
 ## Servers
 
 Requests are sent to the servers declared in the specification. Every
