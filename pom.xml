@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.airlift</groupId>
         <artifactId>airbase</artifactId>
-        <version>418</version>
+        <version>420</version>
     </parent>
 
     <groupId>pl.net.was</groupId>
@@ -54,7 +54,7 @@
         <air.test.jvm.additional-arguments>--add-modules=jdk.incubator.vector --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</air.test.jvm.additional-arguments>
 
         <dep.trino.version>484</dep.trino.version>
-        <dep.airlift.version>451</dep.airlift.version>
+        <dep.airlift.version>453</dep.airlift.version>
         <dep.swagger-parser.version>2.1.48</dep.swagger-parser.version>
         <dep.swagger-models.version>2.2.55</dep.swagger-models.version>
         <!-- same as Trino, the test dependencies otherwise mix Netty 4.1 and 4.2, which have duplicate classes -->
